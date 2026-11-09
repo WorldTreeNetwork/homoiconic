@@ -14,10 +14,10 @@ The partition says the evaluator is Lean 4 source and that the first proof is me
 
 - ADD capability `lean-kernel`
 - A Lean 4 package the kernel builds from
-- Terms are variable, abstraction, application, and quote
-- The pure fragment is terms that contain no quote
-- An interpreter written as a term of the language
-- A theorem: on the pure fragment, evaluating that interpreter-term equals direct evaluation
+- Terms are de Bruijn variable, abstraction, application, and quote
+- The pure fragment is every term that contains no quote, including open and diverging terms
+- The interpreter-term is `quote interpreterBody`, where the body is one closed pure term. The route projects that payload and evaluates it with `Direct` on the Mogensen–Scott encoding of the program. The body does not call `Direct`
+- A theorem: for every pure program and outcome, direct call-by-value evaluation agrees with that route under `Represents`
 - One level. No reflective tower
 
 ## Impact
@@ -43,7 +43,7 @@ No new UI because the surface is `lake build` and the named theorem.
 
 ## Preparation
 
-- Upstream: living spec `openspec/specs/language-partition/spec.md` at `e834845`. `ARCHITECTURE.md` names this change as the owner of the metacircular theorem. Spike `lean-c-abi` is `go` for one unboxed call and is not an input to this proof.
-- Anchors: `language-partition` — eval is Lean 4 source.
-- Outcome: still valid. The fragment below is the small fragment the partition left unnamed.
+- Upstream: living spec `openspec/specs/language-partition/spec.md` at `e834845`. `ARCHITECTURE.md` names this change as the owner of the metacircular theorem. Spike `lean-c-abi` is `go` for one unboxed call and is not an input to this proof. Astra's send-back is `reviews/2026-11-08-advise.md` at `082b583`.
+- Anchors: `language-partition` — eval is Lean 4 source, and circularity is the metacircular equality. This change's `design.md` now names the route and the theorem signature.
+- Outcome: revised. Same fragment, same bounds. The amendment names call-by-value `Direct`, the Scott encoding, the quote-payload route, and the relational theorem. It does not narrow purity to closed, typed, or normalizing terms.
 - Authority: the user said `activate` on 2026-11-08 for this dependency-ready node. Bounds stay the pure fragment: variable, abstraction, application, and quote; the theorem covers programs with no quote; one level; no Zig host and no Rust. `add-zig-host` stays blocked.
