@@ -1,0 +1,14 @@
+{
+  "disposition": "pass",
+  "summary": "ARCHITECTURE.md records Lean 4 as the only semantics language, Zig as the host with no evaluator, and Rust as absent. The metacircular theorem stays on the kernel change.",
+  "verify_command": "rg -n \"Lean 4|metacircular|Rust\" ARCHITECTURE.md",
+  "verify_exit": 0,
+  "commit_sha": "62807d5",
+  "changed_files": [
+    "ARCHITECTURE.md",
+    "openspec/changes/add-language-partition/tasks.md",
+    "groups/homoiconic-pk4.1/packet.json"
+  ],
+  "blockers": [],
+  "raw_ref": ".spawns/homoiconic-pk4-1-1794190335-21640-8dd8fb4a/raw.txt"
+}
