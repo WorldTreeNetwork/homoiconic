@@ -1,6 +1,6 @@
 # add-lean-circular-kernel
 
-> **PENDING**
+> **ACTIVE BUILD**
 
 **Rigor:** instrument
 
@@ -46,4 +46,4 @@ No new UI because the surface is `lake build` and the named theorem.
 - Upstream: living spec `openspec/specs/language-partition/spec.md` at `e834845`. `ARCHITECTURE.md` names this change as the owner of the metacircular theorem. Spike `lean-c-abi` is `go` for one unboxed call and is not an input to this proof.
 - Anchors: `language-partition` — eval is Lean 4 source.
 - Outcome: still valid. The fragment below is the small fragment the partition left unnamed.
-- Authority: campaign `homoiconic-pk4` does not activate this node. Banner stays `PENDING`.
+- Authority: the user said `activate` on 2026-11-08 for this dependency-ready node. Bounds stay the pure fragment: variable, abstraction, application, and quote; the theorem covers programs with no quote; one level; no Zig host and no Rust. `add-zig-host` stays blocked.
