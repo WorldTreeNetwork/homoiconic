@@ -31,7 +31,7 @@ theorem lookup {i : Nat} (h : PureEnv env) (hv : env[i]? = some v) : PureValue v
 end PureEnv
 
 /-- Errors are pure outcomes; code is not an outcome at all. -/
-def PureOutcome : Outcome → Prop
+abbrev PureOutcome : Outcome → Prop
   | .value v => PureValue v
   | .unbound _ => True
 

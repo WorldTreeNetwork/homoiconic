@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "id": "pkt-add-lean-circular-kernel-act",
+  "id": "pkt-add-lean-circular-kernel-repair",
   "node_id": "homoiconic-pk4.2",
   "capability": "lean-kernel",
   "change_id": "add-lean-circular-kernel",
@@ -26,24 +26,24 @@
       "stand_in_id": "agt-sol-implement"
     }
   },
-  "goal": "Implement the Lean 4 kernel package at kernel/ for change add-lean-circular-kernel. The contract is openspec/changes/add-lean-circular-kernel/design.md and openspec/changes/add-lean-circular-kernel/specs/lean-kernel/spec.md at commit 2df19e2, accepted by astra-arch-review in reviews/2026-11-08-advise-3.md. Implement that contract. Do not weaken Pure, do not drop coverage, and do not make the interpreter call Direct or Eval.\n\nThe package defines de Bruijn terms with var, lam, app, and quote; the Direct relation; the Mogensen-Scott encode; interpreterBody as one closed pure term; the quote-payload route; Represents; metacircular; coverage; and total evalFuel. lake build exits 0. The three open task boxes in tasks.md are checked when those declarations exist.\n\nLean 4.35.0 is on PATH via ~/.elan/bin (lean, lake, leanc). Put the package under kernel/ so lake build runs there.\n\nEarlier closed node homoiconic-pk4.1: ARCHITECTURE.md records Lean 4 semantics, a Zig host with no evaluator, and no Rust. That partition is already folded. Do not edit it.",
+  "goal": "Finish the Lean kernel at kernel/. Commit 3c0c942 is task-red: lake build passes, and Circular.metacircular and Circular.coverage are not declared. kernel/Contract.lean is the acceptance check and does not compile. Declare those two theorems at the signatures Contract.lean already writes, with no sorry, no admit, and no new axiom. Then prove there is no Direct derivation of app interpreterBody (encode omega) at the empty environment. Check the remaining task box only when Contract.lean compiles.\n\nDo not rebuild the package. Do not change the theorem's quantifier. Pure still means every quote-free term. The examples in Circular/Examples.lean already cover identity, the open variable, the unbound function applied to omega, and the open lambda. direct_deterministic, evalFuel_sound, and evalFuel_complete already exist. interpreterBody is one closed pure term and does not call Direct or Eval.\n\nFrom kernel/, both lake build and lake env lean Contract.lean must exit 0.\n\nEarlier closed node homoiconic-pk4.1: ARCHITECTURE.md records Lean 4 semantics, a Zig host with no evaluator, and no Rust. Do not edit that partition.",
   "non_goals": [
     "A Zig host",
-    "Initialization, allocation, or a C ABI",
+    "Rewriting the interpreter construction",
+    "Narrowing Pure to closed, typed, or normalizing terms",
     "Folding the change",
-    "Editing the proposal, design, spec delta, or reviews",
-    "A reflective tower"
+    "Editing the proposal, design, spec delta, or reviews"
   ],
   "anchors": [
     {
       "symbol": "lean-kernel",
-      "invariant": "For every quote-free term, Direct at the empty environment agrees with Direct of app interpreterBody (encode p) under Represents. coverage says every interpreter outcome represents a source outcome. evalFuel is sound and complete for Direct, and returns none for omega at every fuel. The interpreter body does not call Direct or Eval."
+      "invariant": "metacircular says Direct [] p o iff some interpreter outcome w represents o, for every quote-free p. coverage says every such w represents some source outcome. omega has no derivation on either route. Neither theorem depends on sorryAx or an axiom declared by this package."
     }
   ],
   "acceptance": {
     "kind": "contrast",
-    "if_true": "cd kernel && lake build exits 0. metacircular and coverage are declarations whose axioms exclude sorryAx and any axiom declared by this package. The identity application, the open variable, the unbound function applied to omega, the open lambda, and omega match the scenarios in the spec delta. The three implementation task boxes are checked.",
-    "if_false": "lake build fails, a theorem uses sorry or admit, the interpreter calls Direct or Eval, or a quoted term is a premise of metacircular."
+    "if_true": "In kernel/, lake build exits 0 and lake env lean Contract.lean exits 0. The printed axioms of metacircular and coverage exclude sorryAx and any axiom declared in this package. The theorem task box is checked.",
+    "if_false": "Contract.lean does not compile, either theorem is missing or admitted, or a quoted term is a premise of metacircular."
   },
   "out_of_scope": [
     {
@@ -65,7 +65,9 @@
       "edit the spec delta",
       "edit reviews",
       "edit ARCHITECTURE.md",
-      "add a Zig program"
+      "add a Zig program",
+      "add an axiom",
+      "use sorry"
     ]
   },
   "load_class": "intention-critical",

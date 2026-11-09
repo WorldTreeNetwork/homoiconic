@@ -18,3 +18,7 @@ import Circular
 #print axioms Circular.skip_omega_interpreter_represents
 #print axioms Circular.open_lambda_interpreter
 #print axioms Circular.open_lambda_interpreter_represents
+
+#print axioms Circular.metacircular
+#print axioms Circular.coverage
+#print axioms Circular.omega_interpreter_no_direct

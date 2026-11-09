@@ -1,4 +1,4 @@
-import Circular.Representation
+import Circular.Correctness
 
 namespace Circular
 
@@ -33,6 +33,15 @@ theorem omega_no_direct : ¬ Direct [] omega o := by
   obtain ⟨n, hn⟩ := evalFuel_complete h
   rw [omega_fuel_none] at hn
   contradiction
+
+/-- Coverage rules out every interpreter outcome on omega, not just outcomes
+    selected in advance or results observed at a bounded amount of fuel. -/
+theorem omega_interpreter_no_direct :
+    ¬ Direct [] (.app interpreterBody (encode omega omega_pure)) w := by
+  intro h
+  obtain ⟨o, hr⟩ := coverage omega omega_pure w h
+  have hd := (metacircular omega omega_pure o).mpr ⟨w, h, hr⟩
+  exact omega_no_direct hd
 
 theorem identity_direct : Direct [] identityApplication (.value (.closure (.var 0) [])) :=
   .appValue .lam .lam (.varBound rfl)
