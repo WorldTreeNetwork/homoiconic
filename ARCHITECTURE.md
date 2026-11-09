@@ -1,6 +1,6 @@
 # Architecture
 
-The settled language partition for the first system. Source of record: `openspec/changes/add-language-partition/`.
+The settled language partition for the first system. Source of record: `openspec/specs/language-partition/spec.md`.
 
 ## Partition
 
