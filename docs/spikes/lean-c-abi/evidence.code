@@ -1,0 +1,14 @@
+-- src/Kernel.lean
+@[export kernel_eval]
+def kernelEval (n : UInt32) : UInt32 :=
+  n * 17 + 3
+
+-- host.zig
+const std = @import("std");
+
+extern fn kernel_eval(n: u32) u32;
+
+pub fn main() void {
+    const result = kernel_eval(4);
+    std.debug.print("{d}\n", .{result});
+}

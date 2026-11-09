@@ -25,7 +25,9 @@ The borrow checker is real and it is not a Lean theorem. Keeping Rust would add 
 
 ## Unverified hypotheses
 
-- `lean-c-abi`. A Zig host can call the compiled Lean 4 kernel through the C ABI without reimplementing `eval`. Confidence: medium. Verification: not empirically tested. Synthesis: none (`docs/spikes/lean-c-abi/finding.md` is missing). This change does not land that call. `add-zig-host` owns it, and the spike runs before that node is acted on.
+- lean-c-abi — go
+
+Finding: `docs/spikes/lean-c-abi/finding.md`. Lean 4.35.0, Zig 0.16.0. One unboxed exported function returned `71` to a Zig host that does not contain the formula. This change still does not land that call. `add-zig-host` owns initialization, allocation, and the real interpreter ABI.
 
 ## ADR
 
