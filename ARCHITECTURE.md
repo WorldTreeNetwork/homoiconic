@@ -1,6 +1,6 @@
 # Architecture
 
-The settled language partition for the first system. Source of record for the partition: `openspec/specs/language-partition/spec.md`. Source of record for the kernel: `openspec/specs/lean-kernel/spec.md`.
+The settled language partition for the first system. Source of record for the partition: `openspec/specs/language-partition/spec.md`. Source of record for the kernel: `openspec/specs/lean-kernel/spec.md`. Source of record for the host: `openspec/specs/zig-host/spec.md`.
 
 ## Partition
 
@@ -18,7 +18,7 @@ The kernel change, `add-lean-circular-kernel`, landed this theorem. The fragment
 
 ## Boundary
 
-The proof boundary is the call from the Zig host into the Lean kernel. The `lean-c-abi` spike (`docs/spikes/lean-c-abi/finding.md`, Lean 4.35.0, Zig 0.16.0) returned `71` from one unboxed exported function to a Zig host that does not contain the formula. The spike shows the call is feasible. It does not land the call. `add-zig-host` owns initialization, allocation, and the real interpreter ABI.
+The proof boundary is the call from the Zig host into the Lean kernel. The `lean-c-abi` spike (`docs/spikes/lean-c-abi/finding.md`, Lean 4.35.0, Zig 0.16.0) returned `71` from one unboxed exported function to a Zig host that does not contain the formula. The spike shows the call is feasible. `add-zig-host` landed that call: Zig calls `kernel_run`, and the object link and the runtime initializer are in `host/`. The kernel theorems stay the source of record in `openspec/specs/lean-kernel/spec.md`.
 
 ## Why
 
@@ -29,6 +29,6 @@ The proof boundary is the call from the Zig host into the Lean kernel. The `lean
 ## Downstream changes
 
 - `add-lean-circular-kernel`: folded. The evaluator and the metacircular theorem are `openspec/specs/lean-kernel/spec.md`.
-- `add-zig-host`: the process and the C ABI call. Not started here.
+- `add-zig-host`: folded. Zig calls `kernel_run`. The object link and the runtime initializer are in `host/`. The host requirements are `openspec/specs/zig-host/spec.md`.
 
-The partition is the landed artifact those changes cite. This kernel does not add a Zig host or a C ABI.
+The partition is the landed artifact those changes cite. This kernel does not add a Zig host or a C ABI. The host landing is the call above.
