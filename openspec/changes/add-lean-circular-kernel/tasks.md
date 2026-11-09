@@ -14,7 +14,7 @@
 
 ## Owed from fresh advise — 2026-11-08, astra-arch-review
 
-- [ ] R3: Reconcile application and open-variable acceptance examples with encoded interpreter outcomes: direct outcome `o`, interpreter outcome `w`, and `Represents o w`; do not require identical raw outcomes. See reviews/2026-11-08-advise-2.md.
-- [ ] R4: Specify function-position unbound-error propagation in Direct and the interpreter, narrow the blanket open-term claim, and require checks for an unbound function with a diverging argument and for an open lambda returning a closure. See reviews/2026-11-08-advise-2.md.
-- [ ] R5: Require proved coverage of every interpreter outcome on pure inputs, or equivalent strengthened correctness, so divergence rules out all interpreter derivations rather than only represented outcomes; reconcile the omega check. See reviews/2026-11-08-advise-2.md.
-- [ ] R6: Require an executable Lean evaluation entry with explicit nontermination/bounds behavior, proved correspondence to the theorem's evaluation relation, and execution checks for the application and open-variable examples; keep Zig/ABI work out of scope. See reviews/2026-11-08-advise-2.md.
+- [x] R3: Reconcile application and open-variable acceptance examples with encoded interpreter outcomes: direct outcome `o`, interpreter outcome `w`, and `Represents o w`; do not require identical raw outcomes. See reviews/2026-11-08-advise-2.md.
+- [x] R4: Specify function-position unbound-error propagation in Direct and the interpreter, narrow the blanket open-term claim, and require checks for an unbound function with a diverging argument and for an open lambda returning a closure. See reviews/2026-11-08-advise-2.md.
+- [x] R5: Require proved coverage of every interpreter outcome on pure inputs, or equivalent strengthened correctness, so divergence rules out all interpreter derivations rather than only represented outcomes; reconcile the omega check. See reviews/2026-11-08-advise-2.md.
+- [x] R6: Require an executable Lean evaluation entry with explicit nontermination/bounds behavior, proved correspondence to the theorem's evaluation relation, and execution checks for the application and open-variable examples; keep Zig/ABI work out of scope. See reviews/2026-11-08-advise-2.md.

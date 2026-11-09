@@ -10,9 +10,9 @@ The named fragment is the pure lambda fragment. Binders are de Bruijn indices. I
 - `Direct env t o` is an inductive call-by-value relation. The function is evaluated before the argument. Rules:
   - `var i` yields the value at index `i`. If `i` is past the end of `env`, the outcome is `unbound i`.
   - `lam b` yields `closure b env`.
-  - `app f a` evaluates `f` to a closure, evaluates `a` to an outcome, and, when that outcome is a value, evaluates the body in the environment extended with that value. An unbound argument is the outcome of the application.
+  - `app f a` evaluates `f` first. If `f` derives `unbound i`, the application derives `unbound i` and `a` is not evaluated. If `f` derives a closure and `a` derives `unbound i`, the application derives `unbound i`. If `f` derives a closure and `a` derives a value, the body is evaluated in the environment extended with that value. If `f` has no derivation, the application has no derivation.
   - `quote` has no `Direct` rule.
-- Divergence is the absence of a derivation. It is not an outcome constructor. The pure term `app (lam (app (var 0) (var 0))) (lam (app (var 0) (var 0)))` has no `Direct` derivation at the empty environment. The theorem has no fuel argument. A fuel-indexed function may be used as an executable witness. The theorem does not treat equal fuel as equal results.
+- Divergence is the absence of a derivation. It is not an outcome constructor. The pure term `omega`, written `app (lam (app (var 0) (var 0))) (lam (app (var 0) (var 0)))`, has no `Direct` derivation at the empty environment. A lambda derives a closure and does not evaluate its body, even when that body contains a free index.
 - `Eval` is `Direct` plus one quote rule: `Eval env (quote t) (code t)`. The rule returns `t` as data and does not evaluate `t`. It does not call `Direct` on `t`.
 
 ## Interpreter term
@@ -31,7 +31,7 @@ Encoded environments are Scott lists of encoded outcomes: `nil = λn. λc. n` an
 
 - Variable: look the Church numeral up in the encoded environment. The empty list yields an encoded `unbound` outcome, not a loop.
 - Abstraction: build an encoded closure from the encoded body and the current encoded environment.
-- Application: decode the function outcome as a closure, evaluate the argument through this same body, and evaluate the closure body in the extended encoded environment.
+- Application: if the function outcome decodes as `unbound i`, return that encoded unbound outcome and do not evaluate the argument. If it decodes as a closure, evaluate the argument through this same body. An unbound argument is the application's encoded outcome. A value argument extends the encoded environment and evaluates the closure body.
 
 `interpreterBody` contains no primitive that invokes `Direct` or `Eval`.
 
@@ -52,7 +52,16 @@ metacircular :
     ∃ w, Direct [] (app interpreterBody (encode p)) w ∧ Represents o w
 ```
 
-The quantifier is every quote-free term, including open and diverging terms. Open terms derive `unbound`. Diverging terms derive nothing on either side. `Direct` is deterministic.
+The quantifier is every quote-free term, including terms with free indices and terms that diverge. An evaluated variable whose index is past the environment derives `unbound`. A lambda with a free index in its body still derives a closure. `Direct` is deterministic.
+
+```
+coverage :
+  ∀ p, Pure p → ∀ w,
+    Direct [] (app interpreterBody (encode p)) w →
+    ∃ o, Represents o w
+```
+
+`coverage` is a separate declaration. With `metacircular`, a derived interpreter outcome on a pure input is a represented source outcome, so a pure term with no `Direct` outcome also has no interpreter derivation. `omega` is that check: no derivation on either route, not merely no `Represents` witness.
 
 The theorem does not quantify over a term that fails `Pure`. It does not state that the interpreter interprets itself. One level.
 
@@ -62,13 +71,17 @@ It is large enough for an interpreter to be a term, and small enough that the eq
 
 ## Build
 
-The package is Lean 4, built with `lake build`. `metacircular` is a declaration in that package. Its dependencies include no `sorryAx` and no axiom declared by this package.
+The package is Lean 4, built with `lake build`. `metacircular` and `coverage` are declarations in that package. Their dependencies include no `sorryAx` and no axiom declared by this package.
 
-These facts are declarations in the same package:
+`evalFuel (n : Nat) (env) (t) : Option Outcome` is the executable entry for `Direct`. It is a total Lean function. `some o` means `Direct env t o`. If `Direct env t o`, some fuel returns `some o`. For `omega` at the empty environment, every fuel returns `none`. The two routes do not share a fuel budget. This entry does not call Zig.
 
-- `app (lam (var 0)) (lam (var 0))` is pure. Both routes derive `closure (var 0) []`, related by `Represents`.
-- The omega term in Fragment is pure and has no `Direct` derivation at the empty environment, so the interpreter route has no `Represents` witness either.
-- `var 0` at the empty environment derives `unbound 0` on both routes.
+These facts are declarations in the same package. Interpreter outcomes are encoded closures. They are not the raw `Direct` outcomes.
+
+- `app (lam (var 0)) (lam (var 0))` is pure. `Direct` at the empty environment derives `closure (var 0) []`. The interpreter route derives a different `w`, and `Represents` relates that closure to `w`. `evalFuel` returns that direct outcome, and on the interpreter application it returns a `w` that `Represents` accepts. The fuels need not match.
+- `var 0` at the empty environment: `Direct` derives `unbound 0`. The interpreter route derives a different `w`, a closure encoding that unbound outcome, and `Represents (unbound 0) w`. The interpreter does not itself stop with a raw unbound index. `evalFuel` agrees on both routes.
+- `app (var 0) omega` at the empty environment: `Direct` derives `unbound 0` and does not evaluate `omega`. The interpreter route represents that same unbound outcome and does not evaluate the encoded argument.
+- `lam (var 1)` at the empty environment: `Direct` derives `closure (var 1) []`. The interpreter route represents that closure.
+- `omega` is pure and has no `Direct` derivation and no interpreter derivation at the empty environment. `evalFuel` returns `none` for `omega` at every fuel.
 - `quote (var 0)` does not satisfy `Pure`.
 
 ## Downstream
