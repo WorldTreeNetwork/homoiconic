@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "id": "pkt-add-zig-host",
+  "node_id": "homoiconic-pk4.3",
+  "capability": "zig-host",
+  "change_id": "add-zig-host",
+  "role": "worker",
+  "requester": {
+    "id": "agt-grok-conductor",
+    "kind": "model",
+    "harness": "grok",
+    "interface": "grok",
+    "signing": {
+      "mode": "stand-in",
+      "stand_in_id": "agt-grok-conductor"
+    }
+  },
+  "assignee": {
+    "id": "agt-sol-implement",
+    "kind": "model",
+    "harness": "codex",
+    "interface": "gpt-6.1-sol",
+    "effort": "high",
+    "signing": {
+      "mode": "stand-in",
+      "stand_in_id": "agt-sol-implement"
+    }
+  },
+  "goal": "Land the Zig host in host/ and the Lean export in the kernel package. kernel_run takes one program's bytes and returns one uint32. It parses the concrete syntax in openspec/changes/add-zig-host/design.md, calls Circular.evalFuel at the empty environment with one finite fuel large enough for the scenarios, and returns 0 for a closure, 2 * i + 1 for unbound i, and 4294967295 for none, including a parse failure. The Zig test passes the five texts in that design and checks those codes. The Zig sources pass bytes and do not case-split on variable, lambda, and application to produce an outcome.\n\nLink the way docs/spikes/lean-c-abi and docs/spikes/lean-runtime-init do: lean -c, leanc -c, zig build-obj, leanc links the objects. Do not pass -lc++ to Zig. Do not use dlopen or leanc -shared. Call the Lean runtime initializer the compiled package emits before the allocating call. The spike's initializer name was initialize_src_Spike because that file lived outside the package. Use the symbol this package actually emits.\n\nFrom the repo root, sh host/check.sh must exit 0. That script builds the kernel, runs lake env lean Contract.lean, links the host, and runs the five programs. lake build and Contract.lean stay exit 0. Check the task boxes in openspec/changes/add-zig-host/tasks.md only when that script exits 0.\n\nEarlier closed node homoiconic-pk4.1: ARCHITECTURE.md records Lean 4 semantics, a Zig host with no evaluator, and no Rust. Earlier closed node homoiconic-pk4.2: the kernel proves metacircular and coverage for every quote-free term, and lake build passes. Do not edit those theorems.",
+  "non_goals": [
+    "A reflective tower",
+    "dlopen or a shared library",
+    "Changing metacircular, coverage, or Pure",
+    "Making evalFuel return quote payloads",
+    "A multi-line REPL",
+    "Folding the change"
+  ],
+  "anchors": [
+    {
+      "symbol": "zig-host",
+      "invariant": "Zig passes program bytes to kernel_run. The codes are 0, 2*i+1, and 4294967295. The Zig tree does not evaluate. The link is the object path, after the Lean initializer."
+    },
+    {
+      "symbol": "evalFuel",
+      "invariant": "evalFuel agrees with Direct. some is a derivation. omega at the empty environment is none at every fuel. Quote is none. The export calls this function and does not apply interpreterBody."
+    }
+  ],
+  "acceptance": {
+    "kind": "command",
+    "command": "sh host/check.sh",
+    "if_true": "sh host/check.sh exits 0. The five programs return 0, 1, 0, 1, and 4294967295. lake build and lake env lean Contract.lean exit 0. The task boxes are checked.",
+    "if_false": "The script fails, a code disagrees with evalFuel, the Zig sources compute the outcome, or Contract.lean no longer compiles."
+  },
+  "out_of_scope": [
+    {
+      "item": "Quote-as-data on the executable entry",
+      "tracked_as": "Eval in the kernel spec"
+    }
+  ],
+  "constraints": {
+    "permission": "write",
+    "paths": [
+      "kernel",
+      "host",
+      "openspec/changes/add-zig-host/tasks.md"
+    ],
+    "do_not": [
+      "fold",
+      "push",
+      "edit proposal.md",
+      "edit design.md",
+      "edit the spec delta",
+      "edit reviews",
+      "edit ARCHITECTURE.md",
+      "edit docs/spikes",
+      "edit docs/the-floor.html",
+      "use sorry",
+      "add an axiom",
+      "use dlopen"
+    ]
+  },
+  "load_class": "intention-critical",
+  "rigor": "change",
+  "density": "standard",
+  "surface": "packet-only"
+}
