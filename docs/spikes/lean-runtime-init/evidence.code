@@ -1,0 +1,119 @@
+# src/Spike.lean
+
+import Circular.Semantics
+
+open Circular
+
+def skip : List Char → List Char
+  | ' ' :: cs => skip cs
+  | '\n' :: cs => skip cs
+  | '\t' :: cs => skip cs
+  | cs => cs
+
+def parseNat (acc : Nat) : List Char → Nat × List Char
+  | c :: cs =>
+    if c.isDigit then
+      parseNat (acc * 10 + (c.toNat - '0'.toNat)) cs
+    else
+      (acc, c :: cs)
+  | [] => (acc, [])
+
+/-- `fuel` bounds term nesting. The text is the design grammar. -/
+def parseTerm : Nat → List Char → Option (Term × List Char)
+  | 0, _ => none
+  | n + 1, raw =>
+    let cs := skip raw
+    match cs with
+    | '[' :: rest =>
+      match parseTerm n rest with
+      | some (body, rest) =>
+        match skip rest with
+        | ']' :: rest => some (.lam body, rest)
+        | _ => none
+      | none => none
+    | '(' :: rest =>
+      match parseTerm n rest with
+      | some (fn, rest) =>
+        match parseTerm n rest with
+        | some (arg, rest) =>
+          match skip rest with
+          | ')' :: rest => some (.app fn arg, rest)
+          | _ => none
+        | none => none
+      | none => none
+    | c :: _ =>
+      if c.isDigit then
+        let (k, rest) := parseNat 0 cs
+        some (.var k, rest)
+      else
+        none
+    | [] => none
+
+def resultCode : Option Outcome → UInt32
+  | some (.value _) => 0
+  | some (.unbound i) => 2 * i.toUInt32 + 1
+  | none => 4294967295
+
+@[export kernel_run]
+def kernelRun (program : String) : UInt32 :=
+  match parseTerm 64 program.toList with
+  | some (term, rest) =>
+    match skip rest with
+    | [] => resultCode (evalFuel 8 [] term)
+    | _ => 4294967295
+  | none => 4294967295
+
+# host.zig
+
+const std = @import("std");
+
+extern fn initialize_src_Spike(builtin: u8) ?*anyopaque;
+extern fn lean_io_mark_end_initialization() void;
+extern fn lean_io_result_show_error(r: *anyopaque) void;
+extern fn lean_mk_string(s: [*:0]const u8) ?*anyopaque;
+extern fn kernel_run(program: *anyopaque) u32;
+
+const LeanObject = extern struct {
+    rc: i32,
+    packed_tail: u32,
+};
+
+fn initTag(object: *anyopaque) u8 {
+    const header: *LeanObject = @ptrCast(@alignCast(object));
+    return @truncate(header.packed_tail >> 24);
+}
+
+fn run(program: [*:0]const u8) u32 {
+    const text = lean_mk_string(program) orelse {
+        std.debug.print("lean_mk_string failed\n", .{});
+        std.process.exit(3);
+    };
+    return kernel_run(text);
+}
+
+pub fn main() void {
+    const init = initialize_src_Spike(0) orelse {
+        std.debug.print("initializer returned null\n", .{});
+        std.process.exit(2);
+    };
+    if (initTag(init) != 0) {
+        lean_io_result_show_error(init);
+        std.process.exit(2);
+    }
+    lean_io_mark_end_initialization();
+
+    const programs = [_][*:0]const u8{
+        "([0] [0])",
+        "0",
+        "[1]",
+        "(0 ([(0 0)] [(0 0)]))",
+        "([(0 0)] [(0 0)])",
+        "bad",
+    };
+    const expected = [_]u32{ 0, 1, 0, 1, 4294967295, 4294967295 };
+    for (programs, expected) |program, want| {
+        const got = run(program);
+        std.debug.print("{s} {d}\n", .{ program, got });
+        if (got != want) std.process.exit(1);
+    }
+}

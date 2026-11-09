@@ -42,4 +42,4 @@ The arithmetic spike did not call the runtime initializer. A parser and `evalFue
 
 ## Unverified hypotheses
 
-- lean-runtime-init: claim: object-linking an exported Lean function that parses one program and calls evalFuel, after the host runs the package initializer, returns the codes in this design. The lean-c-abi spike linked unboxed arithmetic and did not initialize the runtime. confidence: low. verification: untested. synthesis path: add-zig-host
+- lean-runtime-init: claim: object-linking an exported Lean function that parses one program and calls evalFuel, after the host runs the package initializer, returns the codes in this design. The lean-c-abi spike linked unboxed arithmetic and did not initialize the runtime. confidence: high. verification: empirically-tested. synthesis path: add-zig-host. spike-artifact: docs/spikes/lean-runtime-init/finding.md. Validated by spike lean-runtime-init on 2026-11-08. — go

@@ -1,0 +1,23 @@
+$ ./repro-command.sh
+([0] [0]) 0
+0 1
+[1] 0
+(0 ([(0 0)] [(0 0)])) 1
+([(0 0)] [(0 0)]) 4294967295
+bad 4294967295
+
+$ nm out/Semantics.o | rg 'evalFuel$|initialize_Circular_Semantics'
+00000000000035e0 T _initialize_Circular_Semantics
+0000000000001fe4 T _l_Circular_evalFuel
+
+$ nm out/spike.o | rg 'evalFuel|initialize_'
+                 U _initialize_Circular_Semantics
+                 U _initialize_Init
+0000000000001af4 T _initialize_src_Spike
+                 U _l_Circular_evalFuel
+                 U _lean_initialize_runtime_module
+
+$ nm out/host | rg 'evalFuel|initialize_src_Spike|lean_mk_string$'
+00000001000e4588 t _initialize_src_Spike
+00000001000e53ac t _l_Circular_evalFuel
+000000010025db8c T _lean_mk_string
