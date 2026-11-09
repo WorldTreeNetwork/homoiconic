@@ -1,6 +1,6 @@
 # add-zig-host
 
-> **PENDING**
+> **ACTIVE BUILD**
 
 **Rigor:** change
 
@@ -44,7 +44,7 @@ No new UI because the surface is a Zig test that passes program text and checks 
 
 ## Preparation
 
-- Upstream: living specs `openspec/specs/language-partition/spec.md` (`e834845`) and `openspec/specs/lean-kernel/spec.md` (`1060902`). `ARCHITECTURE.md` assigns initialization, allocation, and the interpreter ABI to this change. Spike `lean-c-abi` is `go` for one unboxed `uint32` call that returned `71`. That call did not run the Lean initializer and did not evaluate a term. `evalFuel` remains a Lean function.
-- Anchors: the partition requires the Zig host to call Lean and to contain no evaluator. The kernel spec's executable entry is `evalFuel`, and that entry does not call Zig.
-- Outcome: revised. The bead assumed a callable interpreter ABI already existed. The spike showed the link for arithmetic. This contract adds `kernel_run` on that link. The goal is unchanged: Zig loads the kernel, reads a program, and returns the kernel's result.
-- Authority: none for this node. The user activated `add-lean-circular-kernel` only. Banner stays `PENDING`.
+- Upstream: living specs `openspec/specs/language-partition/spec.md` (`e834845`) and `openspec/specs/lean-kernel/spec.md` (`1060902`). `ARCHITECTURE.md` assigns initialization, allocation, and the interpreter ABI to this change. Spike `lean-c-abi` is `go` for one unboxed call that returned `71`. Spike `lean-runtime-init` is `go` at `7fad594`: object-linking `kernel_run` after the initializer returns the design codes, and the kernel package was not edited. `evalFuel` remains the executable entry and agrees with `Direct` on quote-free terms.
+- Anchors: the partition requires the Zig host to call Lean and to contain no evaluator. The kernel spec's executable entry is `evalFuel`. `metacircular` and `coverage` already cover every quote-free term. Quote-as-data stays on `Eval` and is outside this change.
+- Outcome: still valid. The runtime spike confirmed this contract. The goal is unchanged: Zig loads the kernel, reads a program, and returns the kernel's result.
+- Authority: the user said `activate` on 2026-11-08 for `add-zig-host`. Bounds are this contract: one pure program in, one result code out, object link, runtime initializer, no `dlopen`, no evaluator in the Zig tree, and no edit to `metacircular` or `coverage`. This is not a grant to act in the same breath.
