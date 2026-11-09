@@ -1,18 +1,18 @@
 {
-  "disposition": "task-red",
-  "summary": "lake build succeeds. metacircular and coverage are not declared, so the pure-fragment theorem is not proved.",
-  "verify_command": "lake build",
+  "disposition": "pass",
+  "summary": "metacircular and coverage hold for every quote-free term. omega has no interpreter derivation. lake build and Contract.lean exit 0.",
+  "verify_command": "lake build && lake env lean Contract.lean",
   "verify_exit": 0,
-  "commit_sha": "3c0c942",
+  "commit_sha": "46048e9",
   "changed_files": [
-    "kernel/",
-    "openspec/changes/add-lean-circular-kernel/tasks.md",
-    "groups/homoiconic-pk4.2/packet.json"
+    "kernel/Circular/Correctness.lean",
+    "kernel/Circular/InterpreterProof.lean",
+    "kernel/Circular/Closing.lean",
+    "kernel/Circular/Reduction.lean",
+    "kernel/Circular/Examples.lean",
+    "kernel/Axioms.lean",
+    "openspec/changes/add-lean-circular-kernel/tasks.md"
   ],
-  "blockers": [
-    "General metacircular proof",
-    "General coverage proof",
-    "Absence of interpreter derivations for omega"
-  ],
-  "raw_ref": ".spawns/homoiconic-pk4.2-1794193569-33421-68f3320a/raw.txt"
+  "blockers": [],
+  "raw_ref": ".spawns/homoiconic-pk4.2-1794194919-79395-f364a76e/raw.txt"
 }
