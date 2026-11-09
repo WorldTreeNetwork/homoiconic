@@ -1,0 +1,9 @@
+{
+  "disposition": "pass",
+  "summary": "kernel_run parses one program and calls evalFuel. The Zig host returns 0, 1, 0, 1, and 4294967295. sh host/check.sh exits 0.",
+  "verify_command": "sh host/check.sh",
+  "verify_exit": 0,
+  "commit_sha": "e94fea4",
+  "blockers": [],
+  "raw_ref": ".spawns/homoiconic-pk4.3-1794199937-49012-f17d2a19/raw.txt"
+}
