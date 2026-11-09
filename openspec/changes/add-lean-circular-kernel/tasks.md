@@ -1,7 +1,7 @@
 # Tasks
 
-- [ ] Add a Lean 4 package whose `lake build` succeeds
-- [ ] Define terms with variable, abstraction, application, and quote
+- [x] Add a Lean 4 package whose `lake build` succeeds
+- [x] Define terms with variable, abstraction, application, and quote
 - [ ] Prove the metacircular equality for the pure fragment, and not for quoted re-entry
 
 ## Owed from advise — 2026-11-08, astra-arch-review
