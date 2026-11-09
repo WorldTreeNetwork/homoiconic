@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "id": "pkt-add-language-partition-act",
+  "node_id": "homoiconic-pk4-1",
+  "capability": "language-partition",
+  "change_id": "add-language-partition",
+  "role": "worker",
+  "requester": {
+    "id": "agt-grok-conductor",
+    "kind": "model",
+    "harness": "grok",
+    "interface": "grok",
+    "signing": {
+      "mode": "stand-in",
+      "stand_in_id": "agt-grok-conductor"
+    }
+  },
+  "assignee": {
+    "id": "agt-sonnet-known",
+    "kind": "model",
+    "harness": "claude",
+    "interface": "claude-sonnet-5-5",
+    "signing": {
+      "mode": "stand-in",
+      "stand_in_id": "agt-sonnet-known"
+    }
+  },
+  "goal": "Write ARCHITECTURE.md so a reader can see the settled partition: Lean 4 is the only semantics language, Zig is the host and contains no evaluator, Rust is absent, and the kernel change owns the metacircular theorem on a named small fragment. Check the open task in tasks.md. Create no Lean package and no Zig program.",
+  "non_goals": [
+    "A Lean kernel",
+    "A Zig host",
+    "Folding the change into openspec/specs",
+    "Editing the proposal, the design, or the spec delta"
+  ],
+  "anchors": [
+    {
+      "symbol": "language-partition",
+      "invariant": "Semantics are Lean 4 source. The Zig host contains no evaluator. Rust is absent. Circularity is the metacircular theorem, owned by the kernel change."
+    }
+  ],
+  "acceptance": {
+    "kind": "contrast",
+    "if_true": "ARCHITECTURE.md names Lean 4 as the semantics language, Zig as the host with no evaluator, Rust as absent, and the metacircular theorem as the kernel's acceptance. The task box for writing that file is checked.",
+    "if_false": "ARCHITECTURE.md is missing, puts an evaluator in Zig, or includes Rust as a language of the first system."
+  },
+  "out_of_scope": [
+    {
+      "item": "Lean kernel and the metacircular theorem",
+      "tracked_as": "add-lean-circular-kernel"
+    },
+    {
+      "item": "Zig host and the C ABI call",
+      "tracked_as": "add-zig-host"
+    }
+  ],
+  "constraints": {
+    "permission": "write",
+    "paths": [
+      "ARCHITECTURE.md",
+      "openspec/changes/add-language-partition/tasks.md"
+    ],
+    "do_not": [
+      "fold",
+      "edit proposal.md",
+      "edit design.md",
+      "edit the spec delta",
+      "add a Lean package",
+      "add a Zig program"
+    ]
+  },
+  "load_class": "intention-critical",
+  "rigor": "architecture",
+  "density": "explicit",
+  "surface": "skill-host"
+}
