@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "homoiconic",
+  "project_id": "084846f0-fd1e-4243-ba3b-743675d2ef30"
+}
