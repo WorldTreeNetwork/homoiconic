@@ -119,6 +119,10 @@ No new UI because this change is a vision and a roadmap.
 
 ## Changelog
 
+### 2026-11-09 (second entry)
+
+- D1 decided: primitive data. Added D7 (formats from identikey-protocol: dCBOR, Blake3, the log op, envelopes) and D8 (code as a dCBOR value, proposed). P4 restated over dCBOR in both directions.
+
 ### 2026-11-09
 
 - Created from a reading of the kernel, the proofs, and the host, and from the stated goal: an event-oriented network of VMs running verifiable programs that include deterministic and non-deterministic compute.

@@ -22,9 +22,11 @@ Not yet true:
 
 ## Decisions
 
-### D1. Data carrier — open
+### D1. Data carrier — decided 2026-11-09: primitive data
 
-Data is currently Scott-encoded lambda terms. The alternative is a primitive first-order type: bytes and pairs, or S-expressions.
+Decided by the user. Data is a primitive first-order type, not Scott-encoded terms. D7 says which type and which bytes. D8 says how code is a value of it. The comparison below is kept as the record of why.
+
+Data was Scott-encoded lambda terms. The alternative was a primitive first-order type: bytes and pairs, or S-expressions.
 
 | | Scott-encoded | Primitive data |
 |---|---|---|
@@ -34,7 +36,7 @@ Data is currently Scott-encoded lambda terms. The alternative is a primitive fir
 | Inspecting code in the language | Only by applying it | By case analysis |
 | Existing proof | Stands as is | Restated through P8 |
 
-Recommendation: primitive data, introduced through the parametric statement P8, with `quote` producing it. Every proof from P4 on depends on this choice. It is the first thing stage 1 settles, by a spike that restates `metacircular` for a language with one primitive data type and reports the cost.
+Primitive data is introduced through the parametric statement P8, with `quote` producing it. Stage 1 opens with a spike that restates `metacircular` for a language with this data type and reports the cost.
 
 ### D2. The machine is the executable entry; `Direct` stays the specification
 
@@ -56,6 +58,58 @@ Collision resistance appears as an explicit premise on theorems that need it. No
 
 The partition extends. The step function, the event handler, the log fold, the serialization, and the network transition are Lean definitions. Zig owns sockets, files, the event loop, and calling a model. Zig does not decide what an event means.
 
+### D7. Formats come from identikey-protocol; the code that reads them is Lean
+
+Direction from the user, 2026-11-09: reuse identikey-protocol's choices where useful. Source: `identikey-protocol/docs/standards/` and `crates/identikey-log`.
+
+| Need here | identikey-protocol choice | Used for |
+|---|---|---|
+| Canonical bytes | dCBOR: sorted map keys, smallest-form integers, definite lengths, no floats, re-serialization byte-identical | P4 |
+| Hash | Blake3 over canonical bytes, 32 raw bytes | P5 |
+| Event record | `identikey-log` op: signed, content-addressed, hybrid logical clock, parent links, opaque dCBOR `body` | P13, P14, D4 |
+| Signed container | Gordian Envelope (`#6.200`), signatures on the wrapper, salted elision | Receipts (P20) |
+| Authority | Biscuit capability tokens with attenuation | The host's side of P12 |
+| Text form | `ur:envelope/…` for a whole envelope; base58 or base64 by size for one value | Host output only |
+
+Boundary: the kernel's program, value, or event is the op's `body` — canonical dCBOR bytes. Lean defines and proves the reading and writing of that body. The op wrapper, signatures, clocks, and tokens are the host's. They are checked by Zig and enter the proofs as hypotheses, the way the hash does.
+
+Constraints this puts on us:
+
+- **No Rust.** The identikey crates are Rust and the partition excludes Rust. We adopt the formats and the committed fixtures as test vectors, not the crates.
+- **A strict decoder.** dCBOR rejects non-canonical bytes. P4 therefore gets its converse on accepted input: `parse b = some x → print x = b`. Equal hashes then mean equal values in both directions.
+- **Two hashes exist upstream.** The log's identity is Blake3 of canonical bytes. Envelope digests are SHA-256. Code identity here is Blake3, to match the log.
+- **Start with a subset.** Unsigned integers, byte strings, and arrays first. Maps, text, negative integers, and tags are added through P8 when something needs them. Map-key ordering is a proof of its own.
+- **Biscuit carries Datalog.** Evaluating a token is evaluation. It stays outside the kernel and outside the theorems until someone decides otherwise.
+
+### D8. Code is a value of the data type — proposed
+
+We do not need a new format. We need a schema of a few lines over dCBOR, and its shape has precedent.
+
+```
+term = uint                 ; variable, de Bruijn index
+     / [0, term, term]      ; application
+     / [1, term]            ; lambda
+     / [2, data]            ; literal: the data value itself, not evaluated
+     / [3, uint, *term]     ; primitive operation
+```
+
+The identity function is three bytes: `82 01 00`. The numbering is stage 1's to fix.
+
+What this buys: `quote p` evaluates to the data value that is `p`'s representation. The interpreter takes that value and takes it apart with primitives. The wire form, the hashed form, the quoted form, and the interpreter's input are the same bytes. `encode` stops being a Lean function beside the language and becomes the identity on bytes. The metacircular theorem is restated over that.
+
+Existing work considered:
+
+| | What it is | Take | Leave |
+|---|---|---|---|
+| Dhall binary | A standard CBOR encoding of lambda terms, hashed after normalization | The shape: bare integer for a variable, labelled arrays for the rest | The language: typed and total |
+| Untyped Plutus Core | Untyped lambda calculus with de Bruijn indices, builtins, a CBOR data type, a costed abstract machine, and a formal specification | The design of builtins with a cost each, and a machine with a step budget (P1, P3, P8) | The wire format (bit-oriented, not CBOR) and the builtin set; adopting the language means redoing the central proof for a much larger one |
+| Unison | Code identified by the hash of its syntax tree; names are metadata | The principle | Its own format |
+| Nock | Code is a tree of numbers; a machine is a function of its event log | The architecture, which matches stages 5 and 6 | Combinators instead of lambda; the existing proof would not carry |
+| Binary lambda calculus | Bit encoding of exactly this language | Nothing | No data, not byte-aligned |
+| WebAssembly | A specified, mechanized bytecode | A later compile target | Code is not a value in it |
+
+These descriptions are from memory and were not checked against current sources. Stage 1 checks the two it borrows from.
+
 ## Proof obligations
 
 Ordered by dependency. "Free" means it follows from earlier results with little new work.
@@ -72,7 +126,7 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 
 | | Statement | Why | Needs |
 |---|---|---|---|
-| **P4** | `parse (print x) = some x` for terms, values, outcomes, and machine states; `print` is injective | One canonical form. The current parser gets its theorem here. | D1 |
+| **P4** | Over dCBOR (D7): `parse (print x) = some x` and `parse b = some x → print x = b`, for data, terms, values, outcomes, and machine states | One canonical form, in both directions. The text parser is replaced or gets the same theorem. | D7, D8 |
 | **P5** | Given a hash with no collisions on a set `S`: `hash (print a) = hash (print b) → a = b` for `a b ∈ S` | A hash names a program. | P4, D5 |
 
 ### Wider language
@@ -131,7 +185,8 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 
 ## Unverified hypotheses
 
-- primitive-data-restatement: claim: `metacircular` can be restated for a language with one primitive first-order data type by changing the encoding and three dispatch lemmas, without redoing the fixed-point simulation. confidence: medium. verification: none. synthesis path: stage 1. Decides D1.
+- primitive-data-restatement: claim: `metacircular` can be restated for a language with one primitive first-order data type by changing the encoding and three dispatch lemmas, without redoing the fixed-point simulation. confidence: medium. verification: none. synthesis path: stage 1. Prices D1 and D8.
+- lean-dcbor-subset: claim: a Lean reader and writer for the D7 subset reproduces the identikey-protocol fixtures byte for byte. confidence: high. verification: none. synthesis path: stage 1.
 - parametric-primitives: claim: P8 can be stated so each new primitive adds one local lemma. confidence: medium. verification: none. synthesis path: stage 3.
 - interpreter-overhead: claim: P9's bound is a constant times program size times source steps. Variable lookup walks a Church index, so the factor is not a pure constant. confidence: medium. verification: none. synthesis path: stage 3.
 - order-free-class: claim: there is a useful class for P16 that a proved checker can recognise. confidence: low. verification: none. synthesis path: stage 6.
