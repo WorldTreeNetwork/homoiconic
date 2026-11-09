@@ -1,6 +1,6 @@
 # Architecture
 
-The settled language partition for the first system. Source of record: `openspec/specs/language-partition/spec.md`.
+The settled language partition for the first system. Source of record for the partition: `openspec/specs/language-partition/spec.md`. Source of record for the kernel: `openspec/specs/lean-kernel/spec.md`.
 
 ## Partition
 
@@ -14,7 +14,7 @@ The settled language partition for the first system. Source of record: `openspec
 
 Circularity means the metacircular theorem. An interpreter is a term of the language. On a small, named fragment, evaluating that term on a program equals evaluating the program directly.
 
-The kernel change, `add-lean-circular-kernel`, owns this theorem. It names the fragment, builds the evaluator, and proves the theorem. The theorem is the kernel's acceptance.
+The kernel change, `add-lean-circular-kernel`, landed this theorem. The fragment is every quote-free term. The evaluator is Lean 4 source in `kernel/`. `metacircular` and `coverage` are proved (`46048e9`). One level. The Zig host and a C ABI are not part of that landing.
 
 ## Boundary
 
@@ -28,7 +28,7 @@ The proof boundary is the call from the Zig host into the Lean kernel. The `lean
 
 ## Downstream changes
 
-- `add-lean-circular-kernel`: the evaluator and the metacircular theorem.
-- `add-zig-host`: the process and the C ABI call.
+- `add-lean-circular-kernel`: folded. The evaluator and the metacircular theorem are `openspec/specs/lean-kernel/spec.md`.
+- `add-zig-host`: the process and the C ABI call. Not started here.
 
-Neither starts until this partition is the landed artifact they can cite.
+The partition is the landed artifact those changes cite. This kernel does not add a Zig host or a C ABI.
