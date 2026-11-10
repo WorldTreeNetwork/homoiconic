@@ -4,7 +4,7 @@ import Surface.Run
 
 /-!
 Run with `lake env lean Surface/Check.lean` from `kernel/`. Checks every entry
-of `reads`, `refused`, `prints`, and `renders`, and that rendered data reads
+of `reads`, `refused`, `prints`, `converses`, and `renders`, and that rendered data reads
 back as a program with the same data as its outcome. Prints each failing entry
 and throws, so `lean` exits non-zero, if any check fails.
 -/
@@ -72,6 +72,12 @@ def main : IO UInt32 := do
       if !roundTrip d then
         IO.println s!"FAIL roundtrip {show1 text}: `{renderData d}` does not read back"
         fails := fails + 1
+  for (text, answers, budget, out) in converses do
+    total := total + 1
+    let got := converseText text.toUTF8 answers.toUTF8 budget
+    if got != out then
+      IO.println s!"FAIL converses {show1 text} with {show1 answers}: printed `{show1 got}`, expected `{show1 out}`"
+      fails := fails + 1
   for (t, budget, out) in runs do
     total := total + 1
     let got := renderState budget (runUntil budget (load (compile t)))

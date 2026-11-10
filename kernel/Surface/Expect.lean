@@ -1,4 +1,5 @@
 import Reflect.Interpreter
+import Reflect.Request
 
 /-!
 What the reader must produce. Each entry pairs program text with the exact
@@ -26,6 +27,9 @@ Translation, as fixed by these examples:
   read outside the quotation, and each node on the way is the `cons` chain
   that builds that node's data form.
 - `interpret` is the term `interp`.
+- `ask` is the term `askTerm`: `ask payload next` is a function that hands
+  `payload` and `next` to its caller. A driver outside the program reads it as
+  a request.
 -/
 namespace Surface
 open Reflect
@@ -87,6 +91,7 @@ interpret (quote (~inner + 1))"
 
 /-- Program text and the term it must read as. -/
 def reads : List (String × Term) := [
+  ("ask", askTerm),
   ("42", num 42),
   ("fn x -> x", .lam (.var 0)),
   ("fn x y -> x", .lam (.lam (.var 1))),
@@ -230,6 +235,53 @@ def prints : List (String × Nat × String) := [
   ("[1, 2, [3, 4]]", 1000, "[1, 2, [3, 4]]"),
   ("case [1]\n  [h,\n...t] -> h", 1000, "1"),
   ("case []\n  [\n] -> 7", 1000, "7")
+]
+
+def askTwiceText : String :=
+"ask [1] (fn a ->
+  ask [2, a] (fn b ->
+    add a b))"
+
+def askLoopText : String :=
+"def sum n acc =
+  case n
+    0 -> acc
+    m + 1 -> ask n (fn a -> sum m (add acc a))
+
+sum 3 0"
+
+/-- Program text, answers text, step budget for each turn, and the text the
+    host must print: one `asked:` line for each request, then how the run ended. -/
+def converses : List (String × String × Nat × String) := [
+  (askTwiceText, "[]", 100000, "asked: [1]\nwaiting"),
+  (askTwiceText, "[20]", 100000, "asked: [1]\nasked: [2, 20]\nwaiting"),
+  (askTwiceText, "[20, 22]", 100000, "asked: [1]\nasked: [2, 20]\n42"),
+  -- answers left over are not used
+  (askTwiceText, "[20, 22, 5]", 100000, "asked: [1]\nasked: [2, 20]\n42"),
+  -- the answers text is a program
+  (askTwiceText, "[add 10 10, mul 2 11]", 100000, "asked: [1]\nasked: [2, 20]\n42"),
+  (askLoopText, "[10, 20, 30]", 100000, "asked: 3\nasked: 2\nasked: 1\n60"),
+  (askLoopText, "[10]", 100000, "asked: 3\nasked: 2\nwaiting"),
+  -- a program that asks nothing
+  ("add 1 2", "[]", 1000, "3"),
+  ("add 1 2", "[9]", 1000, "3"),
+  ("1 2", "[]", 1000, "error: wrong"),
+  -- a function that is not a request, and a request whose payload is a function
+  ("fn x -> x", "[]", 1000, "error: wrong"),
+  ("ask (fn x -> x) (fn a -> a)", "[1]", 1000, "error: wrong"),
+  -- an error after an answer keeps the requests made before it
+  ("ask 1 (fn a -> a a)", "[1]", 1000, "asked: 1\nerror: wrong"),
+  -- an answer can be code
+  ("ask 0 (fn code -> interpret code)", "[quote (add 2 3)]", 100000, "asked: 0\n[0, [1, 5]]"),
+  -- a turn that does not finish
+  ("def loop x = loop x\nask 1 (fn a -> loop a)", "[1]", 1000,
+    "asked: 1\nno result within 1000 steps of a turn"),
+  ("def loop x = loop x\nloop 0", "[]", 1000, "no result within 1000 steps of a turn"),
+  -- answers that are not an array, and answers that do not read
+  ("ask 1 (fn a -> a)", "7", 1000, "answers: not an array"),
+  ("ask 1 (fn a -> a)", "fn x -> x", 1000, "answers: not an array"),
+  ("ask 1 (fn a -> a)", "[", 1000, "answers: syntax error: line 1, column 2: expected an expression"),
+  ("f 1", "[]", 1000, "syntax error: line 1, column 1: unbound name `f`")
 ]
 
 /-- Terms no surface text reads as, run on the machine: term, budget, text. -/

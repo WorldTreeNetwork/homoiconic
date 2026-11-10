@@ -1,0 +1,4 @@
+; asks for two numbers, one after the other, and adds them
+ask [1] (fn a ->
+  ask [2, a] (fn b ->
+    add a b))

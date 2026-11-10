@@ -1,3 +1,4 @@
+import Reflect.Request
 import Reflect.Interpreter
 import Reflect.Arith
 
@@ -664,6 +665,7 @@ def lookup (sc : Scope) (p : Pos) (x : String) : Except String TT :=
     .error (fmtPos p s!"the quotation mentions `{x}`, which is bound outside it")
   else if x == "interpret" then .ok (.term interp)
   else if x == "op" then .ok (.term opTerm)
+  else if x == "ask" then .ok (.term askTerm)
   else match arithNames.lookup x with
     | some n => .ok (.term (binaryOp n))
     | none => .error (fmtPos p s!"unbound name `{x}`")

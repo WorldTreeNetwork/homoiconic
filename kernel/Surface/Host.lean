@@ -21,4 +21,14 @@ unsafe def reflectRun (program length out capacity : USize) (budget : UInt64) : 
   let text := Surface.runText (copyBytes program length) budget.toNat
   storeBytes out capacity text.toUTF8
 
+/-- C ABI: program pointer and length, answers pointer and length, output
+    pointer and capacity, step budget for each turn. Returns the number of
+    bytes the rendering needs, as `reflect_run` does. -/
+@[export reflect_converse]
+unsafe def reflectConverse (program length answers answersLength out capacity : USize)
+    (budget : UInt64) : USize :=
+  let text := Surface.converseText (copyBytes program length)
+    (copyBytes answers answersLength) budget.toNat
+  storeBytes out capacity text.toUTF8
+
 end Surface.Host

@@ -10,6 +10,7 @@ mkdir -p "$OUT"
 lake build
 lake env lean ReflectContract.lean
 lake env lean MachineContract.lean
+lake env lean RequestContract.lean
 lake env lean Surface/Check.lean
 # The scenarios print one line each; a line that starts with FAIL fails the check.
 lake env lean ReflectRun.lean > "$OUT/scenarios.txt"
@@ -24,7 +25,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith \
+for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request \
               Surface/Read Surface/Render Surface/Run Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
@@ -34,7 +35,7 @@ for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machi
 done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
 lake env leanc -c -o "$OUT/runtime.o" "$HOST/runtime.c"
-for program in check run; do
+for program in check run ask; do
     zig build-obj "$HOST/$program.zig" -femit-bin="$OUT/zig-$program.o" \
         --cache-dir "$OUT/zig-cache" --global-cache-dir "$OUT/zig-global-cache"
     # shellcheck disable=SC2086
@@ -93,3 +94,48 @@ refuse "run: cannot read the program file: IsDir" "$EXAMPLES"
 refuse "$BUDGET" "$EXAMPLES/append.hom" -1
 refuse "$BUDGET" "$EXAMPLES/append.hom" "$NEWLINE"
 echo "run command checks passed"
+
+# The ask command: a program file and an answers file in, the kernel's text out.
+converse() {
+    wanted="$1"
+    shift
+    got="$("$OUT/ask" "$@")"
+    if [ "$got" != "$wanted" ]; then
+        echo "ask $*: expected '$wanted', got '$got'" >&2
+        exit 1
+    fi
+    echo "ask $* => $(echo "$got" | tr '\n' '|')"
+}
+converse "asked: [1]
+asked: [2, 20]
+42" "$EXAMPLES/ask.hom" "$EXAMPLES/ask.answers"
+converse "asked: [1]
+asked: [2, 20]
+waiting" "$EXAMPLES/ask.hom" "$EXAMPLES/ask-one.answers"
+# A program that asks nothing answers as it does under run.
+converse "[1, 2, 3, 4]" "$EXAMPLES/append.hom" "$EXAMPLES/ask.answers"
+converse "no result within 5000 steps of a turn" "$EXAMPLES/forever.hom" "$EXAMPLES/ask.answers" 5000
+# An answers file that is not an array is the kernel's text, and exits 0.
+converse "answers: not an array" "$EXAMPLES/ask.hom" "$EXAMPLES/factorial.hom"
+
+ASKUSAGE="usage: ask <program-file> <answers-file> [step-budget]   (default budget: 100000000 machine steps for each turn)"
+refuseAsk() {
+    wanted="$1"
+    shift
+    status=0
+    "$OUT/ask" "$@" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+    printf '%s\n' "$wanted" > "$OUT/refuse.expected"
+    if [ "$status" != 2 ] || [ -s "$OUT/refuse.out" ]; then
+        echo "ask $*: expected exit 2 and no output; got exit $status" >&2
+        exit 1
+    fi
+    cmp "$OUT/refuse.expected" "$OUT/refuse.err"
+    echo "ask refused: $wanted"
+}
+refuseAsk "$ASKUSAGE"
+refuseAsk "$ASKUSAGE" "$EXAMPLES/ask.hom"
+refuseAsk "$ASKUSAGE" "$EXAMPLES/ask.hom" "$EXAMPLES/ask.answers" 1 extra
+refuseAsk "ask: cannot read the program file: FileNotFound" "$EXAMPLES/missing.hom" "$EXAMPLES/ask.answers"
+refuseAsk "ask: cannot read the answers file: FileNotFound" "$EXAMPLES/ask.hom" "$EXAMPLES/$NEWLINE"
+refuseAsk "ask: the step budget must be a whole number" "$EXAMPLES/ask.hom" "$EXAMPLES/ask.answers" "$NEWLINE"
+echo "ask command checks passed"
