@@ -283,14 +283,18 @@ def parsePattern : P Pat := do
       | _ => pure (.any x)
     | .lbrack => do
       advance
+      -- Inside brackets layout is off; the header's limit returns after `]`.
+      let g := (← get).guard
+      setGuard .none
       match ← peekRaw with
-      | some ⟨.rbrack, _, _, _⟩ => do advance; pure .nil
+      | some ⟨.rbrack, _, _, _⟩ => do advance; setGuard g; pure .nil
       | some ⟨.name _, _, _, _⟩ =>
         let h ← parseBinder
         expectTok .comma
         expectTok .dots
         let tl ← parseBinder
         expectTok .rbrack
+        setGuard g
         pure (.cons h tl)
       | u => failAt u "patterns are one level deep: `[]` or `[head, ...tail]`"
     | k => failAt (some t) s!"expected a pattern, found `{k.show}`"

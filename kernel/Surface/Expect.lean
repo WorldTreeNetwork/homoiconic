@@ -129,6 +129,9 @@ def reads : List (String × Term) := [
   ("let x\n  = 7\nx", .app (.lam (.var 0)) (num 7)),
   ("case 3\n  m +\n    1 -> m", .dcase (num 3) wrongT (.var 0) wrongT wrongT),
   ("let x = [1,\n2]\nx", .app (.lam (.var 0)) (arr2 (num 1) (num 2))),
+  ("case [1]\n  [h,\n...t] -> h", .dcase (.cons (num 1) nil) wrongT wrongT wrongT (.var 1)),
+  ("case [1]\n  [h, ...t\n] -> h", .dcase (.cons (num 1) nil) wrongT wrongT wrongT (.var 1)),
+  ("case []\n  [\n] -> 7", .dcase nil wrongT wrongT (num 7) wrongT),
   ("quote (fn x -> x)", .lit (reify (.lam (.var 0)))),
   ("quote (interpret 1)", .lit (reify (.app interp (num 1)))),
   (spliceText,
@@ -162,6 +165,8 @@ def refused : List (String × String) := [
   ("let x\n= 7\nx", "indented"),
   ("case 3\n  m +\n1 -> m", "indented"),
   ("case 0\n  x\n-> x", "indented"),
+  ("case [1]\n  [h, ...t]\n-> h", "indented"),
+  ("case []\n  []\n-> 7", "indented"),
   ("case 3\n  m + 1 -> ghost\n  ghost -> 2", "ghost"),
   ("case []\n  [] -> ghost\n  ghost -> 2", "ghost"),
   ("case [1]\n  [h, ...t] -> ghost\n  ghost -> 2", "ghost")
@@ -187,7 +192,9 @@ def prints : List (String × Nat × String) := [
   ("let x = 99\ncase [1]\n  [h, ...t] -> x\n  x -> 0", 1000, "99"),
   ("fn f -> case f\n  _ -> 1", 1000, "<function>"),
   ("let x = 99\ncase []\n  [] ->\n    let y = x\n    y\n  x -> 0", 1000, "99"),
-  ("[1, 2, [3, 4]]", 1000, "[1, 2, [3, 4]]")
+  ("[1, 2, [3, 4]]", 1000, "[1, 2, [3, 4]]"),
+  ("case [1]\n  [h,\n...t] -> h", 1000, "1"),
+  ("case []\n  [\n] -> 7", 1000, "7")
 ]
 
 /-- Terms no surface text reads as, run on the machine: term, budget, text. -/

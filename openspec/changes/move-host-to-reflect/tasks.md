@@ -13,3 +13,4 @@
 - [x] After review: `Expect.runs` compiles, runs, and renders terms no text reads as, including `var 2147483647`; the self-application program goes through `reflect_run`.
 - [x] After second review: header and pattern tokens are consumed under the layout limit, so a header cannot take the next statement's line. Five refusals, four indented controls, and a bracket control are in `Expect.lean`.
 - [x] After second review: the catch-all matrix is complete: the empty-arm result with a local `let`, and unbound-name refusals in the successor, empty, and non-empty arms.
+- [x] After third review: a bracket pattern turns layout off, as bracket expressions do, and the header limit returns for the `->` after `]`. Three accepted forms and two refusals are in `Expect.lean`.
