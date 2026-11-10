@@ -24,14 +24,16 @@ pub fn main(init: std.process.Init) void {
     const args = init.minimal.args.toSlice(arena) catch fail("run: out of memory\n", .{});
     if (args.len < 2 or args.len > 3) fail("{s}", .{usage});
 
+    // Diagnostics do not repeat the arguments, so each is one line whatever
+    // bytes the arguments hold.
     const budget = if (args.len == 3)
         std.fmt.parseInt(u64, args[2], 10) catch
-            fail("run: the step budget must be a whole number, got `{s}`\n", .{args[2]})
+            fail("run: the step budget must be a whole number\n", .{})
     else
         default_budget;
 
     const program = std.Io.Dir.cwd().readFileAlloc(init.io, args[1], arena, .unlimited) catch |err|
-        fail("run: cannot read `{s}`: {s}\n", .{ args[1], @errorName(err) });
+        fail("run: cannot read the program file: {s}\n", .{@errorName(err)});
 
     if (kernel_finish_initialization(initialize_circularKernel_Surface_Host(0)) == 0)
         fail("run: the kernel did not start\n", .{});

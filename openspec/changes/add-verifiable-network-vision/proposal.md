@@ -28,7 +28,7 @@ The usual answer is to trust the operator. Whoever runs the machine tells you wh
 
 If a program is a value, then everything a distributed system does to a computation is an operation on a value: send it, store it, hash it, pause it, resume it elsewhere, replay it, hand it to an interpreter that adds a rule. Each of those can be stated as a theorem about one evaluator.
 
-The first theorem is in place. `metacircular` says an interpreter written in the language agrees with direct evaluation on every quote-free program. That shows the language can hold and run its own programs, and that the proof is about the code that executes.
+The first theorem is in place. `reflective` says an interpreter written in the language, given a program as data, agrees with direct evaluation on every program. (When this was written the theorem was `metacircular`, for quote-free programs only; `Reflect` replaced it.) That shows the language can hold and run its own programs, and that the proof is about the code that executes.
 
 The second half of the insight is about model calls. A model call does not have to be inside the semantics. It can be a request the program makes and an answer it receives. Then the program is exact relative to the answers it was given. The answers are recorded. Everything downstream of them can be replayed and checked, and the program can be proved correct for every answer that passes a check it runs itself.
 
@@ -84,7 +84,7 @@ Two tracks. The spine pushes the metacircular theorem as far as it goes, because
 
 | Stage | Track | Name | What lands | Demonstration | Proofs |
 |---|---|---|---|---|---|
-| 0 | — | Floor | The metacircular theorem and the Zig call. **Done.** | `sh host/check.sh` | — |
+| 0 | — | Floor | The metacircular theorem for quote-free programs and the Zig call. **Done, then replaced by stages 1 and 2.** | `sh host/check.sh` | — |
 | 1 | Spine | Code is data | Primitive data in the language. `quote` gives a program as data. The interpreter takes that data. The theorem covers programs that use quote, at any environment and any interpreter depth. | The interpreter runs itself running a program that builds and runs another program. | P6, P7, P8a |
 | 2 | Machine | Bytecode | A stack machine that agrees with `Direct`, pauses and resumes, and has a step and space budget. A speed measurement. | A long program run in three slices gives the outcome of one run. | P1, P1b, P2, P3 |
 | 3 | Spine | Primitives | New primitives added through one parametric statement, with native implementations. | Arithmetic and hashing on bytes, interpreted and direct, agree. | P8, P9 |
@@ -122,6 +122,10 @@ No new UI because this change is a vision and a roadmap.
 - A surface syntax, module system, or editor.
 
 ## Changelog
+
+### 2026-11-10
+
+- Stages 1 and 2 landed and were folded (`code-as-data`, `bytecode-machine`), with a surface syntax and a host command. The first kernel was removed by `retire-circular-kernel`. The core insight now names `reflective`.
 
 ### 2026-11-09 (third entry)
 

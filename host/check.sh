@@ -52,33 +52,37 @@ expect() {
 expect "[1, 2, 3, 4]" "$EXAMPLES/append.hom"
 expect "[0, [1, 42]]" "$EXAMPLES/code.hom"
 expect "no result within 5000 steps" "$EXAMPLES/forever.hom" 5000
-# An answer longer than the command's first buffer is printed in full.
+# An answer longer than the command's first buffer is printed in full: every
+# byte is compared.
 printf 'def fill n =\n  case n\n    0 -> []\n    m + 1 -> [n, ...fill m]\n\nfill 20000\n' > "$OUT/long.hom"
 "$OUT/run" "$OUT/long.hom" > "$OUT/long.txt"
-size="$(wc -c < "$OUT/long.txt")"
-size="$((size + 0))"
-ending="$(tail -c 9 "$OUT/long.txt")"
-if [ "$size" != 128895 ] || [ "$ending" != "3, 2, 1]" ]; then
-    echo "run: a long answer was not printed in full" >&2
-    exit 1
-fi
+awk 'BEGIN { printf "["; for (i = 20000; i > 1; i--) printf "%d, ", i; printf "1]\n" }' > "$OUT/long.expected"
+cmp "$OUT/long.expected" "$OUT/long.txt"
 
 # A call the command cannot make: exit 2, nothing on standard output, and
-# exactly one line on standard error.
+# exactly the one expected line on standard error, byte for byte.
+USAGE="usage: run <program-file> [step-budget]   (default budget: 100000000 machine steps)"
+BUDGET="run: the step budget must be a whole number"
+NEWLINE="x
+y"
 refuse() {
+    wanted="$1"
+    shift
     status=0
     "$OUT/run" "$@" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
-    lines="$(wc -l < "$OUT/refuse.err")"
-    lines="$((lines + 0))"
-    if [ "$status" != 2 ] || [ -s "$OUT/refuse.out" ] || [ "$lines" != 1 ]; then
-        echo "run $*: expected exit 2, no output and one line of error; got exit $status, $lines error lines" >&2
+    printf '%s\n' "$wanted" > "$OUT/refuse.expected"
+    if [ "$status" != 2 ] || [ -s "$OUT/refuse.out" ]; then
+        echo "run $*: expected exit 2 and no output; got exit $status" >&2
         exit 1
     fi
-    echo "run $* refused: $(cat "$OUT/refuse.err")"
+    cmp "$OUT/refuse.expected" "$OUT/refuse.err"
+    echo "run refused: $wanted"
 }
-refuse
-refuse "$EXAMPLES/append.hom" 1 extra
-refuse "$EXAMPLES/missing.hom"
-refuse "$EXAMPLES"
-refuse "$EXAMPLES/append.hom" -1
+refuse "$USAGE"
+refuse "$USAGE" "$EXAMPLES/append.hom" 1 extra
+refuse "run: cannot read the program file: FileNotFound" "$EXAMPLES/missing.hom"
+refuse "run: cannot read the program file: FileNotFound" "$EXAMPLES/$NEWLINE"
+refuse "run: cannot read the program file: IsDir" "$EXAMPLES"
+refuse "$BUDGET" "$EXAMPLES/append.hom" -1
+refuse "$BUDGET" "$EXAMPLES/append.hom" "$NEWLINE"
 echo "run command checks passed"

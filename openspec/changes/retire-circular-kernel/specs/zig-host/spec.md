@@ -66,7 +66,7 @@ The Zig tree SHALL load the Lean exports and SHALL NOT define an evaluator or a 
 
 ### Requirement: A command runs a program file
 
-The host SHALL provide a command that takes the path of a program file and an optional step budget. It SHALL pass the file's bytes and the budget to `reflect_run` and SHALL print the bytes that come back, followed by a newline, on standard output. With no budget given it SHALL use one hundred million steps. It SHALL exit 0 whenever the kernel answered and the answer was written, whatever the answer says: a value, an error outcome, a syntax error, and a run with no result are all the kernel's text. It SHALL exit 2 and print one line on standard error when it is called with the wrong number of arguments, when the budget is not a whole number, when the file cannot be read, or when the answer cannot be written. An answer longer than the first buffer SHALL be printed in full.
+The host SHALL provide a command that takes the path of a program file and an optional step budget. It SHALL pass the file's bytes and the budget to `reflect_run` and SHALL print the bytes that come back, followed by a newline, on standard output. With no budget given it SHALL use one hundred million steps. It SHALL exit 0 whenever the kernel answered and the answer was written, whatever the answer says: a value, an error outcome, a syntax error, and a run with no result are all the kernel's text. It SHALL exit 2 and print one line on standard error, which does not repeat the arguments, when it is called with the wrong number of arguments, when the budget is not a whole number, when the file cannot be read, or when the answer cannot be written. An answer longer than the first buffer SHALL be printed in full.
 
 #### Scenario: A program file runs
 
@@ -94,6 +94,6 @@ The host SHALL provide a command that takes the path of a program file and an op
 
 #### Scenario: A wrong call
 
-- GIVEN no arguments, three arguments, or the budget `-1`
+- GIVEN no arguments, three arguments, the budget `-1`, or a budget that contains a line break
 - WHEN the command is run
 - THEN it prints nothing on standard output, one line on standard error, and exits 2

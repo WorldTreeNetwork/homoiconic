@@ -63,7 +63,7 @@ The second argument is the step budget; the default is 100000000, about two
 seconds. `run.zig` reads the file, calls `reflect_run`, and prints the bytes
 and a newline. It does not look at them, so it exits 0 for a value, an error
 outcome, a syntax error, or a run with no result. It exits 2, with one line on
-standard error, for a wrong argument count, a budget that is not a whole
+standard error that does not repeat the arguments, for a wrong argument count, a budget that is not a whole
 number, a file it cannot read, or an answer it cannot write. An answer longer than 65536 bytes is asked
 for a second time with a buffer of the needed size, which runs the program
 twice.
