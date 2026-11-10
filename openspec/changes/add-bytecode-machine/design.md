@@ -1,43 +1,49 @@
 # add-bytecode-machine
 
-## Instructions
+## Code
 
-A program is an array of instructions. An instruction is a small number followed by its operands, so code is a `Data` array of numbers.
+Settled when the definitions were written, 2026-11-09. Two departures from the first sketch, both recorded here.
+
+Code is in continuation form: each instruction carries the code that follows it, and `done` ends a block. A closure body and each case branch is a block. This is one plain inductive type, so compile and the proofs are by ordinary induction. It is not yet a flat array with offsets. Flattening is a later, invertible pass and is not in this change.
 
 | Instruction | Does |
 |---|---|
 | `access i` | push the value at index `i` of the environment, or halt with `unbound i` |
-| `closure n` | push a closure over the next `n` instructions and the current environment, and skip them |
-| `apply` | pop argument and function; enter the closure, or halt with `wrong` on data |
-| `return` | leave the current closure with the top of the stack |
+| `closure body` | push a closure over `body` and the current environment |
 | `literal d` | push the data value `d` |
+| `checkFun` | halt with `wrong` unless the top of the stack is a closure |
+| `apply` | pop argument and function, save a frame, and enter the closure body |
+| `checkData` | halt with `wrong` unless the top of the stack is data |
 | `succ`, `cons` | as in `Reflect.Semantics`, halting with `wrong` on misuse |
-| `case nz ns nn nc` | pop the scrutinee, extend the environment as `dcase` does, and enter one of four blocks of the given lengths |
+| `dcase z sc n c` | pop the scrutinee, save a frame, extend the environment as `dcase` does, and enter one of four blocks |
+| `done` | end of block: return to the saved frame, or halt with the one value on the stack |
 
-`compile` is the postfix flattening: function, then argument, then `apply`. Evaluation order and the order of `wrong` checks must match `Direct`. Where a check in `Direct` comes before a later subterm is evaluated, the compiled code needs a guard instruction at that point. The owner settles that list before the contract is frozen.
+`comp t k` computes `t`, pushes it, and continues as `k`. `compile t` is `comp t done`. The two guards keep the order of `wrong` checks equal to `Direct`: `checkFun` sits between function and argument, `checkData` between head and tail.
 
 ## State
 
-A state is running or halted. A running state holds a code pointer, an environment, a value stack, and a stack of return frames. `step` is a total function on states. A halted state steps to itself. `run n` applies `step` `n` times.
+A state is running, halted with an outcome, or `fault`. A running state holds code, an environment, a value stack, and a stack of frames. `step` is total. Halted and fault states step to themselves. `fault` is a state no compiled program reaches; it is not an outcome. `run n` applies `step` `n` times.
 
 Machine values hold code, not terms. `readValue` turns a machine value back into a `Reflect` value by decompiling its code.
 
 ## Theorems
 
-Fixed at activation in `kernel/MachineContract.lean`.
+Fixed in `kernel/MachineContract.lean`.
 
 ```
 machine_correct : ∀ t o,
-  Direct [] t o ↔ ∃ n w, run n (load (compile t)) = halted w ∧ readOutcome w = o
+  Direct [] t o ↔ ∃ n w, run n (load (compile t)) = halted w ∧ readOutcome w = some o
 
 run_add : ∀ n m s, run (n + m) s = run m (run n s)
 
+run_halted : ∀ n o, run n (halted o) = halted o
+
 decompile_compile : ∀ t, decompile (compile t) = some t
 
-space_bound : ∀ n s, size (run n s) ≤ size s + c * n
+depth_bound : ∀ n s, depth (run n s) ≤ depth s + n
 ```
 
-`c` is a stated constant.
+`depth` is the value stack plus the pending frames. This replaces the first sketch's `space_bound` over total state size, which is false: environments are shared between closures, so a size that counts each copy is not linear in steps. A true heap bound needs a model of allocation. That is left to the change that adds budgets to the host.
 
 ## Who does what
 

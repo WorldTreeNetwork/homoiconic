@@ -1,6 +1,6 @@
 # add-bytecode-machine
 
-> **PENDING**
+> **ACTIVE BUILD**
 
 **Rigor:** change
 
@@ -49,4 +49,4 @@ No new UI because the surface is `lake build`, a contract file, and a run file.
 - Upstream: `Reflect.Syntax` and `Reflect.Semantics` from `add-code-as-data`. This change starts when they are merged and frozen.
 - Anchors: `Direct` is the meaning. The machine is what runs. Stack machines of this family and their correctness proofs against call-by-value big-step semantics are standard.
 - Outcome: a pausable, metered machine proved equal to `Direct`, and a number for how fast it runs.
-- Authority: none yet. This change is PENDING.
+- Authority: the user said "build them together, then we can retire the old one ... please continue" on 2026-11-09, for `add-code-as-data` and `add-bytecode-machine`. Bounds are this contract. `Circular`, its theorems, and the Zig host are not edited.

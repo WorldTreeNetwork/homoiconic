@@ -4,7 +4,7 @@
 
 ### Requirement: Programs compile to flat code
 
-The kernel package SHALL define an instruction set for the `Reflect` language and a total function `compile` from terms to an array of instructions. Code SHALL be representable as a data array of numbers. The package SHALL prove that `decompile (compile t)` returns `t` for every term `t`.
+The kernel package SHALL define an instruction set for the `Reflect` language and a total function `compile` from terms to code. The package SHALL prove that `decompile (compile t)` returns `t` for every term `t`.
 
 #### Scenario: Code turns back into its term
 
@@ -38,19 +38,19 @@ The package SHALL prove that running `n + m` steps from a state equals running `
 - WHEN it is run as three slices whose lengths sum to at least `n`
 - THEN the outcome equals the outcome of one run
 
-### Requirement: Steps bound space
+### Requirement: Steps bound control depth
 
-The package SHALL prove that the size of the state after `n` steps is at most the size of the starting state plus a stated constant times `n`.
+The package SHALL prove that the value stack plus the pending frames after `n` steps is at most that of the starting state plus `n`.
 
-#### Scenario: A budget bounds memory
+#### Scenario: A budget bounds the stacks
 
 - GIVEN a step budget
 - WHEN any program is run within it
-- THEN the state size is within the stated bound
+- THEN the stack and frame depth is within the stated bound
 
 ### Requirement: The theorems depend on the logic only
 
-`machine_correct`, `run_add`, `decompile_compile`, and `space_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
+`machine_correct`, `run_add`, `run_halted`, `decompile_compile`, and `depth_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
 
 #### Scenario: No admitted correctness
 

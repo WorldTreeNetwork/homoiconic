@@ -1,6 +1,6 @@
 # add-code-as-data
 
-> **PENDING**
+> **ACTIVE BUILD**
 
 **Rigor:** change
 
@@ -49,4 +49,4 @@ No new UI because the surface is `lake build` and a contract file.
 - Upstream: living spec `openspec/specs/lean-kernel/spec.md`. Spike `primitive-data-restatement` is `go`: seventeen programs agree at one and two interpreter levels, and two cases are proved for every payload by reduction.
 - Anchors: the spike's definitions of data, terms, outcomes, `evalFuel`, `reify`, and the interpreter are the starting point. The spike did not prove the application case or the reverse direction.
 - Outcome: the interpreter theorem holds for every term, with the program passed as its own data form and the answer compared by equality.
-- Authority: none yet. This change is PENDING.
+- Authority: the user said "build them together, then we can retire the old one ... please continue" on 2026-11-09, for `add-code-as-data` and `add-bytecode-machine`. Bounds are this contract. `Circular`, its theorems, and the Zig host are not edited.
