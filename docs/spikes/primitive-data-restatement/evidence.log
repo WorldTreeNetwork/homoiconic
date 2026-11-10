@@ -1,0 +1,28 @@
+$ ./repro-command.sh
+ok   identity applied: one level true, two levels true
+ok   open variable: one level true, two levels true
+ok   open lambda: one level true, two levels true
+ok   unbound function skips omega: one level true, two levels true
+ok   literal: one level true, two levels true
+ok   successor: one level true, two levels true
+ok   construct array: one level true, two levels true
+ok   case on successor: one level true, two levels true
+ok   case on array: one level true, two levels true
+ok   closure over case binder: one level true, two levels true
+ok   apply data is wrong: one level true, two levels true
+ok   successor of function is wrong: one level true, two levels true
+ok   cons onto number is wrong: one level true, two levels true
+ok   case on function is wrong: one level true, two levels true
+ok   quoted program is data: one level true, two levels true
+ok   quoted omega is data: one level true, two levels true
+ok   program builds code and runs it: one level true, two levels true
+omega: direct none true, interpreter none true
+interpreter code size as data: 84044 characters
+'Spike.literal_agrees' depends on axioms: [propext]
+'Spike.lambda_agrees' depends on axioms: [propext]
+
+$ wc -l src/Spike.lean
+     289 src/Spike.lean
+
+$ grep -c sorry src/Spike.lean
+0

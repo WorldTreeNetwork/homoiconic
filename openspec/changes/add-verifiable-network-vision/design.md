@@ -83,7 +83,9 @@ Constraints this puts on us:
 - **Start with a subset.** The language's data type is unsigned integers, byte strings, and arrays. More is added through P8 when something needs it. The wire format can carry more than the language can inspect.
 - **Biscuit carries Datalog.** Evaluating a token is evaluation. It stays outside the kernel and outside the theorems until someone decides otherwise.
 
-### D8. Code is a value of the data type — proposed
+### D8. Code is a value of the data type — confirmed by spike 2026-11-09
+
+The spike used flat tags `0`–`5` and a single case form in place of the nested primitive tag sketched below. `add-code-as-data/design.md` has the table that stands.
 
 We do not need a new format. We need a schema of a few lines over dCBOR, and its shape has precedent.
 
@@ -215,7 +217,7 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 
 ## Unverified hypotheses
 
-- primitive-data-restatement: claim: `metacircular` can be restated for a language with one primitive first-order data type by changing the encoding and three dispatch lemmas, without redoing the fixed-point simulation. confidence: medium. verification: none. synthesis path: stage 1. Prices D1 and D8.
+- primitive-data-restatement: claim: `metacircular` can be restated for a language with one primitive first-order data type by changing the encoding and three dispatch lemmas, without redoing the fixed-point simulation. confidence: medium. verification: empirically-tested. synthesis path: add-code-as-data. spike-artifact: docs/spikes/primitive-data-restatement/finding.md. Validated by spike primitive-data-restatement on 2026-11-09. — go, with a correction: the restatement works and is simpler, but the simulation is redone, not kept.
 - lean-dcbor-subset: claim: a Lean reader and writer for the D7 subset reproduces the identikey-protocol fixtures byte for byte. confidence: high. verification: none. synthesis path: stage 1.
 - parametric-primitives: claim: P8 can be stated so each new primitive adds one local lemma. confidence: medium. verification: none. synthesis path: stage 3.
 - interpreter-overhead: claim: P9's bound is a constant times program size times source steps. Variable lookup walks a Church index, so the factor is not a pure constant. confidence: medium. verification: none. synthesis path: stage 3.

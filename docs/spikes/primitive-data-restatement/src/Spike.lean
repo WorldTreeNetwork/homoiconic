@@ -1,0 +1,289 @@
+/-
+Spike: primitive data, literal-as-quote, and an interpreter that takes a
+program as data. Standalone; the kernel package is not imported or edited.
+-/
+namespace Spike
+
+/-- First-order data. This is the abstract type; bytes on a wire are elsewhere. -/
+inductive Data where
+  | nat : Nat → Data
+  | arr : List Data → Data
+  deriving Repr, BEq
+
+/-- `lit d` evaluates to `d` without looking inside it. Quoting a program is
+    `lit (reify p)`; there is no separate quote constructor. -/
+inductive Term where
+  | var : Nat → Term
+  | lam : Term → Term
+  | app : Term → Term → Term
+  | lit : Data → Term
+  | succ : Term → Term
+  | cons : Term → Term → Term
+  /-- scrutinee; zero; succ (binds predecessor); empty; cons (binds head at 1, tail at 0) -/
+  | dcase : Term → Term → Term → Term → Term → Term
+  deriving Repr
+
+inductive Value where
+  | closure : Term → List Value → Value
+  | data : Data → Value
+  deriving Repr
+
+abbrev Env := List Value
+
+inductive Outcome where
+  | value : Value → Outcome
+  | unbound : Nat → Outcome
+  | wrong : Outcome
+  deriving Repr
+
+def evalFuel : Nat → Env → Term → Option Outcome
+  | 0, _, _ => none
+  | _ + 1, env, .var i =>
+      match env[i]? with
+      | some v => some (.value v)
+      | none => some (.unbound i)
+  | _ + 1, env, .lam b => some (.value (.closure b env))
+  | _ + 1, _, .lit d => some (.value (.data d))
+  | n + 1, env, .app f a =>
+      match evalFuel n env f with
+      | none => none
+      | some (.value (.closure b cap)) =>
+          match evalFuel n env a with
+          | none => none
+          | some (.value v) => evalFuel n (v :: cap) b
+          | some e => some e
+      | some (.value (.data _)) => some .wrong
+      | some e => some e
+  | n + 1, env, .succ t =>
+      match evalFuel n env t with
+      | none => none
+      | some (.value (.data (.nat k))) => some (.value (.data (.nat (k + 1))))
+      | some (.value _) => some .wrong
+      | some e => some e
+  | n + 1, env, .cons a b =>
+      match evalFuel n env a with
+      | none => none
+      | some (.value (.data x)) =>
+          match evalFuel n env b with
+          | none => none
+          | some (.value (.data (.arr xs))) => some (.value (.data (.arr (x :: xs))))
+          | some (.value _) => some .wrong
+          | some e => some e
+      | some (.value _) => some .wrong
+      | some e => some e
+  | n + 1, env, .dcase s z sc ni c =>
+      match evalFuel n env s with
+      | none => none
+      | some (.value (.data (.nat 0))) => evalFuel n env z
+      | some (.value (.data (.nat (k + 1)))) => evalFuel n (.data (.nat k) :: env) sc
+      | some (.value (.data (.arr []))) => evalFuel n env ni
+      | some (.value (.data (.arr (x :: xs)))) =>
+          evalFuel n (.data (.arr xs) :: .data x :: env) c
+      | some (.value (.closure _ _)) => some .wrong
+      | some e => some e
+
+/-- A program as a data value. Total on every term, including `lit`. -/
+def reify : Term → Data
+  | .var i => .nat i
+  | .app f a => .arr [.nat 0, reify f, reify a]
+  | .lam b => .arr [.nat 1, reify b]
+  | .lit d => .arr [.nat 2, d]
+  | .succ t => .arr [.nat 3, reify t]
+  | .cons a b => .arr [.nat 4, reify a, reify b]
+  | .dcase s z sc n c => .arr [.nat 5, reify s, reify z, reify sc, reify n, reify c]
+
+mutual
+  def reifyValue : Value → Data
+    | .closure b env => .arr [.nat 0, reify b, .arr (reifyEnv env)]
+    | .data d => .arr [.nat 1, d]
+  def reifyEnv : List Value → List Data
+    | [] => []
+    | v :: vs => reifyValue v :: reifyEnv vs
+end
+
+def reifyOutcome : Outcome → Data
+  | .value v => .arr [.nat 0, reifyValue v]
+  | .unbound i => .arr [.nat 1, .nat i]
+  | .wrong => .arr [.nat 2]
+
+/- Named construction language; compiles to de Bruijn terms and adds nothing. -/
+namespace B
+inductive Expr where
+  | ref : String → Expr
+  | lam : String → Expr → Expr
+  | app : Expr → Expr → Expr
+  | lit : Data → Expr
+  | succ : Expr → Expr
+  | cons : Expr → Expr → Expr
+  | dcase : Expr → Expr → String → Expr → Expr → String → String → Expr → Expr
+
+def compile (ctx : List String) : Expr → Term
+  | .ref x => .var (ctx.idxOf x)
+  | .lam x b => .lam (compile (x :: ctx) b)
+  | .app f a => .app (compile ctx f) (compile ctx a)
+  | .lit d => .lit d
+  | .succ t => .succ (compile ctx t)
+  | .cons a b => .cons (compile ctx a) (compile ctx b)
+  | .dcase s z p sc n h t c =>
+      .dcase (compile ctx s) (compile ctx z) (compile (p :: ctx) sc)
+        (compile ctx n) (compile (t :: h :: ctx) c)
+
+abbrev v := Expr.ref
+def lams (xs : List String) (b : Expr) : Expr := xs.foldr Expr.lam b
+def apps (f : Expr) (xs : List Expr) : Expr := xs.foldl Expr.app f
+def letE (x : String) (e body : Expr) : Expr := .app (.lam x body) e
+def num (k : Nat) : Expr := .lit (.nat k)
+def nil : Expr := .lit (.arr [])
+def list (xs : List Expr) : Expr := xs.foldr Expr.cons nil
+def W : Expr := .lit (.arr [.nat 2])
+def ok (x : Expr) : Expr := list [num 0, x]
+def bad (i : Expr) : Expr := list [num 1, i]
+def vclos (b e : Expr) : Expr := list [num 0, b, e]
+def vdata (d : Expr) : Expr := list [num 1, d]
+
+/-- Take an array apart, or answer `wrong`. -/
+def uncons (e : Expr) (h t : String) (body : Expr) : Expr :=
+  .dcase e W "_" W W h t body
+/-- Zero or non-zero. -/
+def ifZero (e z nz : Expr) : Expr := .dcase e z "_" nz W "_" "_" W
+/-- Dispatch on a small tag. -/
+def tagcase (tag : Expr) : List Expr → Expr
+  | [] => W
+  | b :: bs => .dcase tag b "tag'" (tagcase (v "tag'") bs) W "_" "_" W
+/-- Continue with the payload of an `ok` result; pass any other result on. -/
+def bind (r : String) (x : String) (k : Expr) : Expr :=
+  uncons (v r) "tg" "rs" (ifZero (v "tg") (uncons (v "rs") x "_" k) (v r))
+
+def fix : Expr :=
+  let arm := lams ["x"] (.app (v "f") (lams ["arg"] (apps (v "x") [v "x", v "arg"])))
+  lams ["f"] (.app arm arm)
+
+def look : Expr := .app fix (lams ["go", "n", "env", "orig"]
+  (.dcase (v "env") W "_" W (bad (v "orig")) "h" "t"
+    (.dcase (v "n") (ok (v "h")) "m" (apps (v "go") [v "m", v "t", v "orig"]) W "_" "_" W)))
+
+def self (c e : Expr) : Expr := apps (v "self") [c, e]
+
+def evalBody : Expr :=
+  let lookupE := apps look [v "code", v "env", v "code"]
+  let application :=
+    uncons (v "rest") "f" "r1" <| uncons (v "r1") "a" "_" <|
+    letE "rf" (self (v "f") (v "env")) <| bind "rf" "vf" <|
+    uncons (v "vf") "vt" "vr" <|
+    ifZero (v "vt")
+      (uncons (v "vr") "b" "r2" <| uncons (v "r2") "cap" "_" <|
+        letE "ra" (self (v "a") (v "env")) <| bind "ra" "va" <|
+        self (v "b") (.cons (v "va") (v "cap")))
+      W
+  let abstraction := uncons (v "rest") "b" "_" (ok (vclos (v "b") (v "env")))
+  let literal := uncons (v "rest") "d" "_" (ok (vdata (v "d")))
+  let successor :=
+    uncons (v "rest") "t" "_" <|
+    letE "r" (self (v "t") (v "env")) <| bind "r" "x" <|
+    uncons (v "x") "xt" "xr" <|
+    ifZero (v "xt") W
+      (uncons (v "xr") "d" "_" <|
+        .dcase (v "d") (ok (vdata (.succ (v "d")))) "_" (ok (vdata (.succ (v "d")))) W "_" "_" W)
+  let construction :=
+    uncons (v "rest") "a" "r1" <| uncons (v "r1") "b" "_" <|
+    letE "ra" (self (v "a") (v "env")) <| bind "ra" "va" <|
+    uncons (v "va") "at" "ar" <|
+    ifZero (v "at") W
+      (uncons (v "ar") "da" "_" <|
+        letE "rb" (self (v "b") (v "env")) <| bind "rb" "vb" <|
+        uncons (v "vb") "bt" "br" <|
+        ifZero (v "bt") W
+          (uncons (v "br") "db" "_" <|
+            let built := ok (vdata (.cons (v "da") (v "db")))
+            .dcase (v "db") W "_" W built "_" "_" built))
+  let analysis :=
+    uncons (v "rest") "s" "r1" <| uncons (v "r1") "z" "r2" <|
+    uncons (v "r2") "sc" "r3" <| uncons (v "r3") "ni" "r4" <|
+    uncons (v "r4") "c" "_" <|
+    letE "rs" (self (v "s") (v "env")) <| bind "rs" "vs" <|
+    uncons (v "vs") "st" "sr" <|
+    ifZero (v "st") W
+      (uncons (v "sr") "d" "_" <|
+        .dcase (v "d")
+          (self (v "z") (v "env"))
+          "m" (self (v "sc") (.cons (vdata (v "m")) (v "env")))
+          (self (v "ni") (v "env"))
+          "hd" "tl" (self (v "c")
+            (.cons (vdata (v "tl")) (.cons (vdata (v "hd")) (v "env")))))
+  .dcase (v "code") lookupE "_" lookupE W "tag" "rest"
+    (tagcase (v "tag")
+      [application, abstraction, literal, successor, construction, analysis])
+
+def eval : Expr := .app fix (lams ["self", "code", "env"] evalBody)
+def interpreter : Expr := lams ["input"] (apps eval [v "input", nil])
+end B
+
+/-- One closed term of the language. It takes a program as data. -/
+def interp : Term := B.compile [] B.interpreter
+
+/-- The interpreter route: apply the interpreter to the program's own data form. -/
+def viaInterp (p : Term) : Term := .app interp (.lit (reify p))
+
+def agrees (direct via : Option Outcome) : Bool :=
+  match direct, via with
+  | some o, some (.value (.data d)) => d == reifyOutcome o
+  | _, _ => false
+
+def check (name : String) (p : Term) (fuel : Nat := 20000) : String :=
+  let direct := evalFuel fuel [] p
+  let via := evalFuel fuel [] (viaInterp p)
+  let two := evalFuel fuel [] (viaInterp (viaInterp p))
+  let level1 := agrees direct via
+  let level2 := agrees via two
+  s!"{if level1 && level2 then "ok  " else "FAIL"} {name}: one level {level1}, two levels {level2}"
+
+def identity : Term := .lam (.var 0)
+def delta : Term := .lam (.app (.var 0) (.var 0))
+def omega : Term := .app delta delta
+def n (k : Nat) : Term := .lit (.nat k)
+def emptyArr : Term := .lit (.arr [])
+/-- Builds the data `[1, 0]`, which is the identity function's code, at run
+    time, and hands it to the interpreter. -/
+def buildsAndRuns : Term := .app interp (.cons (n 1) (.cons (n 0) emptyArr))
+
+#eval IO.println (check "identity applied" (.app identity identity))
+#eval IO.println (check "open variable" (.var 0))
+#eval IO.println (check "open lambda" (.lam (.var 1)))
+#eval IO.println (check "unbound function skips omega" (.app (.var 0) omega))
+#eval IO.println (check "literal" (n 7))
+#eval IO.println (check "successor" (.succ (.succ (n 5))))
+#eval IO.println (check "construct array" (.cons (n 1) (.cons (.succ (n 1)) emptyArr)))
+#eval IO.println (check "case on successor" (.dcase (n 3) (n 0) (.var 0) (n 9) (n 9)))
+#eval IO.println (check "case on array" (.dcase (.lit (.arr [.nat 4, .nat 5])) (n 0) (n 0) (n 0) (.cons (.var 1) (.var 0))))
+#eval IO.println (check "closure over case binder" (.app (.dcase (n 2) identity (.lam (.var 1)) identity identity) (n 0)))
+#eval IO.println (check "apply data is wrong" (.app (n 1) omega))
+#eval IO.println (check "successor of function is wrong" (.succ identity))
+#eval IO.println (check "cons onto number is wrong" (.cons (n 1) (n 2)))
+#eval IO.println (check "case on function is wrong" (.dcase identity (n 0) (n 0) (n 0) (n 0)))
+#eval IO.println (check "quoted program is data" (.lit (reify (.app identity identity))))
+#eval IO.println (check "quoted omega is data" (.lit (reify omega)))
+#eval IO.println (check "program builds code and runs it" buildsAndRuns)
+-- Divergence: no outcome on either route within the budget.
+#eval IO.println s!"omega: direct none {(evalFuel 2000 [] omega).isNone}, interpreter none {(evalFuel 2000 [] (viaInterp omega)).isNone}"
+#eval IO.println s!"interpreter code size as data: {repr (reify interp) |>.pretty.length} characters"
+
+/- Proof-style probe. The payload is a variable, so these are statements about
+   every literal and every lambda body, checked by reduction alone. No
+   substitution, readback, or decoder is involved: the interpreter's answer is
+   data and is compared by equality. -/
+set_option maxRecDepth 100000 in
+theorem literal_agrees (d : Data) :
+    evalFuel 60 [] (viaInterp (.lit d)) =
+      some (.value (.data (reifyOutcome (.value (.data d))))) := by
+  with_unfolding_all rfl
+
+set_option maxRecDepth 100000 in
+theorem lambda_agrees (b : Term) :
+    evalFuel 60 [] (viaInterp (.lam b)) =
+      some (.value (.data (reifyOutcome (.value (.closure b []))))) := by
+  with_unfolding_all rfl
+
+#print axioms literal_agrees
+#print axioms lambda_agrees
+
+end Spike
