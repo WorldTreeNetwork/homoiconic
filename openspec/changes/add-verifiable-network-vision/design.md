@@ -1,6 +1,6 @@
 # add-verifiable-network-vision
 
-> **Written 2026-11-09 against the first kernel, `Circular`, which `retire-circular-kernel` removed on 2026-11-10.** Where this document names `metacircular`, `coverage`, `source_beta`, `interpreterApplication`, `Represents`, `encode` or `kernel_run`, read it as the plan as it stood then. What landed: `reflective` and `reflective_coverage` (P8a), `reflective_env` (P6), `tower` (P7), the machine theorems (P1, P1b, P2, P3), and `reflect_run`. Their exact statements are in `openspec/specs/code-as-data/spec.md` and `openspec/specs/bytecode-machine/spec.md`.
+> **Written 2026-11-09 against the first kernel, `Circular`, which `retire-circular-kernel` removed on 2026-11-10.** Where this document names `metacircular`, `coverage`, `source_beta`, `interpreterApplication`, `Represents`, `encode` or `kernel_run`, read it as the plan as it stood then. What landed: `reflective` and `reflective_coverage` (P8a), `reflective_env` (P6), `tower` (P7), the machine theorems (P1, P1b, P2, P3), and `reflect_run`. Their exact statements are in `openspec/specs/code-as-data/spec.md` and `openspec/specs/bytecode-machine/spec.md`. P8 landed later on 2026-11-10 as `prim` with an `Ops` table (`add-operation-tables`), and needs no lemma per operation.
 
 The architecture the vision implies, and the proofs that carry it. Statements are sketches. Each owning change fixes the exact Lean signature and puts it in a `Contract.lean` check the way `metacircular` is.
 

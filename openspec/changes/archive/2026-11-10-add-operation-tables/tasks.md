@@ -11,5 +11,5 @@
 - [x] Ten operation scenarios in `kernel/ReflectRun.lean`, each run directly, interpreted once and twice, on the machine, sliced, and decompiled.
 - [x] Nineteen surface examples in `kernel/Surface/Expect.lean`; `examples/factorial.hom` in the host check.
 - [x] `lake build`, both contracts, `ReflectRun.lean`, `Surface/Check.lean` and `sh host/check.sh` exit 0.
-- [ ] Advise by a reader from another model family.
-- [ ] Fold.
+- [x] Advise by a reader from another model family. Accepted, 2026-11-10; three notes, answered in `52ce1c8`; notes in `reviews/`.
+- [x] Fold: apply the deltas to `code-as-data`, `bytecode-machine` and `surface-syntax`, note the table in the `zig-host` overview, amend `ARCHITECTURE.md`, and note P8 in the vision.

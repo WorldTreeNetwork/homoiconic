@@ -20,6 +20,8 @@ The first kernel, `Circular` (`add-lean-circular-kernel`), proved the theorem fo
 
 The kernel package holds two Lean libraries, `Reflect` and `Surface`. `Reflect` is the language, its one evaluator, and its proofs. In `Reflect` a program is a data value: data is natural numbers and arrays, and quoting a program is a literal of its data form. The interpreter is one closed term that takes a program as data, and the interpreter theorem holds for every term, with no fragment. A stack machine runs the same language one step at a time, and it is proved equal to direct evaluation. The statements are in `openspec/specs/code-as-data/spec.md` and `openspec/specs/bytecode-machine/spec.md`.
 
+`prim c x` runs an operation from a table, `Ops`: one total function from an operation number and a data value to a data value. Evaluation, the interpreter theorems and the machine theorems are stated for every table. The interpreter is the same term for every table, so a new set of operations is added to a table with no new proof. The first table is exact arithmetic (`kernel/Reflect/Arith.lean`), and the host runs with it (`add-operation-tables`).
+
 ## Surface
 
 `Surface`, the package's other library, holds the reader, from program text with names and indentation to `Reflect` terms, and the renderer, from outcomes to plain text. The reader and the renderer are tested against examples. They are not proved. What runs is the term the reader produced, on the proved machine. The statements are in `openspec/specs/surface-syntax/spec.md`.
@@ -42,5 +44,6 @@ The proof boundary is the call from the Zig host into the Lean kernel. The `lean
 - `add-bytecode-machine`: folded. The machine and its agreement with direct evaluation are `openspec/specs/bytecode-machine/spec.md`.
 - `move-host-to-reflect`: folded. `Surface` and `reflect_run`; the host runs `Reflect` programs on the machine. The syntax is `openspec/specs/surface-syntax/spec.md`, and the host call is `openspec/specs/zig-host/spec.md`.
 - `retire-circular-kernel`: folded. `Circular`, `kernel_run`, and `lean-kernel` are deleted; one evaluator, `Reflect`, remains. The host calls `reflect_run` only and has a run command, `host/out/run`. The command is in `openspec/specs/zig-host/spec.md`.
+- `add-operation-tables`: folded. `prim` and the `Ops` table, with exact arithmetic as the first table; every theorem holds for every table. The requirements are in `openspec/specs/code-as-data/spec.md`, `openspec/specs/bytecode-machine/spec.md` and `openspec/specs/surface-syntax/spec.md`.
 
 The partition is the landed artifact those changes cite. This kernel does not add a Zig host or a C ABI. The host landing is the call above.

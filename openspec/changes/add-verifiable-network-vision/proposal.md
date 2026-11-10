@@ -125,6 +125,7 @@ No new UI because this change is a vision and a roadmap.
 
 ### 2026-11-10
 
+- Stage 3's parametric statement (P8) landed as `add-operation-tables` for total data-to-data operations, with arithmetic as the first table. Bytes and hashing, a cost per operation, and P9 remain.
 - Stages 1 and 2 landed and were folded (`code-as-data`, `bytecode-machine`), with a surface syntax and a host command. The first kernel was removed by `retire-circular-kernel`. The core insight now names `reflective`.
 
 ### 2026-11-09 (third entry)

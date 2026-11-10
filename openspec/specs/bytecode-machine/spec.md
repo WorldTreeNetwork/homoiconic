@@ -1,6 +1,6 @@
 # bytecode-machine
 
-What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
+What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `runUntil_eq`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. `step`, `run`, and the theorems about them take the operation table `Ops` as a parameter and hold for every table. The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
 
 ## Purpose
 
@@ -54,9 +54,25 @@ The package SHALL prove that the value stack plus the pending frames after `n` s
 - WHEN any program is run within it
 - THEN the stack and frame depth is within the stated bound
 
+### Requirement: The machine runs operations
+
+`compile` SHALL compile `prim c x` to the code of `c`, an instruction that checks the value on top is a number, the code of `x`, and an instruction that replaces the number and the argument with the table's answer. A value that fails the check SHALL halt the machine with `wrong` before the code of `x` runs. `step` and `run` SHALL take the table as a parameter. `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `runUntil_eq`, and `depth_bound` SHALL hold for every table. An operation SHALL be one step.
+
+#### Scenario: An operation on the machine
+
+- GIVEN each operation scenario in `kernel/ReflectRun.lean`
+- WHEN the compiled program runs on the machine, whole and in three slices
+- THEN the halted outcome reads back as the outcome of direct evaluation
+
+#### Scenario: Code with an operation turns back into its term
+
+- GIVEN a term that contains `prim`
+- WHEN it is compiled and decompiled
+- THEN the result is the term
+
 ### Requirement: The theorems depend on the logic only
 
-`machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `decompile_compile`, and `depth_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
+`machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `runUntil_eq`, `decompile_compile`, and `depth_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
 
 #### Scenario: No admitted correctness
 

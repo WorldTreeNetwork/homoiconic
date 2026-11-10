@@ -30,3 +30,9 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 
 - The host's Lean objects had been compiled without optimisation since the host landed. Nobody noticed until `host/out/run` made the speed visible: about 3.7 million steps a second. With `-O3` it is about 34 million. Defining `NDEBUG` reaches about 45 million but removes Lean's runtime assertions on the generated C, so it stays off.
 - Review of `retire-circular-kernel` found shell checks of the form "a non-zero exit is a pass". Such a check also passes a crash. `host/check.sh` now asserts the exact exit status, empty standard output, and the exact error line.
+
+## 2026-11-10 — one statement for every operation
+
+- The vision expected one lemma per primitive (P8). Making the operation number a runtime value and the table a typeclass parameter removed the per-operation lemma entirely: the interpreter's branch for an operation is the same construct, `prim`, applied to the evaluated parts. The cost is the shape of an operation: total, data to data, with no failure outcome.
+- Lean includes an instance-implicit section variable in every theorem of the section, whether or not the theorem uses it. Theorems that do not need the table had to be marked `omit [Ops] in`.
+- A contract file that imports an instance can silently check a theorem for one table only. The contracts import no table and quantify over it explicitly, `∀ [Ops], …`.
