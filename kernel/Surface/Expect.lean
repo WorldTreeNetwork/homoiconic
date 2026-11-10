@@ -266,9 +266,12 @@ def converses : List (String × String × Nat × String) := [
   ("add 1 2", "[]", 1000, "3"),
   ("add 1 2", "[9]", 1000, "3"),
   ("1 2", "[]", 1000, "error: wrong"),
-  -- a function that is not a request, and a request whose payload is a function
+  -- a function whose payload is a function, and a request built with one
   ("fn x -> x", "[]", 1000, "error: wrong"),
   ("ask (fn x -> x) (fn a -> a)", "[1]", 1000, "error: wrong"),
+  -- a request carries no mark: any function a turn ends in is read as one
+  ("fn x -> 42", "[]", 1000, "asked: 42\nwaiting"),
+  ("fn x -> 42", "[7]", 1000, "asked: 42\n42"),
   -- an error after an answer keeps the requests made before it
   ("ask 1 (fn a -> a a)", "[1]", 1000, "asked: 1\nerror: wrong"),
   -- an answer can be code

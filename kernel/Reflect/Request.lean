@@ -5,7 +5,8 @@ import Reflect.RunUntil
 Requests. A program that needs something from outside finishes its turn with a
 *request*: a function that holds a payload and the rest of the program. Nothing
 is added to the language for this. `ask payload next` is an ordinary term, and
-a request is an ordinary function value.
+a request is an ordinary function value. The driver cannot tell a function built by `ask`
+from any other, and treats every function a turn ends in as a request.
 
 A *driver* outside the program reads the payload, and, given an answer, runs
 the rest. The driver is defined once, over any way of evaluating (`Sys`), and
@@ -49,8 +50,9 @@ def Ending.map {C R C' R' : Type} (f : R → R') (g : C → C') : Ending C R →
     with `answers` available, the program makes the requests `asked`, in order,
     and ends in `ending`.
 
-    A result that is not a function ends the run. A function is a request: its
-    payload must be data. With no answer left the run waits, and the pending
+    A result that is not a function ends the run. Every function is read as a
+    request, whether or not `ask` built it: a request carries no mark. Its
+    payload is what `payloadTerm` gives, and must be data. With no answer left the run waits, and the pending
     payload is the last entry of `asked`. Otherwise the rest of the program
     runs on the next answer. Answers left over when the run ends are unused. -/
 inductive Drive {C R : Type} (S : Sys C R) : R → List Data → List Data → Ending C R → Prop where

@@ -20,7 +20,7 @@ A request SHALL be a function value of the existing language. `ask payload next`
 
 ### Requirement: A driver runs a program against answers
 
-A run SHALL start from the result of evaluating the program and SHALL proceed by turns. A result that is not a function SHALL end the run with that result. A result that is a function SHALL be read as a request: its payload is evaluated, and a payload that is data SHALL be recorded as asked. A payload that is an error SHALL end the run with that error, and a payload that is a function SHALL end the run as `wrong`. With no answer left the run SHALL end waiting, holding the request. Otherwise the rest of the program SHALL run on the next answer, and its result is the next turn. Answers left over when a run ends SHALL be unused. A turn that never finishes SHALL give the run no ending.
+A run SHALL start from the result of evaluating the program and SHALL proceed by turns. A result that is not a function SHALL end the run with that result. Every result that is a function SHALL be read as a request, whether or not `ask` built it; a request carries no mark. Its payload SHALL be the result of applying the function to the selector `fn payload next -> payload` (`payloadTerm`), and a payload that is data SHALL be recorded as asked. A payload that is an error SHALL end the run with that error, and a payload that is a function SHALL end the run as `wrong`. With no answer left the run SHALL end waiting, holding the request. Otherwise the function SHALL be applied to the selector `fn payload next -> next answer` (`resumeTerm`), which runs the rest of the program on the next answer, and the result is the next turn. Answers left over when a run ends SHALL be unused. An evaluation that never finishes, whether of the program, of a payload, or of the rest on an answer, SHALL give the run no ending.
 
 #### Scenario: Two requests
 
@@ -34,11 +34,17 @@ A run SHALL start from the result of evaluating the program and SHALL proceed by
 - WHEN it is run
 - THEN it asks `[1]`, then `[2, 20]`, and is waiting
 
-#### Scenario: A function that is not a request
+#### Scenario: A function whose payload is a function
 
 - GIVEN the program `fn x -> x`
 - WHEN it is run against any answers
 - THEN the run ends as `wrong`
+
+#### Scenario: A function not built by ask is still read as a request
+
+- GIVEN the program `fn x -> 42`
+- WHEN it is run with no answers, and again with the answer 7
+- THEN the first run asks `42` and is waiting, and the second asks `42` and finishes with 42
 
 ### Requirement: A run is a function of the program and the answers
 
@@ -62,7 +68,7 @@ For every operation table and every program, the run by direct evaluation and th
 
 ### Requirement: The machine asks what the program asks
 
-For every operation table and every program, the run on the machine SHALL make the same requests in the same order and SHALL end with the compiled form of the same ending (`interact_machine`, `interact_machine_exact`). What the executable driver `converse` reports as finished or as waiting SHALL be a run of the program by direct evaluation with exactly those requests (`converse_finished`, `converse_waiting`). `converse` SHALL give each turn its own step budget, and SHALL report a turn that does not halt within it as unfinished, which claims nothing.
+For every operation table and every program, the run on the machine SHALL make the same requests in the same order and SHALL end with the compiled form of the same ending (`interact_machine`, `interact_machine_exact`). What the executable driver `converse` reports as finished or as waiting SHALL be a run of the program by direct evaluation with exactly those requests (`converse_finished`, `converse_waiting`). `converse` SHALL give a fresh step budget to each machine run: the first evaluation, each reading of a payload, and each running of the rest on an answer. It SHALL report a machine run that does not halt within its budget as unfinished, which claims nothing, including about the requests listed before it.
 
 #### Scenario: The driver's report is true
 

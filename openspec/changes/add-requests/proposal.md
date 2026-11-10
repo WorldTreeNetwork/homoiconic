@@ -32,7 +32,7 @@ For every operation table, with Lean's standard axioms only. Exact statements: `
 | `interact_machine`, `interact_machine_exact` | The machine makes the same requests and ends the same way |
 | `converse_finished`, `converse_waiting` | What the executable driver reports is a run of the program by direct evaluation |
 
-No existing definition or theorem changes.
+The core language, evaluation, the interpreter, the machine, and every existing theorem statement are unchanged. `kernel/ReflectContract.lean` and `kernel/MachineContract.lean` are not edited. The reader gains one built-in name, and the surface examples and their check gain entries.
 
 ## How this differs from the vision
 
@@ -40,6 +40,7 @@ The vision wrote P10 "with a `request op payload k` outcome", a new kind of outc
 
 - A new outcome would have to pass through every evaluation rule and collect the rest of the program as it goes. That reopens every proof and puts the same bookkeeping into the interpreter. As a value, a request needs nothing from the kernel, which is what decision D10 asked of channels.
 - The cost is the style of the program. A request is made at the end of a turn, with the rest of the program passed as a function. A function deep inside a computation cannot ask and then return to its caller; it has to be written to pass its continuation. Syntax that hides this is not in this change.
+- A second cost: a request carries no mark. The driver treats every function a turn ends in as a request. It applies that function to a selector, `fn payload next -> payload`, to read the payload, and, when there is an answer, applies it again to `fn payload next -> next answer` to run the rest. A function not built by `ask` is put through the same two applications, and what comes out depends on the function. `fn x -> x` ends as `wrong`, because its payload is a function. `fn x -> 42` ignores the selector, so it asks `42`, and given any answer finishes with `42`. A selector application can also run forever. So a driven program cannot finish with a function as its result, and a program that returns one by mistake may be read as asking.
 
 ## Not in this change
 
@@ -48,7 +49,9 @@ The vision wrote P10 "with a `request op payload k` outcome", a new kind of outc
 - **A stored paused run.** The `ask` command replays from the start with the whole answers file each time. `interact_resume` is the theorem that keeping the paused run instead gives the same result; storing it needs the wire format.
 - **Completeness of the executable driver.** `converse` is proved sound: what it reports is true. That every run is reported for some budget is not proved.
 - **Syntax for sequencing requests**, an event log, more than one VM.
-- **A step budget for the whole run.** The budget is for each turn.
+- **A step budget for the whole run.** The budget is given afresh to each machine run: the first evaluation of the program, each reading of a payload, each running of the rest on an answer, and the answers program. There is no combined budget.
+- **A claim about an unfinished run.** When a machine run does not halt within its budget the command prints the requests made so far and a line saying so. The theorems cover runs reported as finished or waiting; they say nothing about that partial list.
+- **Telling apart failures of the answers program.** An answers program that errors, runs out of budget, or gives something other than an array all print `answers: not an array`.
 
 ## Impact
 
@@ -65,7 +68,7 @@ The surface is program text, an answers file and the command line.
 - **Waiting** — with `examples/ask-one.answers`, which holds one answer, it prints the two `asked:` lines and then `waiting`.
 - **Empty** — a program that asks nothing prints what `run` prints for it.
 - **Failed** — the same program and answers give different requests directly, interpreted, or on the machine; or the command reports a request the program did not make.
-- **Off** — a program that ends in a function that is not a request prints `error: wrong`.
+- **Off** — a program that ends in a function not built by `ask` is still read as a request. `fn x -> x` prints `error: wrong`; `fn x -> 42` prints `asked: 42` and `waiting`.
 
 ## Out of scope
 
