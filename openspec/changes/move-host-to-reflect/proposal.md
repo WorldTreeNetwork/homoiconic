@@ -25,12 +25,12 @@ The host still calls the quote-free kernel, takes de Bruijn text, and answers wi
 
 ## User journey & surfaces
 
-The surface is a program file and the text the host prints.
+The surface is program text and the text the host check prints. A command that runs a program file is not in this change; it is tracked as a bead.
 
 - **Working** — the host is given the countdown program in `design.md` and prints `0`. Given a quoted program it prints that program's data. Given a program that builds code and interprets it, it prints the outcome.
 - **Empty** — today: programs are written as `([0] [0])` and the answer is a number.
 - **Failed** — the host prints a result the machine did not produce, a name resolves to the wrong binder, or a malformed program is run instead of refused.
-- **Off** — no file given: the host prints usage.
+- **Off** — there is no command-line program yet.
 
 ## Out of scope
 
