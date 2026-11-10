@@ -11,6 +11,12 @@ lake build
 lake env lean ReflectContract.lean
 lake env lean MachineContract.lean
 lake env lean Surface/Check.lean
+# The scenarios print one line each; a line that starts with FAIL fails the check.
+lake env lean ReflectRun.lean > "$OUT/scenarios.txt"
+if grep -q "^FAIL" "$OUT/scenarios.txt"; then
+    grep "^FAIL" "$OUT/scenarios.txt" >&2
+    exit 1
+fi
 
 # The programs the host passes come from Surface.prints, so Zig only holds bytes.
 lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"

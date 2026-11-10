@@ -1,6 +1,6 @@
 # code-as-data
 
-At fold, the overview gains: "`prim c x` runs an operation from a table, `Ops`, that every definition and theorem takes as a parameter."
+At fold, the overview gains: "`prim c x` runs an operation from a table, `Ops`, that the evaluation definitions and the theorems about them take as a parameter."
 
 ## ADDED Requirements
 
