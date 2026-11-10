@@ -11,7 +11,7 @@
 | Count down from 300, through the interpreter twice | 25,373,970 | 666–673 ms | about 38 million |
 
 - One loop iteration is 23 steps direct, about 1,190 through one interpreter, and about 84,600 through two. One interpreter level costs a factor of about 52. The second level costs about 71.
-- The machine does not reuse frames for calls in tail position, so the direct run holds a million frames. It still runs.
+- The machine does not reuse frames for calls in tail position, so the direct run holds about three frames per iteration, roughly three million at its deepest. It still runs.
 - This is the unoptimized machine on continuation-form code. No flattening, no primitive beyond `succ`, `cons`, and the case form.
 
 ## 2026-11-09 — a proof found what the scenarios missed

@@ -39,7 +39,7 @@ No new UI because the surface is `lake build`, a contract file, and a run file.
 
 ## Out of scope
 
-- Optimization passes. The compile is the plain flattening.
+- Optimization passes. The compile is the plain postfix translation into continuation-form code.
 - A native or Zig executor.
 - Serializing machine states to bytes.
 - Primitives beyond those in `Reflect`.
