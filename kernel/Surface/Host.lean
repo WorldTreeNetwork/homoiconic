@@ -2,7 +2,7 @@ import Surface.Run
 
 namespace Surface.Host
 
-/-- Native-only byte copy, shared with `Circular.Host`. The caller lends `length`
+/-- Native-only byte copy. The caller lends `length`
     readable bytes for this call. -/
 @[extern "kernel_copy_bytes"]
 private unsafe def copyBytes (_address _length : USize) : ByteArray :=

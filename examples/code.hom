@@ -1,0 +1,3 @@
+; build code with a hole in it, fill the hole, and run the result
+let inner = quote 41
+interpret (quote (~inner + 1))

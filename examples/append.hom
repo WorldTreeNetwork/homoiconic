@@ -1,0 +1,7 @@
+; join two arrays
+def append xs ys =
+  case xs
+    [] -> ys
+    [head, ...tail] -> [head, ...append tail ys]
+
+append [1, 2] [3, 4]

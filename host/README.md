@@ -2,15 +2,16 @@
 
 From the repository root, run `sh host/check.sh` with Zig 0.16.0 and the
 Lean toolchain pinned in `kernel/lean-toolchain` installed. The script builds
-the package, checks `Contract.lean` and `Surface/Check.lean`, writes the
+the package, checks `ReflectContract.lean`, `MachineContract.lean` and
+`Surface/Check.lean`, writes the
 programs to run, compiles Lean to C and C to objects, compiles the Zig check to
 an object, and links with `leanc`. Generated C, objects, the generated
 `cases.zig`, the executable and Zig caches stay in ignored `out/`.
 
-The host first calls `initialize_circularKernel_Circular_Host` and
-`initialize_circularKernel_Surface_Host`, the symbols emitted using Lake's
-package setup, then passes both results to `kernel_finish_initialization` in
-`runtime.c`, which checks and releases each and marks initialization complete.
+The host first calls `initialize_circularKernel_Surface_Host`, the symbol
+emitted using Lake's package setup, then passes the result to
+`kernel_finish_initialization` in `runtime.c`, which checks and releases it
+and marks initialization complete.
 Zig does not read the syntax, compile, or evaluate.
 
 ## `reflect_run`: surface text in, rendered text out
@@ -45,14 +46,26 @@ also tries a buffer too small for the answer (the needed length comes back and
 the buffer is untouched) and four refused texts, comparing the syntax-error
 bytes.
 
-## `kernel_run`: the old kernel
+The check also passes `42invalid` with a declared length of 2 and expects `42`:
+bytes past the length are not part of the program.
 
-`kernel_run` stays until `retire-circular-kernel`. `Circular.Host` parses
-decimal indices, `[body]` and `(function argument)`, with ASCII whitespace
-between tokens. It requires one complete term and rejects other bytes,
-including quote syntax and embedded zero bytes. Parsing depth is bounded by
-input length. Evaluation calls `Circular.evalFuel` with fuel 64 and the empty
-environment. It returns 0 for a closure, `2 * i + 1` in uint32 arithmetic for
-an unbound index, or 4294967295 for parse failure or exhausted fuel. This
-finite budget does not decide divergence generally. The Zig executable checks
-the five design scenarios and byte/parser boundary cases for it as before.
+## Running a program file
+
+`check.sh` also builds `out/run`:
+
+```
+host/out/run examples/append.hom          # prints [1, 2, 3, 4]
+host/out/run examples/forever.hom 5000    # prints no result within 5000 steps
+```
+
+The second argument is the step budget; the default is 100000000, about two
+seconds. `run.zig` reads the file, calls `reflect_run`, and prints the bytes
+and a newline. It does not look at them, so it exits 0 for a value, an error
+outcome, a syntax error, or a run with no result. It exits 2, with one line on
+standard error, for a wrong argument count, a budget that is not a whole
+number, or a file it cannot read. An answer longer than 65536 bytes is asked
+for a second time with a buffer of the needed size, which runs the program
+twice.
+
+The Lean objects are compiled with `-O3 -DNDEBUG`. Without it the machine runs
+about thirteen times slower.

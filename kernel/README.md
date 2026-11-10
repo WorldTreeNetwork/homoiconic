@@ -1,61 +1,54 @@
-# Circular kernel
+# Kernel
 
-This package proves `metacircular` and `coverage` for every quote-free
-term, including open and diverging programs. `Contract.lean` checks the
-exact general signatures and prints their axiom dependencies. Both proofs
-use only Lean's standard logical axioms (`propext`, `Classical.choice`, and
-`Quot.sound`), with no admissions or package-declared axioms.
+One Lean package, three libraries.
 
-Use Lean 4.35.0, pinned in `lean-toolchain`, and run commands from this directory:
+- `Reflect` is the language and its proofs. A program is a data value, and
+  one closed term of the language interprets programs given as data.
+- `Surface` reads program text into `Reflect` terms and renders outcomes as
+  text. It is tested, not proved.
+- The Zig host in `../host` calls the export `reflect_run`.
+
+Use Lean 4.35.0, pinned in `lean-toolchain`, and run from this directory:
 
 ```sh
 lake build
-lake env lean Run.lean
-lake env lean Axioms.lean
-lake env lean Contract.lean
+lake env lean ReflectContract.lean   # the interpreter theorems, exact statements
+lake env lean MachineContract.lean   # the machine theorems, exact statements
+lake env lean ReflectRun.lean        # the scenarios, executed
+lake env lean Surface/Check.lean     # the reader and renderer against examples
+lake exe reflectBench                # steps per second
 ```
 
-`Axioms.lean` also prints the dependencies of the interpreter omega proof.
-`Run.lean` executes both routes on the identity application and open variable,
-and the interpreter on the remaining scenarios. Its bounded omega result is
-an execution check; `omega_interpreter_no_direct` proves the general absence
-of an interpreter derivation.
+Both contract files print each theorem's axioms. They are Lean's standard
+three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 
-`Circular.Semantics` defines function-first, call-by-value `Direct`, its
-determinism proof, total `evalFuel`, and fuel soundness, monotonicity, and
-completeness. Environments contain closures; unbound errors propagate before
-unused arguments are evaluated. Quote has no `Direct` rule. `Eval` adds
-quotation as data.
+## Reflect
 
-`Circular.Encoding` encodes every quote-free term, with no closedness or
-normalization restriction. `encode p h` requires the proof `h : Circular.Pure p`.
-The encoding is Mogensen–Scott with Church indices and explicit binder shifts.
-`Circular.Data` encodes pure outcomes and their captured environments.
+| File | Holds |
+|---|---|
+| `Reflect/Syntax.lean` | `Data` (numbers and arrays), `Term`, and `reify : Term → Data` |
+| `Reflect/Semantics.lean` | `Direct`, the call-by-value relation; `evalFuel`, its total executable form |
+| `Reflect/Interpreter.lean` | `interp`, the interpreter as one closed term; `level k` nests it |
+| `Reflect/SemanticsProofs.lean` | `Direct` is deterministic; `evalFuel` agrees with it |
+| `Reflect/Proof.lean`, `Correctness.lean` | `reflective`, `reflective_coverage`, `reflective_env`, `tower` |
+| `Reflect/Machine.lean` | `compile`, `step`, `run`: a stack machine that can stop after any step |
+| `Reflect/MachineProof.lean`, `MachineExact.lean` | `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `depth_bound` |
+| `Reflect/RunUntil.lean`, `RunUntilProof.lean` | `runUntil`, which stops when the machine stops, and `runUntil_eq` |
+| `Reflect/Examples.lean` | Worked cases, checked by the kernel |
 
-`Circular.Interpreter` constructs the interpreter with a name-erasing syntax
-builder. The resulting `interpreterBody` is proved pure and closed. Its only
-constructors are variables, lambdas, and applications. Recursion uses a
-call-by-value fixed-point combinator. Neither the builder nor the generated
-term invokes `Direct` or `Eval`. The execution application projects the payload
-of `quote interpreterBody` syntactically.
+`reflective` says: for every term `p` and outcome `o`, `p` evaluates to `o`
+exactly when the interpreter applied to `p` as data evaluates to the data form
+of `o`. There is no fragment and no fuel in the statement. `tower` says the
+same for the interpreter interpreting itself to any depth.
 
-`Circular.Representation` reads back captured closures by syntactic
-substitution and parses the exact Scott data encoding. `Represents` uses this
-decoder; it never invokes a source evaluator. Round-trip, injectivity, and
-unique-decoding theorems establish that this is a data representation.
+## Surface
 
-`Circular.Examples` contains kernel-checked execution witnesses and decoded
-results for the identity application, open variable, unbound function with
-omega as its argument, and open lambda. It also proves the direct omega result
-is `none` at every fuel, absence of a direct omega derivation, exclusion of
-quoted input from `Pure`, and that interpreted outputs differ from raw source
-outcomes. The general theorems are in `Circular.Correctness`.
+`Surface/Read.lean` is the reader, `Render.lean` the renderer, `Run.lean` joins
+them to the machine, and `Host.lean` is the C export. `Expect.lean` is the
+specification by example that `Check.lean` runs.
 
-`Circular.Closing` relates closure evaluation to closed substitution
-semantics without changing the source evaluator or its domain.
-`Circular.Reduction` certifies finite call-by-value reductions and counts
-beta contractions in derivations. `Circular.InterpreterProof` proves the
-existing fixed-point interpreter's forward simulation by induction on source
-derivations, and its reverse simulation by induction on that reduction count.
-The reverse simulation covers every interpreter result. The omega theorem
-combines coverage, metacircular correspondence, and `omega_no_direct`.
+## History
+
+The first kernel, `Circular`, proved the interpreter theorem for quote-free
+programs with a Mogensen–Scott encoding. `Reflect` replaced it. It is in git at
+`8b23867` and earlier.
