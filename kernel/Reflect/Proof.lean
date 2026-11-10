@@ -12,6 +12,7 @@ along and never looked at.
 set_option linter.unusedSimpArgs false
 
 namespace Reflect
+variable [Ops]
 open B
 
 /-- The body of the evaluator: `env` at 0, `code` at 1, `self` at 2. -/
@@ -20,7 +21,9 @@ def armBody : Term := .app (.var 1) (.lam (.app (.app (.var 1) (.var 1)) (.var 0
 def selfBody : Term := .app (.app (.var 1) (.var 1)) (.var 0)
 def fixT : Term := .lam (.app (.lam armBody) (.lam armBody))
 
+omit [Ops] in
 theorem fix_eq (ctx : List String) : compile ctx fix = fixT := rfl
+omit [Ops] in
 theorem eval_eq (ctx : List String) :
     compile ctx B.eval = .app fixT (.lam (.lam (.lam core))) := rfl
 
@@ -57,6 +60,7 @@ theorem self_apply {γ ρ : Env} {st ct et : Term} {c e : Value} {r : Outcome}
 /-! ## Lookup -/
 
 def lookCore : Term := compile ["orig", "env", "n", "go"] lookBody
+omit [Ops] in
 theorem look_eq (ctx : List String) :
     compile ctx look = .app fixT (.lam (.lam (.lam (.lam lookCore)))) := rfl
 
@@ -81,6 +85,7 @@ macro "walk" : tactic => `(tactic| repeat' (first
   | apply Direct.caseCons (Direct.varBound rfl)
   | apply Direct.consArr
   | apply Direct.succNat
+  | apply Direct.primData
   | apply self_apply (Direct.varBound rfl)
   | apply Direct.appValue Direct.lam))
 
@@ -229,6 +234,40 @@ theorem fwd (γ : Env) {env : Env} {p : Term} {o : Outcome} (h : Direct env p o)
     simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
     cases xs <;> walk
   | @consTailNat env a x b k ha hb iha ihb =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases k <;> walk
+  | @primCodeError env c e x hc he ih =>
+    cases e with
+    | value v => exact he.elim
+    | unbound j =>
+      unfold core
+      simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+      walk
+    | wrong =>
+      unfold core
+      simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+      walk
+  | @primCodeArr env c xs x hc ih =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases xs <;> walk
+  | @primArgError env c k x e hc hx he ihc ihx =>
+    cases e with
+    | value v => exact he.elim
+    | unbound j =>
+      unfold core
+      simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+      cases k <;> walk
+    | wrong =>
+      unfold core
+      simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+      cases k <;> walk
+  | @primArgClosure env c k x b cap hc hx ihc ihx =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases k <;> walk
+  | @primData env c k x d hc hx ihc ihx =>
     unfold core
     simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
     cases k <;> walk
@@ -415,6 +454,30 @@ theorem stuck_core (γ : Env) : ∀ (n : Nat) (env : Env) (p : Term),
             cases hb : evalFuel m env b with
             | none => sdesc; scall_val Fa; sdesc; scall_stuck (ih _ _ hb)
             | some ob => rw [hb] at h; impossible h
+    | prim c x =>
+      simp only [evalFuel] at h
+      unfold core
+      simp only [reify]
+      cases hc : evalFuel m env c with
+      | none => sdesc; scall_stuck (ih _ _ hc)
+      | some oc =>
+        rw [hc] at h
+        have Fc := fwd γ (evalFuel_sound hc)
+        cases oc with
+        | unbound j => cases h
+        | wrong => cases h
+        | value vc =>
+          cases vc with
+          | closure b cap => cases h
+          | data dc =>
+            cases dc with
+            | arr xs => cases h
+            | nat k =>
+              simp only [] at h
+              simp only [reifyOutcome, reifyValue] at Fc
+              cases hx : evalFuel m env x with
+              | none => cases k <;> (sdesc; scall_val Fc; sdesc; scall_stuck (ih _ _ hx))
+              | some ox => rw [hx] at h; impossible h
     | dcase s z sc ni c =>
       simp only [evalFuel] at h
       unfold core
@@ -458,6 +521,7 @@ theorem stuck_core (γ : Env) : ∀ (n : Nat) (env : Env) (p : Term),
 
 /-! ## The run of `core` and the source derivation are the same thing -/
 
+omit [Ops] in
 theorem reify_inj : ∀ {t t' : Term}, reify t = reify t' → t = t' := by
   intro t
   induction t with
@@ -470,7 +534,9 @@ theorem reify_inj : ∀ {t t' : Term}, reify t = reify t' → t = t' := by
   | dcase s z sc n c ihs ihz ihsc ihn ihc =>
     intro t' h; cases t' <;> simp [reify] at h
     rw [ihs h.1, ihz h.2.1, ihsc h.2.2.1, ihn h.2.2.2.1, ihc h.2.2.2.2]
+  | prim c x ihc ihx => intro t' h; cases t' <;> simp [reify] at h; rw [ihc h.1, ihx h.2]
 
+omit [Ops] in
 mutual
   theorem reifyValue_inj : ∀ (v v' : Value), reifyValue v = reifyValue v' → v = v'
     | .closure b e, .closure b' e', h => by
@@ -486,6 +552,7 @@ mutual
       simp [reifyEnv] at h; rw [reifyValue_inj v v' h.1, reifyEnv_inj vs vs' h.2]
 end
 
+omit [Ops] in
 theorem reifyOutcome_inj {o o' : Outcome} (h : reifyOutcome o = reifyOutcome o') : o = o' := by
   cases o <;> cases o' <;> simp [reifyOutcome] at h
   · rw [reifyValue_inj _ _ h]
@@ -536,6 +603,7 @@ theorem eval_iff {ρ : Env} {ct et : Term} {c e : Data} {w : Outcome}
       (.value (.closure core (.data c :: selfV ρ :: ρ))) := .appValue (eval_value ρ) hc .lam
   exact ⟨app_inv hf he, .appValue hf he⟩
 
+omit [Ops] in
 theorem interp_eq : interp =
     .lam (.app (.app (.app fixT (.lam (.lam (.lam core)))) (.var 0)) (.lit (.arr []))) := rfl
 

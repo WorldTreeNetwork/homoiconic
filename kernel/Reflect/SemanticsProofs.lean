@@ -1,6 +1,7 @@
 import Reflect.Semantics
 
 namespace Reflect
+variable [Ops]
 
 theorem direct_deterministic {env : Env} {t : Term} {o o' : Outcome}
     (h : Direct env t o) (h' : Direct env t o') : o = o' := by
@@ -49,6 +50,18 @@ theorem direct_deterministic {env : Env} {t : Term} {o o' : Outcome}
     cases h' <;> (try cases ihs ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | caseError _ he ihs =>
     cases h' <;> (try cases ihs ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | primCodeError _ he ihc =>
+    cases h' <;> (try cases ihc ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | primCodeArr _ ihc =>
+    cases h' <;> (try cases ihc ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | primCodeClosure _ ihc =>
+    cases h' <;> (try cases ihc ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | primArgError _ _ he ihc ihx =>
+    cases h' <;> (try cases ihc ‹_›) <;> (try cases ihx ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | primArgClosure _ _ ihc ihx =>
+    cases h' <;> (try cases ihc ‹_›) <;> (try cases ihx ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | primData _ _ ihc ihx =>
+    cases h' <;> (try cases ihc ‹_›) <;> (try cases ihx ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
 theorem evalFuel_sound {n : Nat} {env : Env} {t : Term} {o : Outcome}
     (h : evalFuel n env t = some o) : Direct env t o := by
   induction n generalizing env t o with
@@ -106,6 +119,18 @@ theorem evalFuel_sound {n : Nat} {env : Env} {t : Term} {o : Outcome}
         | exact .caseCons (ih ‹_›) (ih h)
         | exact .caseClosure (ih ‹_›)
         | exact .caseError (ih ‹_›) (by simp [Outcome.IsError])
+    | prim c x =>
+      simp only [evalFuel] at h
+      repeat' split at h
+      all_goals (try (simp only [Option.some.injEq] at h; subst h))
+      all_goals first
+        | contradiction
+        | exact .primData (ih ‹_›) (ih ‹_›)
+        | exact .primArgClosure (ih ‹_›) (ih ‹_›)
+        | exact .primArgError (ih ‹_›) (ih ‹_›) (by simp [Outcome.IsError])
+        | exact .primCodeArr (ih ‹_›)
+        | exact .primCodeClosure (ih ‹_›)
+        | exact .primCodeError (ih ‹_›) (by simp [Outcome.IsError])
 theorem evalFuel_mono {n m : Nat} {env : Env} {t : Term} {o : Outcome}
     (h : evalFuel n env t = some o) (hle : n ≤ m) : evalFuel m env t = some o := by
   induction n generalizing env t o m with
@@ -135,6 +160,11 @@ theorem evalFuel_mono {n m : Nat} {env : Env} {t : Term} {o : Outcome}
         all_goals (try (simp only [Option.some.injEq] at h; subst h))
         all_goals simp_all
       | dcase s z sc ni c =>
+        simp only [evalFuel] at h ⊢
+        repeat' split at h
+        all_goals (try (simp only [Option.some.injEq] at h; subst h))
+        all_goals simp_all
+      | prim c x =>
         simp only [evalFuel] at h ⊢
         repeat' split at h
         all_goals (try (simp only [Option.some.injEq] at h; subst h))
@@ -245,6 +275,35 @@ theorem evalFuel_complete {env : Env} {t : Term} {o : Outcome}
     obtain ⟨n, hn⟩ := ih
     refine ⟨n + 1, ?_⟩
     cases e <;> simp_all [evalFuel, Outcome.IsError]
+  | @primCodeError _ _ e _ _ he ih =>
+    obtain ⟨n, hn⟩ := ih
+    refine ⟨n + 1, ?_⟩
+    cases e <;> simp_all [evalFuel, Outcome.IsError]
+  | primCodeArr _ ih =>
+    obtain ⟨n, hn⟩ := ih
+    exact ⟨n + 1, by simp [evalFuel, hn]⟩
+  | primCodeClosure _ ih =>
+    obtain ⟨n, hn⟩ := ih
+    exact ⟨n + 1, by simp [evalFuel, hn]⟩
+  | @primArgError _ _ _ _ e _ _ he ihc ihx =>
+    obtain ⟨n1, h1⟩ := ihc
+    obtain ⟨n2, h2⟩ := ihx
+    have h1' := evalFuel_mono h1 (m := n1 + n2) (by omega)
+    have h2' := evalFuel_mono h2 (m := n1 + n2) (by omega)
+    refine ⟨n1 + n2 + 1, ?_⟩
+    cases e <;> simp_all [evalFuel, Outcome.IsError]
+  | primArgClosure _ _ ihc ihx =>
+    obtain ⟨n1, h1⟩ := ihc
+    obtain ⟨n2, h2⟩ := ihx
+    have h1' := evalFuel_mono h1 (m := n1 + n2) (by omega)
+    have h2' := evalFuel_mono h2 (m := n1 + n2) (by omega)
+    exact ⟨n1 + n2 + 1, by simp [evalFuel, h1', h2']⟩
+  | primData _ _ ihc ihx =>
+    obtain ⟨n1, h1⟩ := ihc
+    obtain ⟨n2, h2⟩ := ihx
+    have h1' := evalFuel_mono h1 (m := n1 + n2) (by omega)
+    have h2' := evalFuel_mono h2 (m := n1 + n2) (by omega)
+    exact ⟨n1 + n2 + 1, by simp [evalFuel, h1', h2']⟩
 
 theorem direct_iff_evalFuel {env : Env} {t : Term} {o : Outcome} :
     Direct env t o ↔ ∃ n, evalFuel n env t = some o :=

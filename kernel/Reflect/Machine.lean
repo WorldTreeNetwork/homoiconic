@@ -17,6 +17,9 @@ inductive Code where
   | succ : Code → Code
   | cons : Code → Code
   | dcase : Code → Code → Code → Code → Code → Code
+  /-- The value on top must be a number, checked before the argument runs. -/
+  | checkNat : Code → Code
+  | prim : Code → Code
   deriving Repr
 
 /-- Postfix flattening: `comp t k` computes `t`, pushes it, and continues as `k`. -/
@@ -29,6 +32,7 @@ def comp : Term → Code → Code
   | .cons a b, k => comp a (.checkData (comp b (.cons k)))
   | .dcase s z sc n c, k =>
       comp s (.dcase (comp z .done) (comp sc .done) (comp n .done) (comp c .done) k)
+  | .prim c x, k => comp c (.checkNat (comp x (.prim k)))
 
 def compile (t : Term) : Code := comp t .done
 
@@ -55,6 +59,9 @@ def decomp : Code → List Term → Option Term
       | some z', some sc', some n', some c' => decomp k (.dcase s z' sc' n' c' :: stk)
       | _, _, _, _ => none
   | .dcase _ _ _ _ _, [] => none
+  | .checkNat k, stk => decomp k stk
+  | .prim k, x :: c :: stk => decomp k (.prim c x :: stk)
+  | .prim _, _ => none
 
 def decompile (c : Code) : Option Term := decomp c []
 
@@ -85,6 +92,8 @@ inductive State where
       That a compiled program which never halts also avoids it is not proved. -/
   | fault : State
   deriving Repr
+
+variable [Ops]
 
 def step : State → State
   | .halted o => .halted o
@@ -126,6 +135,14 @@ def step : State → State
       .running c (.data (.arr xs) :: .data x :: env) stk (⟨k, env⟩ :: frs)
   | .running (.dcase _ _ _ _ _) _ (.closure _ _ :: _) _ => .halted .wrong
   | .running (.dcase _ _ _ _ _) _ [] _ => .fault
+  | .running (.checkNat k) env (.data (.nat n) :: stk) frs =>
+      .running k env (.data (.nat n) :: stk) frs
+  | .running (.checkNat _) _ (_ :: _) _ => .halted .wrong
+  | .running (.checkNat _) _ [] _ => .fault
+  | .running (.prim k) env (.data d :: .data (.nat n) :: stk) frs =>
+      .running k env (.data (Ops.op n d) :: stk) frs
+  | .running (.prim _) _ (.closure _ _ :: .data (.nat _) :: _) _ => .halted .wrong
+  | .running (.prim _) _ _ _ => .fault
 
 def run : Nat → State → State
   | 0, s => s

@@ -2,6 +2,7 @@ import Reflect.MachineProof
 import Reflect.Examples
 
 namespace Reflect
+variable [Ops]
 open MP
 
 /-- A source outcome as the machine outcome that carries its compiled code. -/

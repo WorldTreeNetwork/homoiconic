@@ -1,6 +1,7 @@
 import Reflect.Machine
 
 namespace Reflect
+variable [Ops]
 
 theorem run_add : ∀ n m s, run (n + m) s = run m (run n s) := by
   intro n m
@@ -19,6 +20,7 @@ theorem run_halted : ∀ n o, run n (.halted o) = .halted o := by
   | zero => rfl
   | succ n ih => simp [run, step, ih]
 
+omit [Ops] in
 theorem decomp_comp : ∀ t k stk, decomp (comp t k) stk = decomp k (t :: stk) := by
   intro t
   induction t with
@@ -28,9 +30,11 @@ theorem decomp_comp : ∀ t k stk, decomp (comp t k) stk = decomp k (t :: stk) :
   | lit d => intro k stk; simp [comp, decomp]
   | succ t iht => intro k stk; simp [comp, decomp, iht]
   | cons a b iha ihb => intro k stk; simp [comp, decomp, iha, ihb]
+  | prim c x ihc ihx => intro k stk; simp [comp, decomp, ihc, ihx]
   | dcase s z sc n c ihs ihz ihsc ihn ihc =>
     intro k stk; simp [comp, decomp, ihs, ihz, ihsc, ihn, ihc]
 
+omit [Ops] in
 theorem decompile_compile : ∀ t, decompile (compile t) = some t := by
   intro t
   simp [decompile, compile, decomp_comp, decomp]
@@ -62,6 +66,7 @@ mutual
     | v :: vs => injV v :: injE vs
 end
 
+omit [Ops] in
 mutual
   theorem readValue_injV : ∀ v : Value, readValue (injV v) = some v
     | .closure b env => by
@@ -77,6 +82,7 @@ mutual
       simp [injE, readEnv, h1, h2]
 end
 
+omit [Ops] in
 theorem injE_get : ∀ (env : List Value) (i : Nat), (injE env)[i]? = (env[i]?).map injV := by
   intro env
   induction env with
@@ -91,9 +97,11 @@ inductive ErrM : MOutcome → Outcome → Prop
   | unbound (i : Nat) : ErrM (.unbound i) (.unbound i)
   | wrong : ErrM .wrong .wrong
 
+omit [Ops] in
 theorem ErrM.isError {w e} (h : ErrM w e) : e.IsError := by
   cases h <;> simp [Outcome.IsError]
 
+omit [Ops] in
 theorem ErrM.read {w e} (h : ErrM w e) : readOutcome w = some e := by
   cases h <;> rfl
 
@@ -225,6 +233,32 @@ theorem fwd {env t o} (h : Direct env t o) :
     obtain ⟨n1, h1⟩ := iha (.checkData (comp _ (.cons k))) stk frs
     refine Reach.of_run h1 (Reach.step ?_)
     exact (ihb (.cons k) (.data _ :: stk) frs).lift_err he
+  | primData hc hx ihc ihx =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
+    obtain ⟨n2, h2⟩ := ihx (.prim k) (.data _ :: stk) frs
+    exact ⟨n1 + 1 + (n2 + 1), run_to (run_to h1 rfl) (run_to h2 rfl)⟩
+  | primCodeArr hc ihc =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
+    exact Reach.of_run h1 (Reach.step ⟨0, rfl⟩)
+  | primCodeClosure hc ihc =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
+    exact Reach.of_run h1 (Reach.step ⟨0, rfl⟩)
+  | primCodeError hc he ihc =>
+    intro k stk frs
+    exact (ihc (.checkNat (comp _ (.prim k))) stk frs).lift_err he
+  | primArgClosure hc hx ihc ihx =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
+    obtain ⟨n2, h2⟩ := ihx (.prim k) (.data _ :: stk) frs
+    exact Reach.of_run h1 (Reach.step (Reach.of_run h2 (Reach.step ⟨0, rfl⟩)))
+  | primArgError hc hx he ihc ihx =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
+    refine Reach.of_run h1 (Reach.step ?_)
+    exact (ihx (.prim k) (.data _ :: stk) frs).lift_err he
   | caseZero hs hz ihs ihz =>
     intro k stk frs
     obtain ⟨n1, h1⟩ := ihs (.dcase (comp _ .done) (comp _ .done) (comp _ .done) (comp _ .done) k) stk frs
@@ -414,6 +448,46 @@ theorem rev : ∀ n, Rev n := by
               | arr xs =>
                 exact Or.inr ⟨(m1 + 1) + (m2 + 1), .data (.arr (x :: xs)),
                   Direct.consArr hda hdb, run_to hrun1 hrun2⟩
+    | prim c x ihc ihx =>
+      intro env k stk frs w h
+      rcases ihc env (.checkNat (comp x (.prim k))) stk frs w h with
+        ⟨e, he, hd⟩ | ⟨m1, vc, hdc, hm1⟩
+      · exact Or.inl ⟨e, he, Direct.primCodeError hd he.isError⟩
+      · obtain ⟨n1, hlt1, hn1, hrun1⟩ := advance h hm1
+        cases vc with
+        | closure b cap =>
+          have hst : step (.running (.checkNat (comp x (.prim k))) (injE env)
+              (injV (.closure b cap) :: stk) frs) = .halted .wrong := rfl
+          rw [hst, run_halted] at hn1
+          cases hn1
+          exact Or.inl ⟨.wrong, .wrong, Direct.primCodeClosure hdc⟩
+        | data dc =>
+          cases dc with
+          | arr xs =>
+            have hst : step (.running (.checkNat (comp x (.prim k))) (injE env)
+                (injV (.data (.arr xs)) :: stk) frs) = .halted .wrong := rfl
+            rw [hst, run_halted] at hn1
+            cases hn1
+            exact Or.inl ⟨.wrong, .wrong, Direct.primCodeArr hdc⟩
+          | nat j =>
+            have hst : step (.running (.checkNat (comp x (.prim k))) (injE env)
+                (injV (.data (.nat j)) :: stk) frs) =
+                .running (comp x (.prim k)) (injE env) (.data (.nat j) :: stk) frs := rfl
+            rw [hst] at hn1 hrun1
+            rcases ihn n1 hlt1 x env (.prim k) (.data (.nat j) :: stk) frs w hn1 with
+              ⟨e, he, hd⟩ | ⟨m2, vx, hdx, hm2⟩
+            · exact Or.inl ⟨e, he, Direct.primArgError hdc hd he.isError⟩
+            · obtain ⟨n2, hlt2, hn2, hrun2⟩ := advance hn1 hm2
+              cases vx with
+              | closure b cap =>
+                have hst2 : step (.running (.prim k) (injE env)
+                    (injV (.closure b cap) :: .data (.nat j) :: stk) frs) = .halted .wrong := rfl
+                rw [hst2, run_halted] at hn2
+                cases hn2
+                exact Or.inl ⟨.wrong, .wrong, Direct.primArgClosure hdc hdx⟩
+              | data d =>
+                exact Or.inr ⟨(m1 + 1) + (m2 + 1), .data (Ops.op j d),
+                  Direct.primData hdc hdx, run_to hrun1 hrun2⟩
     | dcase s z sc nl c ihs ihz ihsc ihnl ihc =>
       intro env k stk frs w h
       rcases ihs env (.dcase (comp z .done) (comp sc .done) (comp nl .done) (comp c .done) k)

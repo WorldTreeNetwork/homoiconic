@@ -1,3 +1,4 @@
+import Reflect.Arith
 import Surface.Expect
 import Surface.Run
 

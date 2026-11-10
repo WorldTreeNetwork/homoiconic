@@ -50,6 +50,10 @@ The check also passes `42` followed by a zero byte and expects a syntax error
 at column 3, so a zero byte does not end a program. It passes `42invalid` with a declared length of 2 and expects `42`:
 bytes past the length are not part of the program.
 
+The host runs with the operation table `arith` (`kernel/Reflect/Arith.lean`).
+Programs reach it through the built-in names `add`, `sub`, `mul`, `div`, `mod`,
+`equal`, `less`, and `op number argument`.
+
 ## Running a program file
 
 `check.sh` also builds `out/run`:

@@ -56,6 +56,22 @@ def appendText : String :=
 
 append [1, 2] [3, 4]"
 
+def factorialText : String :=
+"def factorial n =
+  case n
+    0 -> 1
+    m + 1 -> mul n (factorial m)
+
+factorial 20"
+
+def powerText : String :=
+"def power b n =
+  case n
+    0 -> 1
+    m + 1 -> mul b (power b m)
+
+power 2 100"
+
 def addText : String :=
 "def add a b =
   case a
@@ -175,6 +191,25 @@ def refused : List (String × String) := [
 /-- Program text, step budget, and the text the host must print. -/
 def prints : List (String × Nat × String) := [
   ("42", 1000, "42"),
+  ("add 2 3", 1000, "5"),
+  ("mul (add 2 3) (sub 9 5)", 1000, "20"),
+  ("sub 2 5", 1000, "0"),
+  ("div 7 2", 1000, "3"),
+  ("div 7 0", 1000, "0"),
+  ("mod 7 0", 1000, "7"),
+  ("equal [1, [2]] [1, [2]]", 1000, "1"),
+  ("equal 1 [1]", 1000, "0"),
+  ("less 2 3", 1000, "1"),
+  ("less 3 3", 1000, "0"),
+  ("add 1 [2]", 1000, "[]"),
+  ("op 0 [20, 22]", 1000, "42"),
+  ("op 99 [1, 2]", 1000, "[]"),
+  ("op (fn x -> x) 1", 1000, "error: wrong"),
+  ("op 0 (fn x -> x)", 1000, "error: wrong"),
+  ("let add = fn a b -> a\nadd 7 8", 1000, "7"),
+  (factorialText, 1000000, "2432902008176640000"),
+  (powerText, 1000000, "1267650600228229401496703205376"),
+  ("interpret (quote (add 2 3))", 10000000, "[0, [1, 5]]"),
   ("let id = fn x -> x\nid id", 1000, "<function>"),
   (countdownText, 1000000, "0"),
   (appendText, 1000000, "[1, 2, 3, 4]"),

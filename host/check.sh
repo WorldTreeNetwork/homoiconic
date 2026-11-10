@@ -18,7 +18,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil \
+for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith \
               Surface/Read Surface/Render Surface/Run Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
@@ -51,6 +51,7 @@ expect() {
 }
 expect "[1, 2, 3, 4]" "$EXAMPLES/append.hom"
 expect "[0, [1, 42]]" "$EXAMPLES/code.hom"
+expect "265252859812191058636308480000000" "$EXAMPLES/factorial.hom"
 expect "no result within 5000 steps" "$EXAMPLES/forever.hom" 5000
 # An answer longer than the command's first buffer is printed in full: every
 # byte is compared.

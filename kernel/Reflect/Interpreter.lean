@@ -14,6 +14,7 @@ inductive Expr where
   | succ : Expr → Expr
   | cons : Expr → Expr → Expr
   | dcase : Expr → Expr → String → Expr → Expr → String → String → Expr → Expr
+  | prim : Expr → Expr → Expr
 
 def compile (ctx : List String) : Expr → Term
   | .ref x => .var (ctx.idxOf x)
@@ -25,6 +26,7 @@ def compile (ctx : List String) : Expr → Term
   | .dcase s z p sc n h t c =>
       .dcase (compile ctx s) (compile ctx z) (compile (p :: ctx) sc)
         (compile ctx n) (compile (t :: h :: ctx) c)
+  | .prim c x => .prim (compile ctx c) (compile ctx x)
 
 abbrev v := Expr.ref
 def lams (xs : List String) (b : Expr) : Expr := xs.foldr Expr.lam b
@@ -113,9 +115,21 @@ def evalBody : Expr :=
           (self (v "ni") (v "env"))
           "hd" "tl" (self (v "c")
             (.cons (vdata (v "tl")) (.cons (vdata (v "hd")) (v "env")))))
+  let operation :=
+    uncons (v "rest") "c" "r1" <| uncons (v "r1") "x" "_" <|
+    letE "rc" (self (v "c") (v "env")) <| bind "rc" "vc" <|
+    uncons (v "vc") "ct" "cr" <|
+    ifZero (v "ct") W
+      (uncons (v "cr") "dc" "_" <|
+        let argument :=
+          letE "rx" (self (v "x") (v "env")) <| bind "rx" "vx" <|
+          uncons (v "vx") "xt" "xr" <|
+          ifZero (v "xt") W
+            (uncons (v "xr") "dx" "_" <| ok (vdata (.prim (v "dc") (v "dx"))))
+        .dcase (v "dc") argument "_" argument W "_" "_" W)
   .dcase (v "code") lookupE "_" lookupE W "tag" "rest"
     (tagcase (v "tag")
-      [application, abstraction, literal, successor, construction, analysis])
+      [application, abstraction, literal, successor, construction, analysis, operation])
 
 def eval : Expr := .app fix (lams ["self", "code", "env"] evalBody)
 def interpreter : Expr := lams ["input"] (apps eval [v "input", nil])

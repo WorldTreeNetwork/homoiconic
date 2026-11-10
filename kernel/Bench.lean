@@ -1,3 +1,4 @@
+import Reflect.Arith
 import Reflect.Interpreter
 import Reflect.Machine
 open Reflect

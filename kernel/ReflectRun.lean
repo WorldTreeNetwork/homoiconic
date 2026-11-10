@@ -1,3 +1,4 @@
+import Reflect.Arith
 import Reflect
 open Reflect
 
@@ -46,6 +47,16 @@ def emptyArr : Term := .lit (.arr [])
 #eval IO.println (check "case on function is wrong" (.dcase identity (n 0) (n 0) (n 0) (n 0)))
 #eval IO.println (check "case on unbound scrutinee" (.dcase (.var 3) (n 0) (n 0) (n 0) (n 0)))
 #eval IO.println (check "case on wrong scrutinee" (.dcase (.succ identity) (n 0) (n 0) (n 0) (n 0)))
+#eval IO.println (check "operation: add" (.prim (n 0) (.lit (.arr [.nat 2, .nat 3]))))
+#eval IO.println (check "operation on built operands" (.prim (n 2) (.cons (.succ (n 5)) (.cons (n 7) emptyArr))))
+#eval IO.println (check "operation number is computed" (.prim (.succ (n 0)) (.lit (.arr [.nat 9, .nat 4]))))
+#eval IO.println (check "unknown operation answers []" (.prim (n 99) (n 1)))
+#eval IO.println (check "operation number that is an array is wrong before the argument" (.prim emptyArr omega))
+#eval IO.println (check "operation number that is a function is wrong before the argument" (.prim identity omega))
+#eval IO.println (check "unbound operation number skips the argument" (.prim (.var 4) omega))
+#eval IO.println (check "function as operand is wrong" (.prim (n 0) identity))
+#eval IO.println (check "unbound operand" (.prim (n 0) (.var 2)))
+#eval IO.println (check "wrong operand" (.prim (n 0) (.succ identity)))
 #eval IO.println (check "quoted program is data" (.lit (reify (.app identity identity))))
 #eval IO.println (check "quoted omega is data" (.lit (reify omega)))
 #eval IO.println (check "program builds code and runs it" buildsAndRuns)

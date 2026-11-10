@@ -2,6 +2,7 @@ import Reflect.RunUntil
 import Reflect.MachineProof
 
 namespace Reflect
+variable [Ops]
 
 theorem run_fault : ∀ n, run n .fault = .fault := by
   intro n

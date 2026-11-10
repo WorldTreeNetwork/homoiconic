@@ -1,6 +1,7 @@
 import Reflect.Correctness
 
 namespace Reflect
+variable [Ops]
 
 abbrev identity : Term := .lam (.var 0)
 abbrev deltaBody : Term := .app (.var 0) (.var 0)

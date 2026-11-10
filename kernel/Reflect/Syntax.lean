@@ -18,6 +18,9 @@ inductive Term where
   /-- Scrutinee; zero branch; successor branch (binds the predecessor);
       empty branch; non-empty branch (binds the head at 1 and the tail at 0). -/
   | dcase : Term → Term → Term → Term → Term → Term
+  /-- Operation number; argument. What an operation computes is not part of the
+      language: it is supplied by an `Ops` table (`Reflect.Semantics`). -/
+  | prim : Term → Term → Term
   deriving Repr
 
 /-- A program as a data value. Total: there is no term it rejects. -/
@@ -29,5 +32,6 @@ def reify : Term → Data
   | .succ t => .arr [.nat 3, reify t]
   | .cons a b => .arr [.nat 4, reify a, reify b]
   | .dcase s z sc n c => .arr [.nat 5, reify s, reify z, reify sc, reify n, reify c]
+  | .prim c x => .arr [.nat 6, reify c, reify x]
 
 end Reflect

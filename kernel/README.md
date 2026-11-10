@@ -27,7 +27,8 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 | File | Holds |
 |---|---|
 | `Reflect/Syntax.lean` | `Data` (numbers and arrays), `Term`, and `reify : Term → Data` |
-| `Reflect/Semantics.lean` | `Direct`, the call-by-value relation; `evalFuel`, its total executable form |
+| `Reflect/Semantics.lean` | `Ops`, the table of operations; `Direct`, the call-by-value relation; `evalFuel`, its total executable form |
+| `Reflect/Arith.lean` | `arith`, the first table: exact arithmetic and comparison. No theorem depends on it |
 | `Reflect/Interpreter.lean` | `interp`, the interpreter as one closed term; `level k` nests it |
 | `Reflect/SemanticsProofs.lean` | `Direct` is deterministic; `evalFuel` agrees with it |
 | `Reflect/Proof.lean`, `Correctness.lean` | `reflective`, `reflective_coverage`, `reflective_env`, `tower` |
@@ -40,6 +41,17 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 exactly when the interpreter applied to `p` as data evaluates to the data form
 of `o`. There is no fragment and no fuel in the statement. `tower` says the
 same for the interpreter interpreting itself to any depth.
+
+## Operations
+
+`prim c x` runs operation number `c` on the data value `x`. What an operation
+computes is not part of the language. It comes from a table, `Ops`, holding one
+total function `op : Nat → Data → Data`, and every definition and theorem takes
+the table as a parameter. The interpreter is the same term for every table, so
+adding an operation is adding a line to a table: no proof changes.
+
+The contract files state each theorem as `∀ [Ops], …` and do not import a
+table. The host runs with `arith`.
 
 ## Surface
 

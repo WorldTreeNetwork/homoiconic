@@ -1,6 +1,7 @@
 import Reflect.Proof
 
 namespace Reflect
+variable [Ops]
 
 /-- Direct evaluation and interpretation agree for every program. The program
     is passed as its own data form and the answer is compared by equality. -/

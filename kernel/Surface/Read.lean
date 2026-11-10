@@ -1,4 +1,5 @@
 import Reflect.Interpreter
+import Reflect.Arith
 
 /-!
 The reader: program text to a `Reflect.Term`, or an error message with line and
@@ -639,6 +640,7 @@ def uses (k : Nat) : Term → Bool
   | .cons a b => uses k a || uses k b
   | .dcase s z sc n c =>
     uses k s || uses k z || uses (k + 1) sc || uses k n || uses (k + 2) c
+  | .prim c x => uses k c || uses k x
 
 /-- `ctx` is the names in scope, nearest first. Inside a quotation `ctx` holds
     only the names bound inside it, and `outer` the names bound outside it. -/
@@ -648,13 +650,23 @@ structure Scope where
 
 def Scope.push (sc : Scope) (x : String) : Scope := { sc with ctx := x :: sc.ctx }
 
+/-- `op n x`: operation number `n` on the argument `x`. -/
+def opTerm : Term := .lam (.lam (.prim (.var 1) (.var 0)))
+
+/-- A named operation of two operands, as a function of two arguments. -/
+def binaryOp (n : Nat) : Term :=
+  .lam (.lam (.prim (.lit (.nat n)) (.cons (.var 1) (.cons (.var 0) (.lit (.arr []))))))
+
 def lookup (sc : Scope) (p : Pos) (x : String) : Except String TT :=
   let i := sc.ctx.idxOf x
   if i < sc.ctx.length then .ok (.var i)
   else if sc.outer.any (·.contains x) then
     .error (fmtPos p s!"the quotation mentions `{x}`, which is bound outside it")
   else if x == "interpret" then .ok (.term interp)
-  else .error (fmtPos p s!"unbound name `{x}`")
+  else if x == "op" then .ok (.term opTerm)
+  else match arithNames.lookup x with
+    | some n => .ok (.term (binaryOp n))
+    | none => .error (fmtPos p s!"unbound name `{x}`")
 
 def tr : Scope → Expr → Except String TT
   | _, .num n => .ok (.lit (.nat n))

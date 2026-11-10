@@ -1,6 +1,7 @@
 import Reflect.Machine
 
 namespace Reflect
+variable [Ops]
 
 /-- `run`, stopping as soon as the machine stops. It is the same function. -/
 def runUntil : Nat → State → State

@@ -21,6 +21,14 @@ def Outcome.IsError : Outcome → Prop
   | .unbound _ => True
   | .wrong => True
 
+/-- A table of operations: operation number and argument to result. Total, so an
+    operation has its own answer for an argument it does not expect. Every
+    definition and theorem below holds for any table. -/
+class Ops where
+  op : Nat → Data → Data
+
+variable [Ops]
+
 /-- Function-first call by value. Divergence is the absence of a derivation.
     Each rule has the premises `evalFuel` checks, in the order it checks them. -/
 inductive Direct : Env → Term → Outcome → Prop where
@@ -64,6 +72,17 @@ inductive Direct : Env → Term → Outcome → Prop where
   | caseClosure (hs : Direct env s (.value (.closure b cap))) :
       Direct env (.dcase s z sc n c) .wrong
   | caseError (hs : Direct env s e) (he : e.IsError) : Direct env (.dcase s z sc n c) e
+  | primCodeError (hc : Direct env c e) (he : e.IsError) : Direct env (.prim c x) e
+  | primCodeArr (hc : Direct env c (.value (.data (.arr xs)))) : Direct env (.prim c x) .wrong
+  | primCodeClosure (hc : Direct env c (.value (.closure b cap))) :
+      Direct env (.prim c x) .wrong
+  | primArgError (hc : Direct env c (.value (.data (.nat k))))
+      (hx : Direct env x e) (he : e.IsError) : Direct env (.prim c x) e
+  | primArgClosure (hc : Direct env c (.value (.data (.nat k))))
+      (hx : Direct env x (.value (.closure b cap))) : Direct env (.prim c x) .wrong
+  | primData (hc : Direct env c (.value (.data (.nat k))))
+      (hx : Direct env x (.value (.data d))) :
+      Direct env (.prim c x) (.value (.data (Ops.op k d)))
 
 /-- The executable entry. Fuel bounds derivation height. -/
 def evalFuel : Nat → Env → Term → Option Outcome
@@ -116,6 +135,20 @@ def evalFuel : Nat → Env → Term → Option Outcome
       | some (.value (.data (.arr []))) => evalFuel n env ni
       | some (.value (.data (.arr (x :: xs)))) =>
           evalFuel n (.data (.arr xs) :: .data x :: env) c
+      | some (.value (.closure _ _)) => some .wrong
+      | some (.unbound i) => some (.unbound i)
+      | some .wrong => some .wrong
+  | n + 1, env, .prim c x =>
+      match evalFuel n env c with
+      | none => none
+      | some (.value (.data (.nat k))) =>
+          match evalFuel n env x with
+          | none => none
+          | some (.value (.data d)) => some (.value (.data (Ops.op k d)))
+          | some (.value (.closure _ _)) => some .wrong
+          | some (.unbound i) => some (.unbound i)
+          | some .wrong => some .wrong
+      | some (.value (.data (.arr _))) => some .wrong
       | some (.value (.closure _ _)) => some .wrong
       | some (.unbound i) => some (.unbound i)
       | some .wrong => some .wrong
