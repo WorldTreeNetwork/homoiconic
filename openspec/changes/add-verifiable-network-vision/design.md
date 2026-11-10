@@ -110,6 +110,21 @@ Existing work considered:
 
 These descriptions are from memory and were not checked against current sources. Stage 1 checks the two it borrows from.
 
+### D9. Speed comes from a small machine and native primitives, not from the canonical form — proposed
+
+Asked 2026-11-09: can code be close to bytecode and run efficiently, perhaps as WebAssembly, without hurting the proof or code-as-data.
+
+The canonical form stays the term (D8). That is what is hashed, quoted, and reasoned about. What runs is derived from it.
+
+- **A stack bytecode in the SECD / ZINC family.** About six instructions: access a variable, build a closure, apply, return, push a literal, call a primitive. Code is a flat array of integers, so it is a dCBOR value too. The unoptimized compile is a postfix flattening of the term and is invertible. This machine is the P1 machine; stage 2 builds it.
+- **Compile correctness is one more theorem (P1b).** Running `compile t` gives the outcome `Direct` gives `t`. `metacircular` stays stated on terms and is not touched.
+- **Heavy work is primitives.** Hashing, byte operations, big integers, and tensor arithmetic are native code behind P8, each with a cost and a local obligation. The language is the glue. Model inference is a request (D3) or, for fixed-weight integer inference, a primitive.
+- **The machine is written in Lean and compiled by Lean to C.** The C compiler handles the processor. The proof stays about the code that runs.
+- **If that is too slow, add an unchecked fast executor, not a trusted one.** It must be able to produce the canonical machine state at a given step count. The reference machine judges it through P21. This would put an evaluator outside Lean and needs a decision against the partition when it comes up.
+- **No floats.** Processors differ on float edge cases. dCBOR in this tier already excludes them.
+
+WebAssembly as the language is declined: code is not a value in it, it has no closures, and a self-interpreter and its proof would be far larger than everything here. WebAssembly as packaging is welcome: the compiled kernel can be built for it so a receipt can be checked in a browser.
+
 ## Proof obligations
 
 Ordered by dependency. "Free" means it follows from earlier results with little new work.
@@ -119,6 +134,7 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 | | Statement | Why | Needs |
 |---|---|---|---|
 | **P1** | `Direct env t o ↔ ∃ n, run n (load env t) = done o` | The thing that runs means what `Direct` says. | — |
+| **P1b** | `Direct [] t o ↔ ∃ n, run n (load (compile t)) = done o`, and `decompile (compile t) = t` | The bytecode means what the term means, and is the same information. | P1's machine, D9 |
 | **P2** | `run (n + m) s = run m (run n s)` | Pause, resume, checkpoint, slice. | P1's machine |
 | **P3** | After `n` steps the state holds at most `c * n + size s₀` cells | A budget bounds memory, not only time. A hostile program cannot exhaust a VM. | P1's machine |
 
