@@ -125,6 +125,7 @@ No new UI because this change is a vision and a roadmap.
 
 ### 2026-11-10
 
+- Stage 4's P10 and P11 landed as `add-requests`, in the form "a request is a value, the driver is outside evaluation" rather than a `request` outcome. P12, `send`, `receive`, `spawn`, fresh names and the meaning of a payload remain. Annotated in `design.md`.
 - Stage 3's parametric statement (P8) landed as `add-operation-tables` for total data-to-data operations, with arithmetic as the first table. Bytes and hashing, a cost per operation, and P9 remain.
 - Stages 1 and 2 landed and were folded (`code-as-data`, `bytecode-machine`), with a surface syntax and a host command. The first kernel was removed by `retire-circular-kernel`. The core insight now names `reflective`.
 

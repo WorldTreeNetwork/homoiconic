@@ -6,7 +6,7 @@ One Lean package with two libraries, and the host that calls it.
   one closed term of the language interprets programs given as data.
 - `Surface` reads program text into `Reflect` terms and renders outcomes as
   text. It is tested, not proved.
-- The Zig host in `../host` calls the export `reflect_run`.
+- The Zig host in `../host` calls the exports `reflect_run` and `reflect_converse`.
 
 Use Lean 4.35.0, pinned in `lean-toolchain`, and run from this directory:
 
@@ -14,12 +14,13 @@ Use Lean 4.35.0, pinned in `lean-toolchain`, and run from this directory:
 lake build
 lake env lean ReflectContract.lean   # the interpreter theorems, exact statements
 lake env lean MachineContract.lean   # the machine theorems, exact statements
+lake env lean RequestContract.lean   # the request theorems, exact statements
 lake env lean ReflectRun.lean        # the scenarios, executed
 lake env lean Surface/Check.lean     # the reader and renderer against examples
 lake exe reflectBench                # steps per second
 ```
 
-Both contract files print each theorem's axioms. They are Lean's standard
+All three contract files print each theorem's axioms. They are Lean's standard
 three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 
 ## Reflect
@@ -35,6 +36,8 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 | `Reflect/Machine.lean` | `compile`, `step`, `run`: a stack machine that can stop after any step |
 | `Reflect/MachineProof.lean`, `MachineExact.lean` | `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `depth_bound` |
 | `Reflect/RunUntil.lean`, `RunUntilProof.lean` | `runUntil`, which stops when the machine stops, and `runUntil_eq` |
+| `Reflect/Request.lean` | `askTerm`, `payloadTerm`, `resumeTerm`; `Sys`, a way of evaluating; `Drive`, the driver over any `Sys`; `Interact`, `InteractI`, `InteractM`; `driveRun` and `converse`, the executable driver |
+| `Reflect/RequestProof.lean` | Determinism, resume and extra answers; `Sim.drive`, which lifts turn-by-turn agreement to runs; the interpreter and machine instances; soundness of `converse` |
 | `Reflect/Examples.lean` | Worked cases, checked by the kernel |
 
 `reflective` says: for every term `p` and outcome `o`, `p` evaluates to `o`
@@ -52,6 +55,26 @@ adding an operation is adding a line to a table: no proof changes.
 
 The contract files state each theorem as `∀ [Ops], …` and do not import a
 table. The host runs with `arith`.
+
+## Requests
+
+A request is a function value: `ask payload next` is the closed term
+`askTerm`, which hands `payload` and `next` to its caller. No term, value,
+outcome, rule or instruction is added. A driver, `Drive`, runs a program
+against a list of answers. A turn that ends in data or an error ends the run.
+A turn that ends in a function is read as a request, whether or not `ask`
+built it: the driver applies it to `payloadTerm` to read the payload, which
+must be data, and to `resumeTerm` to run the rest on the next answer. With no
+answer left the run is waiting.
+
+`Drive` is defined once over `Sys`, a way of evaluating, and used three times:
+`Interact` (direct evaluation), `InteractI` (the interpreter on data) and
+`InteractM` (the machine). `RequestContract.lean` states
+`interact_deterministic`, `interact_resume`, `interact_extra`,
+`interact_reflective`, `interact_coverage`, `interact_machine`,
+`interact_machine_exact`, `converse_finished` and `converse_waiting`, each as
+`∀ [Ops], …`. `converse` gives each machine run a fresh step budget and is
+proved sound, not complete.
 
 ## Surface
 

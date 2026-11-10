@@ -1,6 +1,6 @@
 # add-verifiable-network-vision
 
-> **Written 2026-11-09 against the first kernel, `Circular`, which `retire-circular-kernel` removed on 2026-11-10.** Where this document names `metacircular`, `coverage`, `source_beta`, `interpreterApplication`, `Represents`, `encode` or `kernel_run`, read it as the plan as it stood then. What landed: `reflective` and `reflective_coverage` (P8a), `reflective_env` (P6), `tower` (P7), the machine theorems (P1, P1b, P2, P3), and `reflect_run`. Their exact statements are in `openspec/specs/code-as-data/spec.md` and `openspec/specs/bytecode-machine/spec.md`. P8 landed later on 2026-11-10 as `prim` with an `Ops` table (`add-operation-tables`), and needs no lemma per operation.
+> **Written 2026-11-09 against the first kernel, `Circular`, which `retire-circular-kernel` removed on 2026-11-10.** Where this document names `metacircular`, `coverage`, `source_beta`, `interpreterApplication`, `Represents`, `encode` or `kernel_run`, read it as the plan as it stood then. What landed: `reflective` and `reflective_coverage` (P8a), `reflective_env` (P6), `tower` (P7), the machine theorems (P1, P1b, P2, P3), and `reflect_run`. Their exact statements are in `openspec/specs/code-as-data/spec.md` and `openspec/specs/bytecode-machine/spec.md`. P8 landed later on 2026-11-10 as `prim` with an `Ops` table (`add-operation-tables`), and needs no lemma per operation. P10 and P11 landed later on 2026-11-10 in another form (`add-requests`; see Requests below); P12 is open.
 
 The architecture the vision implies, and the proofs that carry it. Statements are sketches. Each owning change fixes the exact Lean signature and puts it in a `Contract.lean` check the way `metacircular` is.
 
@@ -175,6 +175,8 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 | **P9** | The interpreter's step count is bounded by a stated function of the program's step count and size | A step budget means something at every interpreter depth. | P1 |
 
 ### Requests
+
+> **2026-11-10, `add-requests`:** P10 and P11 are met in a different form from the one below. A request is a value, not a new outcome: `ask payload next` is a function that holds a payload and the rest of the program, and the driver that answers it is outside evaluation. P10 is `interact_deterministic`, and P11 is `interact_reflective` and `interact_coverage` (the interpreter on data), with `interact_machine` for the machine. A request carries no mark, so the driver reads every function a turn ends in as a request. The statements are in `openspec/specs/requests/spec.md`. P12 is still open: a payload is data, and nothing yet stops a program from naming what it was not handed.
 
 | | Statement | Why | Needs |
 |---|---|---|---|

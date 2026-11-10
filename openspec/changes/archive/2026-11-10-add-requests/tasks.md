@@ -9,4 +9,4 @@
 - [x] Export `reflect_converse`; command `host/out/ask`; five command checks and six refusals in `host/check.sh`.
 - [x] `lake build`, three contracts, `ReflectRun.lean`, `Surface/Check.lean` and `sh host/check.sh` exit 0.
 - [x] Advise by a reader from another model family. Send-back, 2026-11-10, two required fixes to the description and three notes, all answered; no proof finding. Review in `reviews/`.
-- [ ] Fold: add `requests`, apply the deltas to `surface-syntax` and `zig-host`, amend `ARCHITECTURE.md`, the READMEs and `docs/PROOFS.md`, and note P10, P11 and P12 in the vision.
+- [x] Fold: add `requests`, apply the deltas to `surface-syntax` and `zig-host`, amend `ARCHITECTURE.md`, the READMEs and `docs/PROOFS.md`, and note P10, P11 and P12 in the vision.

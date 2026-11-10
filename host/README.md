@@ -2,8 +2,8 @@
 
 From the repository root, run `sh host/check.sh` with Zig 0.16.0 and the
 Lean toolchain pinned in `kernel/lean-toolchain` installed. The script builds
-the package, checks `ReflectContract.lean`, `MachineContract.lean` and
-`Surface/Check.lean`, writes the
+the package, checks `ReflectContract.lean`, `MachineContract.lean`,
+`RequestContract.lean` and `Surface/Check.lean`, writes the
 programs to run, compiles Lean to C and C to objects, compiles the Zig check to
 an object, and links with `leanc`. Generated C, objects, the generated
 `cases.zig`, the executable and Zig caches stay in ignored `out/`.
@@ -71,6 +71,47 @@ standard error that does not repeat the arguments, for a wrong argument count, a
 number, a file it cannot read, or an answer it cannot write. An answer longer than 65536 bytes is asked
 for a second time with a buffer of the needed size, which runs the program
 twice.
+
+## Running a program against answers
+
+```
+size_t reflect_converse(const uint8_t *program, size_t length,
+                        const uint8_t *answers, size_t answers_length,
+                        uint8_t *out, size_t capacity, uint64_t budget);
+```
+
+`reflect_converse` is the second export that evaluates. It borrows the
+program bytes and the answers bytes, runs `Surface.converseText`
+(`kernel/Surface/Run.lean`), and returns the number of bytes the rendering
+needs, as `reflect_run` does. The answers text is a program whose result is an
+array; its items are the answers. The rendering is one line `asked: <payload>`
+for each request, in order, then how the run ended: the outcome as `run`
+prints it, `waiting` when the program asked and no answer was left, or
+`no result within N steps of a turn`. An answers text that does not read
+prints `answers: ` and the syntax error; one whose result is not an array, or
+that errors or does not finish, prints `answers: not an array`.
+
+`check.sh` also builds `out/ask`:
+
+```
+host/out/ask examples/ask.hom examples/ask.answers       # asked: [1], asked: [2, 20], 42
+host/out/ask examples/ask.hom examples/ask-one.answers   # asked: [1], asked: [2, 20], waiting
+```
+
+The third argument is the step budget for each turn: the first evaluation of
+the program, each reading of a payload, each running of the rest on an answer,
+and the answers program each get it afresh. The default is 100000000. There is
+no budget for the whole run. `ask.zig` reads both files, calls
+`reflect_converse`, and prints the bytes and a newline. It exits 0 whenever the
+kernel answered, and 2, with one line on standard error, for a wrong argument
+count, a budget that is not a whole number, a file it cannot read, or an answer
+it cannot write. Each call runs the program from the start against the whole
+answers file; a paused run is not stored.
+
+A request carries no mark. Every function a turn ends in is read as a request,
+so `fn x -> x` prints `error: wrong` and `fn x -> 42` prints `asked: 42` and
+`waiting`. When a turn runs out of budget the requests printed before that
+line are not covered by any theorem.
 
 The Lean objects are compiled with `-O3`. Without it the machine runs about ten
 times slower. Lean's runtime assertions are left on (`NDEBUG` is not defined):

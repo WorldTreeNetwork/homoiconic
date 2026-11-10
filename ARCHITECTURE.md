@@ -1,6 +1,6 @@
 # Architecture
 
-The settled language partition for the first system. Source of record for the partition: `openspec/specs/language-partition/spec.md`. Source of record for the host: `openspec/specs/zig-host/spec.md`. Source of record for programs as data: `openspec/specs/code-as-data/spec.md`. Source of record for the machine: `openspec/specs/bytecode-machine/spec.md`. Source of record for the surface syntax: `openspec/specs/surface-syntax/spec.md`.
+The settled language partition for the first system. Source of record for the partition: `openspec/specs/language-partition/spec.md`. Source of record for the host: `openspec/specs/zig-host/spec.md`. Source of record for programs as data: `openspec/specs/code-as-data/spec.md`. Source of record for the machine: `openspec/specs/bytecode-machine/spec.md`. Source of record for the surface syntax: `openspec/specs/surface-syntax/spec.md`. Source of record for requests: `openspec/specs/requests/spec.md`.
 
 ## Partition
 
@@ -22,13 +22,17 @@ The kernel package holds two Lean libraries, `Reflect` and `Surface`. `Reflect` 
 
 `prim c x` runs an operation from a table, `Ops`: one total function from an operation number and a data value to a data value. Evaluation, the interpreter theorems and the machine theorems are stated for every table. The interpreter is the same term for every table, so a new set of operations is added to a table with no new proof. The first table is exact arithmetic (`kernel/Reflect/Arith.lean`), and the host runs with it (`add-operation-tables`).
 
+## Requests
+
+A program can ask the outside for something and continue from the answer. A request is an ordinary value: `ask payload next` builds a function that hands its payload and the rest of the program to its caller. Nothing is added to the language, evaluation, the interpreter or the machine. A driver outside the program runs it against a list of answers: every function a turn ends in is read as a request, its payload must be data, and the rest of the program runs on the next answer. The driver is defined once, over any way of evaluating, and it is proved that a run is fixed by the program and the answers, and that direct evaluation, the interpreter on data and the machine make the same requests and end the same way. A request carries no mark, so a driven program cannot finish with a function. What a payload means is not part of this. The statements are in `openspec/specs/requests/spec.md`.
+
 ## Surface
 
 `Surface`, the package's other library, holds the reader, from program text with names and indentation to `Reflect` terms, and the renderer, from outcomes to plain text. The reader and the renderer are tested against examples. They are not proved. What runs is the term the reader produced, on the proved machine. The statements are in `openspec/specs/surface-syntax/spec.md`.
 
 ## Boundary
 
-The proof boundary is the call from the Zig host into the Lean kernel. The `lean-c-abi` spike (`docs/spikes/lean-c-abi/finding.md`, Lean 4.35.0, Zig 0.16.0) returned `71` from one unboxed exported function to a Zig host that does not contain the formula. The spike shows the call is feasible. The object link and the runtime initializer are in `host/`. Zig passes program text to `reflect_run`, the only export that evaluates, and prints the text it returns; Zig reads nothing and evaluates nothing. The command `host/out/run <program-file> [step-budget]` does the same for a program file. The host requirements are `openspec/specs/zig-host/spec.md`. The theorems are the source of record in `openspec/specs/code-as-data/spec.md` and `openspec/specs/bytecode-machine/spec.md`.
+The proof boundary is the call from the Zig host into the Lean kernel. The `lean-c-abi` spike (`docs/spikes/lean-c-abi/finding.md`, Lean 4.35.0, Zig 0.16.0) returned `71` from one unboxed exported function to a Zig host that does not contain the formula. The spike shows the call is feasible. The object link and the runtime initializer are in `host/`. Zig passes program text to `reflect_run`, or a program and an answers text to `reflect_converse`, and prints the text it returns. These two are the only exports that evaluate; Zig reads nothing and evaluates nothing. The command `host/out/run <program-file> [step-budget]` does the same for a program file, and `host/out/ask <program-file> <answers-file> [step-budget]` runs a program file against an answers file. The host requirements are `openspec/specs/zig-host/spec.md`. The theorems are the source of record in `openspec/specs/code-as-data/spec.md` and `openspec/specs/bytecode-machine/spec.md`.
 
 ## Why
 
@@ -45,5 +49,6 @@ The proof boundary is the call from the Zig host into the Lean kernel. The `lean
 - `move-host-to-reflect`: folded. `Surface` and `reflect_run`; the host runs `Reflect` programs on the machine. The syntax is `openspec/specs/surface-syntax/spec.md`, and the host call is `openspec/specs/zig-host/spec.md`.
 - `retire-circular-kernel`: folded. `Circular`, `kernel_run`, and `lean-kernel` are deleted; one evaluator, `Reflect`, remains. The host calls `reflect_run` only and has a run command, `host/out/run`. The command is in `openspec/specs/zig-host/spec.md`.
 - `add-operation-tables`: folded. `prim` and the `Ops` table, with exact arithmetic as the first table; every theorem holds for every table. The requirements are in `openspec/specs/code-as-data/spec.md`, `openspec/specs/bytecode-machine/spec.md` and `openspec/specs/surface-syntax/spec.md`.
+- `add-requests`: folded. A request is a value and the driver is outside evaluation; `reflect_converse` and the command `host/out/ask`. The requirements are in `openspec/specs/requests/spec.md`, with additions in `openspec/specs/surface-syntax/spec.md` and `openspec/specs/zig-host/spec.md`.
 
 The partition is the landed artifact those changes cite. This kernel does not add a Zig host or a C ABI. The host landing is the call above.

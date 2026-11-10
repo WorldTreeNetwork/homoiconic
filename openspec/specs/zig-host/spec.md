@@ -1,6 +1,6 @@
 # zig-host
 
-What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
+What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
 
 ## Purpose
 
@@ -10,7 +10,7 @@ Name the host call into the kernel. This spec does not restate the surface synta
 
 ### Requirement: The host returns the kernel's result
 
-The Zig host SHALL pass one program's bytes, an output buffer, and a step budget to the Lean export `reflect_run`. That export SHALL read the surface syntax, compile the term, and run the machine for at most the budget. It SHALL write the plain text rendering of the outcome and SHALL return the number of bytes that rendering needs. The Zig sources SHALL pass and print bytes. They SHALL NOT read the syntax and SHALL NOT case-split on terms to produce an outcome. `reflect_run` SHALL NOT answer with a numeric result code. `reflect_run` SHALL be the only export that evaluates.
+The Zig host SHALL pass one program's bytes, an output buffer, and a step budget to the Lean export `reflect_run`. That export SHALL read the surface syntax, compile the term, and run the machine for at most the budget. It SHALL write the plain text rendering of the outcome and SHALL return the number of bytes that rendering needs. The Zig sources SHALL pass and print bytes. They SHALL NOT read the syntax and SHALL NOT case-split on terms to produce an outcome. `reflect_run` SHALL NOT answer with a numeric result code. `reflect_run` and `reflect_converse` SHALL be the only exports that evaluate.
 
 #### Scenario: Identity
 
@@ -62,7 +62,7 @@ The Zig tree SHALL load the Lean exports and SHALL NOT define an evaluator or a 
 
 - GIVEN the Zig sources
 - WHEN they are reviewed against the partition
-- THEN every outcome comes from the Lean export `reflect_run`, and no Zig source decides an outcome
+- THEN every outcome comes from the Lean exports `reflect_run` and `reflect_converse`, and no Zig source decides an outcome
 
 ### Requirement: The link is the proved object path
 
@@ -107,3 +107,25 @@ The host SHALL provide a command that takes the path of a program file and an op
 - GIVEN no arguments, three arguments, the budget `-1`, or a budget that contains a line break
 - WHEN the command is run
 - THEN it prints nothing on standard output, one line on standard error, and exits 2
+
+### Requirement: A command runs a program against answers
+
+The host SHALL provide a command that takes the path of a program file, the path of an answers file, and an optional step budget. It SHALL pass both files' bytes and the budget to the Lean export `reflect_converse` and SHALL print the bytes that come back, followed by a newline, on standard output. `reflect_converse` SHALL run `Surface.converseText` and SHALL return the number of bytes the rendering needs, as `reflect_run` does. With no budget given the command SHALL use one hundred million steps for each turn. It SHALL exit 0 whenever the kernel answered and the answer was written, whatever the answer says: requests, a waiting run, a value, an error, and an answers file the kernel refuses are all the kernel's text. It SHALL exit 2 and print one line on standard error, which does not repeat the arguments, when it is called with the wrong number of arguments, when the budget is not a whole number, when either file cannot be read, or when the answer cannot be written. The Zig source SHALL NOT read either file's contents. Each call SHALL run the program from the start against the whole answers file.
+
+#### Scenario: A program asks and finishes
+
+- GIVEN `examples/ask.hom` and `examples/ask.answers`
+- WHEN the host check runs the command
+- THEN it prints `asked: [1]`, `asked: [2, 20]` and `42`, and exits 0
+
+#### Scenario: A program is left waiting
+
+- GIVEN `examples/ask.hom` and `examples/ask-one.answers`
+- WHEN the host check runs the command
+- THEN it prints the two `asked:` lines and `waiting`, and exits 0
+
+#### Scenario: A missing answers file
+
+- GIVEN a path to an answers file that does not exist
+- WHEN the command is run
+- THEN it exits 2 with one line on standard error and nothing on standard output

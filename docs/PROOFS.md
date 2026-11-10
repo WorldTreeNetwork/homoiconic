@@ -1,9 +1,11 @@
 # What is proved
 
 A record of what the Lean proofs say, how they got there, and what they leave
-out. The exact statements are in `kernel/ReflectContract.lean` and
-`kernel/MachineContract.lean`; the requirements are in `openspec/specs/`.
-Written 2026-11-10, after `add-operation-tables`.
+out. The exact statements are in `kernel/ReflectContract.lean`,
+`kernel/MachineContract.lean` and `kernel/RequestContract.lean`; the
+requirements are in `openspec/specs/`.
+Written 2026-11-10, after `add-operation-tables`; updated 2026-11-10, after
+`add-requests`.
 
 ## In one sentence
 
@@ -32,6 +34,15 @@ expression. `reflective` (commit `4ec21ae`) has no condition on the program:
 Every theorem now begins `∀ [Ops]`: it holds for every table of operations
 (`f89c88a`). The interpreter runs an operation by using the same operation, so
 it never looks at which table is in force.
+
+**2026-11-10: requests.** A program can ask the outside for something and
+continue from the answer (`b5885e3`, `c14f63a`). A request is not a new
+outcome: it is a function value that holds a payload and the rest of the
+program, and a driver outside evaluation answers it from a list. Nothing in
+the language, evaluation, the interpreter or the machine changed, and no
+earlier theorem statement changed. The driver is defined once over any way of
+evaluating, so the agreement of the interpreter and the machine with direct
+evaluation carries over to whole runs of requests and answers.
 
 ## The definitions
 
@@ -77,13 +88,29 @@ and nothing else.
 | `decompile_compile` | Bytecode converts back to the exact term |
 | `depth_bound` | Stack depth grows by at most one per step |
 
+### Requests
+
+A run is a program driven against a list of answers: the requests it makes, in
+order, and how it ends (finished with an outcome, or waiting on a request).
+
+| Theorem | Says |
+|---|---|
+| `interact_deterministic` | The requests a program makes and how it ends are fixed by the program and the answers |
+| `interact_resume` | A waiting program continued with an answer is the program run from the start with that answer added |
+| `interact_extra` | A program that finished is not changed by more answers |
+| `interact_reflective` | The interpreter, driven on data, makes the same requests in the same order and ends the same way |
+| `interact_coverage` | Every interpreted run is the data form of a run of the program |
+| `interact_machine` | The machine makes the same requests and ends the same way |
+| `interact_machine_exact` | Whatever the machine's run ends with is the compiled form of the program's ending |
+| `converse_finished`, `converse_waiting` | What the executable driver reports as finished or waiting is a run of the program by direct evaluation |
+
 ## Why these proofs can be trusted
 
 - **Both directions.** The main theorems are "if and only if". Errors map
   across exactly, and a program that never finishes never halts the machine.
 - **Nothing assumed.** No `sorry`, no added axiom. The contract files print
   each theorem's axioms on every check.
-- **The contract cannot rot.** The two contract files restate each theorem
+- **The contract cannot rot.** The three contract files restate each theorem
   with its exact signature, so a weakened theorem fails to compile. They do
   not import an operation table, so nothing is proved for one table only.
 - **New operations cost no proof.** Adding a table changes no lemma.
@@ -92,7 +119,7 @@ and nothing else.
 - **Compiled code is still data.** Bytecode decompiles to the term it came
   from.
 - **Read by another model family.** Each change went to an outside reviewer
-  before it was folded. Reviews sent work back five times before accepting.
+  before it was folded. Reviews sent work back six times before accepting.
 
 ## What the proofs do not cover
 
@@ -108,10 +135,24 @@ and nothing else.
   fault state is not proved (`homoiconic-q59.3`).
 - **Speed.** About 34 million machine steps per second, with operations
   emulated in compiled Lean.
-- **The network.** Requests, logs, several VMs and model calls are the
-  roadmap in `openspec/changes/add-verifiable-network-vision/`.
+- **A request carries no mark.** The driver reads every function a turn
+  ends in as a request, so a driven program cannot finish with a function as
+  its result, and one that returns a function by mistake may be read as
+  asking.
+- **Reaching only what a program was handed (P12).** A payload is data, and a
+  program can build any data. Nothing here stops a program from naming
+  something it was not given.
+- **Completeness of the driver, and unfinished runs.** `converse` is proved
+  sound, not complete: that every run is reported for some budget is not
+  proved. When a turn does not finish within its budget, nothing is claimed,
+  including about the requests listed before it.
+- **A budget for a whole run.** The step budget is per machine run: the first
+  evaluation, each reading of a payload, and each running of the rest on an
+  answer get it afresh.
+- **The network.** What a payload means, logs, several VMs and model calls
+  are the roadmap in `openspec/changes/add-verifiable-network-vision/`.
 
 ## Next
 
-Requests: a program that asks the outside for something, stops, and continues
-from the answer. The change is `add-requests`.
+The event log and one VM (vision stage 5, P13 and P14). It needs the
+decision on bytes and hashing first.

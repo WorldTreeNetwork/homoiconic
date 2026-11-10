@@ -36,3 +36,8 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - The vision expected one lemma per primitive (P8). Making the operation number a runtime value and the table a typeclass parameter removed the per-operation lemma entirely: the interpreter's branch for an operation is the same construct, `prim`, applied to the evaluated parts. The cost is the shape of an operation: total, data to data, with no failure outcome.
 - Lean includes an instance-implicit section variable in every theorem of the section, whether or not the theorem uses it. Theorems that do not need the table had to be marked `omit [Ops] in`.
 - A contract file that imports an instance can silently check a theorem for one table only. The contracts import no table and quantify over it explicitly, `∀ [Ops], …`.
+
+## 2026-11-10 — one driver, one simulation lemma
+
+- The request driver was defined once, over an abstract way of evaluating (`Sys`), with one simulation lemma (`Sim.drive`) that lifts turn-by-turn agreement to whole runs. The interpreter and machine agreement theorems for requests then each cost only a turn-level equivalence, proved from the existing `reflective` and machine theorems.
+- Review caught that a request carries no mark. The driver reads every function a turn ends in as a request, so `fn x -> 42` asks `42` and a driven program cannot finish with a function. The first description said such functions end as `wrong`; only some do.
