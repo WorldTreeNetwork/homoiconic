@@ -34,6 +34,17 @@ theorem misuse_skips_the_argument : Direct [] (.app (.lit (.nat 1)) omega) .wron
 theorem quoted_omega_is_data :
     Direct [] (.lit (reify omega)) (.value (.data (reify omega))) := .lit
 
+/-- A program that is a quotation, seen through the interpreter. -/
+theorem quoted_program_interpreted :
+    Direct [] (level 1 (.lit (reify (.app identity identity))))
+      (lift 1 (.value (.data (reify (.app identity identity))))) :=
+  (tower 1 _ _).mp .lit
+
+/-- The interpreter interpreting itself on the identity application. -/
+theorem identity_two_levels :
+    Direct [] (level 2 (.app identity identity)) (lift 2 (.value (.closure (.var 0) []))) :=
+  (tower 2 _ _).mp identity_direct
+
 theorem deltaBody_fuel_none (n : Nat) :
     evalFuel n [.closure deltaBody []] deltaBody = none := by
   induction n with

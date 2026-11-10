@@ -13,12 +13,13 @@ Depends on: the first task of `add-code-as-data` (the `Reflect` definitions). It
 ## What
 
 - ADD capability `bytecode-machine`
-- A flat instruction set for the `Reflect` language, and `compile` from terms to it
+- An instruction set for the `Reflect` language in continuation form, and `compile` from terms to it. Flattening to an array with offsets is a later pass
 - A total `step` on an explicit machine state, and `run n`
-- `machine_correct`: the machine agrees with `Direct`
+- `machine_correct` and `machine_exact`: the machine agrees with `Direct`, and what it halts with is exactly the compiled form of the source outcome
+- `machine_never_halts`: a term with no derivation never halts
 - `run_add`: running `n + m` steps is running `n` then `m`
 - `decompile_compile`: the bytecode holds the same information as the term
-- A space bound in the number of steps
+- `depth_bound`: stack and frame depth grows by at most one per step. A heap bound is not in this change
 - A recorded speed measurement of the compiled machine
 
 ## Impact

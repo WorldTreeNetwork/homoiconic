@@ -2,7 +2,7 @@
 
 ## ADDED Requirements
 
-### Requirement: Programs compile to flat code
+### Requirement: Programs compile to code
 
 The kernel package SHALL define an instruction set for the `Reflect` language and a total function `compile` from terms to code. The package SHALL prove that `decompile (compile t)` returns `t` for every term `t`.
 
@@ -14,13 +14,13 @@ The kernel package SHALL define an instruction set for the `Reflect` language an
 
 ### Requirement: The machine agrees with direct evaluation
 
-The package SHALL define a machine state and a total function `step` on states. For every term `t` and outcome `o`, the package SHALL prove that `Direct [] t o` holds if and only if the machine, loaded with `compile t`, halts after some number of steps with an outcome that reads back as `o`. A term with no derivation SHALL never halt.
+The package SHALL define a machine state and a total function `step` on states. For every term `t` and outcome `o`, the package SHALL prove that `Direct [] t o` holds if and only if the machine, loaded with `compile t`, halts after some number of steps with an outcome that reads back as `o`. The package SHALL prove that whatever the machine halts with is exactly the compiled form of a source outcome, so that a returned closure holds the compiled code of its body. The package SHALL prove that a term with no derivation never halts.
 
 #### Scenario: Identity
 
 - GIVEN `app (lam (var 0)) (lam (var 0))`
-- WHEN its code is run
-- THEN the machine halts with the identity closure
+- WHEN its code is run for seven steps
+- THEN the machine has halted with the compiled identity closure
 
 #### Scenario: Divergence
 
@@ -50,7 +50,7 @@ The package SHALL prove that the value stack plus the pending frames after `n` s
 
 ### Requirement: The theorems depend on the logic only
 
-`machine_correct`, `run_add`, `run_halted`, `decompile_compile`, and `depth_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
+`machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `decompile_compile`, and `depth_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
 
 #### Scenario: No admitted correctness
 

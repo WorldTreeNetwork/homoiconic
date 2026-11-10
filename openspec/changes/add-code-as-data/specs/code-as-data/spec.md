@@ -40,7 +40,7 @@ The kernel package SHALL define a language whose data is natural numbers and arr
 
 The statement SHALL have no side condition on `p`. It SHALL cover open terms, diverging terms, terms that go `wrong`, and terms that contain literals.
 
-The package SHALL prove the same statement at every environment, with the environment passed as data.
+The package SHALL prove the same equivalence at every environment for `evalTerm`, the evaluator term that takes a program and an environment as data. `interp` SHALL be `evalTerm` applied at the empty environment.
 
 #### Scenario: A program with a quotation
 

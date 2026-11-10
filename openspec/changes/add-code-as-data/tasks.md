@@ -6,5 +6,5 @@
 - [x] Write `kernel/ReflectContract.lean` with the four signatures in `design.md`. It fails to compile until they exist.
 - [x] Prove `reflective` and `reflective_coverage`.
 - [x] Prove `reflective_env` and `tower`.
-- [x] `Reflect.Examples`: the spike's seventeen scenarios as checked statements, including the program that builds and runs another program at two interpreter levels.
+- [x] `Reflect.Examples`: each spec scenario as a checked statement, including a quoted program through the interpreter and the program that builds and runs another program at two interpreter levels. The wider set of twenty programs is run, not proved, in `kernel/ReflectRun.lean`.
 - [x] `lake env lean ReflectContract.lean` prints no `sorryAx` and no package axiom.

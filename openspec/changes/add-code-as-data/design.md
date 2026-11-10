@@ -7,7 +7,8 @@ A second library, `Reflect`, in the `kernel/` package. `Circular` is not importe
 | Module | Holds |
 |---|---|
 | `Reflect.Syntax` | `Data`, `Term`, `reify` |
-| `Reflect.Semantics` | `Value`, `Outcome`, `Direct`, `evalFuel`, determinism, fuel soundness, monotonicity, completeness |
+| `Reflect.Semantics` | `Value`, `Outcome`, `Direct`, `evalFuel`, the data forms of values and outcomes |
+| `Reflect.SemanticsProofs` | determinism, fuel soundness, monotonicity, completeness |
 | `Reflect.Interpreter` | the named builder and `interp` |
 | `Reflect.Proof` | the simulation, both directions |
 | `Reflect.Correctness` | the four contract theorems |
@@ -65,16 +66,22 @@ reflective_env : ∀ env p o,
 tower : ∀ k p o, Direct [] p o ↔ Direct [] (level k p) (lift k o)
 ```
 
+`reflective_env` is about `evalTerm`, the evaluator as a term taking a program and an environment. `interp` is `evalTerm` applied at the empty environment. At an arbitrary environment the contract pins the equivalence; coverage there is the internal `core_sound`.
+
 `level (k+1) p` is `app interp (lit (reify (level k p)))`. `lift (k+1) o` is `value (data (reifyOutcome (lift k o)))`. `tower` follows from `reflective` by induction on `k`, because `reflective` has no side condition on `p`.
 
 ## Proof route
 
-Stay in environment semantics. The kernel's proof moved to substitution to compare closures as syntax. Here the answer is data, so that step is not needed.
+As landed. Environment semantics throughout; no substitution relation and no readback.
 
-- Name the run-time value of the interpreter's recursive function and prove one unrolling lemma for applying it.
-- Forward: induction on the source derivation. Each case is a derivation through a known case tree, with the induction hypothesis used at each recursive call.
-- Reverse: strong induction on the fuel of the interpreter's run, with one inversion lemma per term constructor.
-- Coverage needs the interpreter never to answer `wrong` on its own account when its input is `reify p`.
+- The run-time value of the evaluator's recursive function is named, with one unrolling lemma.
+- Forward: induction on the source derivation. One tactic walks the known case tree, using the induction hypothesis at each recursive call. Twenty-four rules.
+- Reverse: the interpreter's run is not taken apart. A source evaluation that is out of fuel at `n` leaves the interpreter out of fuel at `n`. Completeness, the forward direction, and determinism then give the result. This also shows the interpreter never answers on its own account.
+- Injectivity of the data forms turns "some outcome with this data form" into "this outcome".
+
+## Change after the freeze
+
+The interpreter was frozen with the definitions and then edited once. The forward proof failed on the rule for a case form whose scrutinee errors. The `bind` helper bound the names `tg` and `rs`, and `rs` was also the caller's name for the result being passed on. The names are now `bind.tag` and `bind.rest`. `compile` still has no check that a helper's names are fresh; the proof is what guards it.
 
 ## Who does what
 
@@ -82,6 +89,6 @@ Stay in environment semantics. The kernel's proof moved to substitution to compa
 - Determinism and the three fuel theorems are proofs against frozen statements and can be handed off.
 - The simulation stays with the owner until the application case and the reverse direction have each been done once.
 
-## Unverified hypotheses
+## Hypotheses, resolved
 
-- environment-style-simulation: claim: the simulation can be proved in environment semantics without a substitution relation or a readback. The spike proved the two cases that need no induction. confidence: medium. verification: none. synthesis path: this change.
+- environment-style-simulation: go. `kernel/Reflect/Proof.lean` proves both directions in environment semantics, 551 lines.

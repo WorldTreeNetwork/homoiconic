@@ -1,7 +1,8 @@
 import Reflect
 open Reflect
 
-/-- Both routes and the machine on one program, at one and two interpreter levels. -/
+/-- Both routes and the machine on one program, at one and two interpreter levels.
+    The sliced run cuts the interpreted program at steps 50 and 150, while it is live. -/
 def check (name : String) (p : Term) (fuel : Nat := 20000) (steps : Nat := 2000000) : String :=
   let same (a : Option Outcome) (d : Option Outcome) : Bool :=
     match a, d with
@@ -16,7 +17,7 @@ def check (name : String) (p : Term) (fuel : Nat := 20000) (steps : Nat := 20000
     | _, _ => false
   let sliced :=
     match run steps (load (compile (level 1 p))),
-          run (steps - 700) (run 400 (run 300 (load (compile (level 1 p))))) with
+          run (steps - 150) (run 100 (run 50 (load (compile (level 1 p))))) with
     | .halted a, .halted b => (readOutcome a).map reifyOutcome == (readOutcome b).map reifyOutcome
     | _, _ => false
   let back := match decompile (compile p) with
@@ -25,13 +26,8 @@ def check (name : String) (p : Term) (fuel : Nat := 20000) (steps : Nat := 20000
   let all := one && two && machine && sliced && back
   s!"{if all then "ok  " else "FAIL"} {name}: interp {one}, twice {two}, machine {machine}, sliced {sliced}, decompile {back}"
 
-def identity : Term := .lam (.var 0)
-def delta : Term := .lam (.app (.var 0) (.var 0))
-def omega : Term := .app delta delta
 def n (k : Nat) : Term := .lit (.nat k)
 def emptyArr : Term := .lit (.arr [])
-/-- Builds the identity function's code `[1, 0]` at run time and runs it. -/
-def buildsAndRuns : Term := .app interp (.cons (n 1) (.cons (n 0) emptyArr))
 
 #eval IO.println (check "identity applied" (.app identity identity))
 #eval IO.println (check "open variable" (.var 0))
