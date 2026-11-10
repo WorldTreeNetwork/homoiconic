@@ -129,16 +129,17 @@ Data renders in the same form the reader accepts, so printed data can be pasted 
 
 ## As built
 
-- The reader is `kernel/Surface/Read.lean`, 708 lines, total, with no parser library. Layout: a token that starts a line at or left of the enclosing statement's column ends the expression; inside `()` and `[]` layout is off. A body on a new line after `=` or `->` is a block.
+- The reader is `kernel/Surface/Read.lean`, 735 lines, total, with no parser library. Layout: a token that starts a line at or left of the enclosing statement's column ends the expression; inside `()` and `[]` layout is off. A body on a new line after `=` or `->` is a block.
 - `fn`, `case`, and `quote` may be the last argument of an application and extend as far right as they can. `~` takes one atom.
 - A `quote` inside a quotation is refused. So are number patterns other than `0`, nested patterns, and non-ASCII bytes outside comments.
+- A header (the names after `fn`, `let`, or `def` up to `=` or `->`, and an arm's pattern up to `->`) may continue on a following line only if that line is indented under it. Every token is consumed through one function that enforces this. Inside `()` and `[]` layout is off.
 - A user binding named `interpret` shadows the interpreter.
 - A catch-all arm matches any data. Its name is in scope only in its own body. On a function it is `wrong`, like every arm.
 - A machine fault renders as `error: machine fault`.
 - Syntax errors read `syntax error: line L, column C: text`, columns from 1.
 - `kernel/Surface/Check.lean` runs every entry of `Surface.Expect` and exits non-zero on a mismatch. `host/check.sh` generates the Zig cases from the same list.
-- The scenario for a large unbound index is checked in Lean on the renderer. No surface program reaches it, because the reader refuses unbound names.
+- The scenario for a large unbound index is checked in Lean: `var 2147483647` is compiled, run on the machine, and rendered (`Expect.runs`). No surface program reaches it, because the reader refuses unbound names.
 
 ## Hypotheses, resolved
 
-- reader-size: no-go on the number. The reader is 708 lines, not under 500. No parser library was needed.
+- reader-size: no-go on the number. The reader is 735 lines, not under 500. No parser library was needed.

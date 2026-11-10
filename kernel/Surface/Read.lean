@@ -192,6 +192,9 @@ structure PS where
   pos : Nat
   /-- The head token of the statement being read is not subject to its own limit. -/
   exempt : Nat
+  /-- While a header is being read (binder names, a pattern, up to `=` or `->`),
+      no token may be consumed that this limit stops. -/
+  guard : Lim := .none
   eofLine : Nat
   eofCol : Nat
 
@@ -207,7 +210,19 @@ def peek (l : Lim) : P (Option Tok) := do
   | none => pure none
   | some t => if s.pos != s.exempt && l.stops t then pure none else pure (some t)
 
-def advance : P Unit := modify fun s => { s with pos := s.pos + 1 }
+def setGuard (l : Lim) : P Unit := modify fun s => { s with guard := l }
+
+/-- Consume one token. Inside a header, a token on a new line that is not
+    indented under the header is refused, so a header never swallows the next
+    statement. -/
+def advance : P Unit := do
+  let s ← get
+  match s.toks[s.pos]? with
+  | some t =>
+    if s.pos != s.exempt && s.guard.stops t then
+      throw (t.fail "this line continues the line above and must be indented under it")
+    else set { s with pos := s.pos + 1 }
+  | none => set { s with pos := s.pos + 1 }
 
 def failAt {α : Type} (t : Option Tok) (msg : String) : P α := do
   let s ← get
@@ -375,10 +390,12 @@ mutual
         | .num n => do advance; pure (.num n)
         | .name "fn" => do
           advance
+          setGuard l
           let ps ← parseNames (f + 1) .arrow []
           if ps.isEmpty then failAt (some t) "`fn` needs at least one parameter"
           else
             expectTok .arrow
+            setGuard .none
             let body ← parseBody f l
             pure (ps.foldr Expr.lam body)
         | .name "case" => do advance; parseCase f l
@@ -457,16 +474,20 @@ mutual
         match t.kind with
         | .name "let" =>
           advance
+          setGuard (.col c)
           let x ← parseBinder
           expectTok .eq
+          setGuard .none
           let v ← parseBody f (.col c)
           let rest ← blockRest f c
           pure (.letE x v rest)
         | .name "def" =>
           advance
+          setGuard (.col c)
           let x ← parseBinder
           let ps ← parseNames (f + 1) .eq []
           expectTok .eq
+          setGuard .none
           let b ← parseBody f (.col c)
           let rest ← blockRest f c
           pure (.defE x ps b rest)
@@ -516,8 +537,10 @@ mutual
     | 0, _, _, _ => failHere "the input is too large to read"
     | f + 1, l, a, acc => do
       let some t ← peekRaw | failHere "expected an arm"
+      modify fun s => { s with exempt := s.pos, guard := .col a }
       let p ← parsePattern
       expectTok .arrow
+      setGuard .none
       let body ← parseBody f (.col a)
       let acc ← addArm t p body acc
       match ← peekRaw with

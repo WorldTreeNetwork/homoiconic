@@ -123,6 +123,12 @@ def reads : List (String × Term) := [
       (num 99)),
   -- An indented line continues `+`; a line at the statement's column does not.
   ("let x = 0 +\n  1\nx", .app (.lam (.var 0)) (.succ (num 0))),
+  -- A header may continue on an indented line, and brackets turn layout off.
+  ("let x = fn\n  y -> y\nx 7", .app (.lam (.app (.var 0) (num 7))) (.lam (.var 0))),
+  ("def f\n  x = x\nf 7", .app (.lam (.app (.var 0) (num 7))) (.lam (.var 0))),
+  ("let x\n  = 7\nx", .app (.lam (.var 0)) (num 7)),
+  ("case 3\n  m +\n    1 -> m", .dcase (num 3) wrongT (.var 0) wrongT wrongT),
+  ("let x = [1,\n2]\nx", .app (.lam (.var 0)) (arr2 (num 1) (num 2))),
   ("quote (fn x -> x)", .lit (reify (.lam (.var 0)))),
   ("quote (interpret 1)", .lit (reify (.app interp (num 1)))),
   (spliceText,
@@ -150,7 +156,15 @@ def refused : List (String × String) := [
   ("case 1\n  0 -> 1\n  0 -> 2", "arm"),
   ("case 0\n  0 -> ghost\n  ghost -> 2", "ghost"),
   ("let x = 0 +\n1\nx", "+"),
-  ("let x = 0 +\n1\n  + 1\nx", "+")
+  ("let x = 0 +\n1\n  + 1\nx", "+"),
+  ("let x = fn\ny -> y\nx 7", "indented"),
+  ("def f\nx = x\nf 7", "indented"),
+  ("let x\n= 7\nx", "indented"),
+  ("case 3\n  m +\n1 -> m", "indented"),
+  ("case 0\n  x\n-> x", "indented"),
+  ("case 3\n  m + 1 -> ghost\n  ghost -> 2", "ghost"),
+  ("case []\n  [] -> ghost\n  ghost -> 2", "ghost"),
+  ("case [1]\n  [h, ...t] -> ghost\n  ghost -> 2", "ghost")
 ]
 
 /-- Program text, step budget, and the text the host must print. -/
@@ -171,7 +185,9 @@ def prints : List (String × Nat × String) := [
   ("let x = 99\ncase 0\n  0 -> x\n  x -> x", 1000, "99"),
   ("let x = 99\ncase 3\n  m + 1 -> x\n  x -> 0", 1000, "99"),
   ("let x = 99\ncase [1]\n  [h, ...t] -> x\n  x -> 0", 1000, "99"),
-  ("fn f -> case f\n  _ -> 1", 1000, "<function>")
+  ("fn f -> case f\n  _ -> 1", 1000, "<function>"),
+  ("let x = 99\ncase []\n  [] ->\n    let y = x\n    y\n  x -> 0", 1000, "99"),
+  ("[1, 2, [3, 4]]", 1000, "[1, 2, [3, 4]]")
 ]
 
 /-- Terms no surface text reads as, run on the machine: term, budget, text. -/

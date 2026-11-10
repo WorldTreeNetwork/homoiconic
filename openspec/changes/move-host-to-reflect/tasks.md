@@ -11,3 +11,5 @@
 - [x] After review: a catch-all arm's name is no longer visible in the written arms (it silently rebound an outer name, and let an unbound name through). Regressions for all four arms, an arm-local `let`, and the refusal are in `Expect.lean`.
 - [x] After review: `+` no longer takes its operand from a line at the statement's column. Refusals and an indented positive control are in `Expect.lean`.
 - [x] After review: `Expect.runs` compiles, runs, and renders terms no text reads as, including `var 2147483647`; the self-application program goes through `reflect_run`.
+- [x] After second review: header and pattern tokens are consumed under the layout limit, so a header cannot take the next statement's line. Five refusals, four indented controls, and a bracket control are in `Expect.lean`.
+- [x] After second review: the catch-all matrix is complete: the empty-arm result with a local `let`, and unbound-name refusals in the successor, empty, and non-empty arms.
