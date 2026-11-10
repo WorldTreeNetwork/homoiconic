@@ -7,3 +7,7 @@ name = "Circular"
 
 [[lean_lib]]
 name = "Reflect"
+
+[[lean_exe]]
+name = "reflectBench"
+root = "Bench"
