@@ -1,6 +1,6 @@
 # bytecode-machine
 
-What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. The speed measurement is in `docs/LEARNINGS.md`. The host does not call the machine.
+What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
 
 ## Purpose
 

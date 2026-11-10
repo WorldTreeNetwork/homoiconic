@@ -1,0 +1,67 @@
+# surface-syntax
+
+What is built: a third Lean library, `Surface`, in the kernel package beside `Circular` and `Reflect`. `Surface.read` takes program text to a `Reflect` term, resolving names to de Bruijn indices and refusing unbound names, tabs in indentation, and malformed blocks. `Surface.render` prints outcomes as plain text. Both are tested against the examples in `kernel/Surface/Expect.lean` and are not proved. The export `reflect_run` runs what the reader produced on the machine in `openspec/specs/bytecode-machine/spec.md`; the host call is `openspec/specs/zig-host/spec.md`. The syntax, its examples, and the programs these scenarios name are in `openspec/changes/archive/2026-11-10-move-host-to-reflect/design.md`.
+
+## Purpose
+
+Name the text people write `Reflect` programs in, and the text outcomes print as. This spec does not contain the language or the interpreter theorem (`openspec/specs/code-as-data/spec.md`), the machine (`openspec/specs/bytecode-machine/spec.md`), or the host call (`openspec/specs/zig-host/spec.md`).
+
+## Requirements
+
+### Requirement: Programs are written with names and indentation
+
+The kernel package SHALL define a reader, in Lean, from program text to `Reflect` terms. Application SHALL be juxtaposition. Lines indented under a line SHALL continue it. Functions SHALL be written `fn x -> body`, bindings `let x = value` and `def f x = body`, arrays `[a, b, ...rest]`, and the successor `e + 1`. Data SHALL be taken apart by `case` with arms `pattern -> body`, where a pattern is `0`, `m + 1`, `[]`, `[head, ...tail]`, a name, or `_`. Names SHALL be resolved to de Bruijn indices by the reader. A program that uses an unbound name SHALL be refused and SHALL NOT be run.
+
+#### Scenario: Recursion by name
+
+- GIVEN the text of the countdown program in the change's design, applied to `1000`
+- WHEN it is read and run
+- THEN the outcome is the number `0`
+
+#### Scenario: An unknown name is refused
+
+- GIVEN the text `f 1`, where `f` is not bound
+- WHEN it is read
+- THEN the reader reports a syntax error naming `f`, and nothing is run
+
+### Requirement: Quotation is written in the syntax
+
+`quote e` SHALL denote the data that is `reify` of the term `e` reads as. Inside a quotation, `~e` SHALL place the code that `e` evaluates to at that position. A quotation that mentions a name bound outside it, or a splice enclosed by a binder of its quotation, SHALL be refused.
+
+#### Scenario: A quoted function is its code
+
+- GIVEN the text `quote (fn x -> x)`
+- WHEN it is read and run
+- THEN the outcome is the data `[1, 0]`
+
+#### Scenario: Code with a hole is filled and run
+
+- GIVEN a program that binds `inner` to `quote 41` and applies `interpret` to `quote (~inner + 1)`
+- WHEN it is read and run
+- THEN the outcome is the data `[0, [1, 42]]`
+
+#### Scenario: A splice under a binder is refused
+
+- GIVEN the text `quote (fn x -> ~y)` with `y` bound outside
+- WHEN it is read
+- THEN the reader reports a syntax error, and nothing is run
+
+### Requirement: Outcomes render as plain text
+
+The package SHALL define a rendering of outcomes as text. A number SHALL render as its decimal digits. An array SHALL render in brackets with items separated by a comma and a space. Rendered data SHALL read back, as a bracket literal, to the same data. A function SHALL render as `<function>`. `unbound i` and `wrong` SHALL render as errors that say which.
+
+#### Scenario: Data round-trips through text
+
+- GIVEN the data `[1, 2, [3, 4]]`
+- WHEN it is rendered and the text is read as a program
+- THEN the program's outcome is the data `[1, 2, [3, 4]]`
+
+### Requirement: The reader and renderer are not part of the proof
+
+The reader and the renderer SHALL be tested against examples. They SHALL NOT be cited as proved. What is run SHALL be the term the reader produced, on the machine in `openspec/specs/bytecode-machine/spec.md`.
+
+#### Scenario: The proof boundary is stated
+
+- GIVEN a result printed by the host
+- WHEN someone asks what is proved about it
+- THEN the answer is that the machine's outcome for the term read is the term's outcome, and that the reading and the printing are tested
