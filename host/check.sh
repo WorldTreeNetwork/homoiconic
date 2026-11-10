@@ -23,7 +23,7 @@ for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machi
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
         -c "$OUT/$name.c" "$module.lean"
-    lake env leanc -c -O3 -DNDEBUG -o "$OUT/lean-$name.o" "$OUT/$name.c"
+    lake env leanc -c -O3 -o "$OUT/lean-$name.o" "$OUT/$name.c"
     OBJS="$OBJS $OUT/lean-$name.o"
 done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
@@ -55,16 +55,30 @@ expect "no result within 5000 steps" "$EXAMPLES/forever.hom" 5000
 # An answer longer than the command's first buffer is printed in full.
 printf 'def fill n =\n  case n\n    0 -> []\n    m + 1 -> [n, ...fill m]\n\nfill 20000\n' > "$OUT/long.hom"
 "$OUT/run" "$OUT/long.hom" > "$OUT/long.txt"
-if [ "$(wc -c < "$OUT/long.txt" | tr -d ' ')" != 128895 ] || [ "$(tail -c 9 "$OUT/long.txt")" != "3, 2, 1]" ]; then
+size="$(wc -c < "$OUT/long.txt")"
+size="$((size + 0))"
+ending="$(tail -c 9 "$OUT/long.txt")"
+if [ "$size" != 128895 ] || [ "$ending" != "3, 2, 1]" ]; then
     echo "run: a long answer was not printed in full" >&2
     exit 1
 fi
-if "$OUT/run" "$EXAMPLES/missing.hom" 2>/dev/null; then
-    echo "run: a missing file did not fail" >&2
-    exit 1
-fi
-if "$OUT/run" 2>/dev/null; then
-    echo "run: no arguments did not fail" >&2
-    exit 1
-fi
+
+# A call the command cannot make: exit 2, nothing on standard output, and
+# exactly one line on standard error.
+refuse() {
+    status=0
+    "$OUT/run" "$@" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+    lines="$(wc -l < "$OUT/refuse.err")"
+    lines="$((lines + 0))"
+    if [ "$status" != 2 ] || [ -s "$OUT/refuse.out" ] || [ "$lines" != 1 ]; then
+        echo "run $*: expected exit 2, no output and one line of error; got exit $status, $lines error lines" >&2
+        exit 1
+    fi
+    echo "run $* refused: $(cat "$OUT/refuse.err")"
+}
+refuse
+refuse "$EXAMPLES/append.hom" 1 extra
+refuse "$EXAMPLES/missing.hom"
+refuse "$EXAMPLES"
+refuse "$EXAMPLES/append.hom" -1
 echo "run command checks passed"

@@ -1,6 +1,6 @@
 # Kernel
 
-One Lean package, three libraries.
+One Lean package with two libraries, and the host that calls it.
 
 - `Reflect` is the language and its proofs. A program is a data value, and
   one closed term of the language interprets programs given as data.

@@ -46,7 +46,8 @@ also tries a buffer too small for the answer (the needed length comes back and
 the buffer is untouched) and four refused texts, comparing the syntax-error
 bytes.
 
-The check also passes `42invalid` with a declared length of 2 and expects `42`:
+The check also passes `42` followed by a zero byte and expects a syntax error
+at column 3, so a zero byte does not end a program. It passes `42invalid` with a declared length of 2 and expects `42`:
 bytes past the length are not part of the program.
 
 ## Running a program file
@@ -63,9 +64,11 @@ seconds. `run.zig` reads the file, calls `reflect_run`, and prints the bytes
 and a newline. It does not look at them, so it exits 0 for a value, an error
 outcome, a syntax error, or a run with no result. It exits 2, with one line on
 standard error, for a wrong argument count, a budget that is not a whole
-number, or a file it cannot read. An answer longer than 65536 bytes is asked
+number, a file it cannot read, or an answer it cannot write. An answer longer than 65536 bytes is asked
 for a second time with a buffer of the needed size, which runs the program
 twice.
 
-The Lean objects are compiled with `-O3 -DNDEBUG`. Without it the machine runs
-about thirteen times slower.
+The Lean objects are compiled with `-O3`. Without it the machine runs about ten
+times slower. Lean's runtime assertions are left on (`NDEBUG` is not defined):
+turning them off gains about a third more speed and removes the checks that
+would catch a fault in the generated C.

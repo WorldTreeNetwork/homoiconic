@@ -4,6 +4,8 @@ The architecture the vision implies, and the proofs that carry it. Statements ar
 
 ## Where the floor stands
 
+> This section is the state on 2026-11-09, when the vision was written. `Circular`, `metacircular` and `kernel_run` were replaced by `Reflect`, `reflective` and `reflect_run`, and removed by `retire-circular-kernel` on 2026-11-10.
+
 Proved in `kernel/`:
 
 - `direct_deterministic`: `Direct` has at most one outcome.

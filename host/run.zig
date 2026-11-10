@@ -7,13 +7,7 @@ extern fn reflect_run(program: [*]const u8, length: usize, out: [*]u8, capacity:
 /// Steps the machine may take when no budget is given.
 const default_budget: u64 = 100_000_000;
 
-const usage =
-    \\usage: run <program-file> [step-budget]
-    \\
-    \\Reads the program file, runs it on the kernel for at most step-budget
-    \\machine steps (default 100000000), and prints the result.
-    \\
-;
+const usage = "usage: run <program-file> [step-budget]   (default budget: 100000000 machine steps)\n";
 
 fn fail(comptime format: []const u8, args: anytype) noreturn {
     std.debug.print(format, args);
@@ -23,7 +17,8 @@ fn fail(comptime format: []const u8, args: anytype) noreturn {
 /// Read a file, hand its bytes to `reflect_run`, print the bytes that come
 /// back. Zig does not read the program, and it does not look at the answer:
 /// a syntax error, an error outcome and a value are all text the kernel wrote,
-/// and all of them exit 0. Exit 2 means this command could not ask the kernel.
+/// and all of them exit 0. Exit 2 means this command could not ask the kernel
+/// or could not write its answer.
 pub fn main(init: std.process.Init) void {
     const arena = init.arena.allocator();
     const args = init.minimal.args.toSlice(arena) catch fail("run: out of memory\n", .{});
@@ -53,6 +48,6 @@ pub fn main(init: std.process.Init) void {
     }
 
     const out = std.Io.File.stdout();
-    out.writeStreamingAll(init.io, text[0..needed]) catch std.process.exit(2);
-    out.writeStreamingAll(init.io, "\n") catch std.process.exit(2);
+    out.writeStreamingAll(init.io, text[0..needed]) catch fail("run: cannot write the answer\n", .{});
+    out.writeStreamingAll(init.io, "\n") catch fail("run: cannot write the answer\n", .{});
 }

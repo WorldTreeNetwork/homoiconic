@@ -52,6 +52,8 @@ fn checkReflect() void {
         .{ .program = "(1", .expected = "syntax error: line 1, column 3: expected `)`" },
         .{ .program = "", .expected = "syntax error: line 1, column 1: empty program: there is nothing to read" },
         .{ .program = "\xff", .expected = "syntax error: line 1, column 1: unexpected character; programs are ASCII text" },
+        // A zero byte does not end the program: the bytes before it are not run alone.
+        .{ .program = "42\x00", .expected = "syntax error: line 1, column 3: unexpected character; programs are ASCII text" },
     };
     for (refusals) |case| {
         const got = reflect(case.program, 1000, &small, &big) orelse std.process.exit(1);
