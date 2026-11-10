@@ -18,7 +18,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
 for module in Circular/Syntax Circular/Semantics Circular/Host \
-              Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine \
+              Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil \
               Surface/Read Surface/Render Surface/Run Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
