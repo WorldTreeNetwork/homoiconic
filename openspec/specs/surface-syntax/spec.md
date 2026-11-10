@@ -1,6 +1,6 @@
 # surface-syntax
 
-What is built: a third Lean library, `Surface`, in the kernel package beside `Circular` and `Reflect`. `Surface.read` takes program text to a `Reflect` term, resolving names to de Bruijn indices and refusing unbound names, tabs in indentation, and malformed blocks. `Surface.render` prints outcomes as plain text. Both are tested against the examples in `kernel/Surface/Expect.lean` and are not proved. The export `reflect_run` runs what the reader produced on the machine in `openspec/specs/bytecode-machine/spec.md`; the host call is `openspec/specs/zig-host/spec.md`. The syntax, its examples, and the programs these scenarios name are in `openspec/changes/archive/2026-11-10-move-host-to-reflect/design.md`.
+What is built: a Lean library, `Surface`, in the kernel package beside `Reflect`. `Surface.read` takes program text to a `Reflect` term, resolving names to de Bruijn indices and refusing unbound names, tabs in indentation, and malformed blocks. `Surface.render` prints outcomes as plain text. Both are tested against the examples in `kernel/Surface/Expect.lean` and are not proved. The export `reflect_run` runs what the reader produced on the machine in `openspec/specs/bytecode-machine/spec.md`; the host call is `openspec/specs/zig-host/spec.md`. The syntax, its examples, and the programs these scenarios name are in `openspec/changes/archive/2026-11-10-move-host-to-reflect/design.md`.
 
 ## Purpose
 

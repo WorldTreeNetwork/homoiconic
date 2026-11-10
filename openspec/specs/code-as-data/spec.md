@@ -1,10 +1,10 @@
 # code-as-data
 
-What is built: a second Lean library, `Reflect`, in the kernel package beside `Circular`. Data is natural numbers and arrays, a program is quoted as `lit (reify p)`, and `interp` is one closed term that takes a program as data. `reflective`, `reflective_coverage`, `reflective_env`, and `tower` are proved for every term, with no side condition, and restated in `kernel/ReflectContract.lean`. `Circular`, `openspec/specs/lean-kernel/spec.md`, and the Zig host are unchanged.
+What is built: a Lean library, `Reflect`, in the kernel package; with `Surface` it is one of the package's two libraries. Data is natural numbers and arrays, a program is quoted as `lit (reify p)`, and `interp` is one closed term that takes a program as data. `reflective`, `reflective_coverage`, `reflective_env`, and `tower` are proved for every term, with no side condition, and restated in `kernel/ReflectContract.lean`.
 
 ## Purpose
 
-Name the language in which a program is a value, and the interpreter theorem in that setting. This spec does not contain the bytecode machine (`openspec/specs/bytecode-machine/spec.md`), the quote-free kernel, or the Zig host.
+Name the language in which a program is a value, and the interpreter theorem in that setting. This spec does not contain the bytecode machine (`openspec/specs/bytecode-machine/spec.md`) or the Zig host.
 
 ## Requirements
 

@@ -10,6 +10,6 @@
 - [x] `lake build`, `Surface/Check.lean`, `ReflectContract.lean`, `MachineContract.lean`, `ReflectRun.lean` and `sh host/check.sh` exit 0.
 - [x] After review: an embedded zero byte is checked through `reflect_run`; wrong arguments print one line; a failed write exits 2 with a line; `check.sh` asserts exit status, empty output and one error line for five refusals, with no pipeline in a condition; stale text outside the first fold list is claimed in the proposal.
 - [x] After the second review: diagnostics do not repeat arguments, so an argument with a line break still gives one line; `check.sh` compares refusal errors and the long answer byte for byte; the vision's proposal and design are marked where they name the first kernel.
-- [ ] Advise by a reader from another model family.
-- [ ] Fold: remove `openspec/specs/lean-kernel/`, apply the deltas, amend `ARCHITECTURE.md` and the two overview paragraphs named in the proposal.
-- [ ] Close `homoiconic-3gx` and `homoiconic-q59.5`.
+- [x] Advise by a reader from another model family. Third read accepted, 2026-11-10; notes in `reviews/`.
+- [x] Fold: remove `openspec/specs/lean-kernel/`, apply the deltas, amend `ARCHITECTURE.md` and the two overview paragraphs named in the proposal.
+- [x] Close `homoiconic-3gx` and `homoiconic-q59.5`.

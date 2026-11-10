@@ -25,3 +25,8 @@ A hint given to the machine-proof worker was false: "halting in `n` steps forces
 ## 2026-11-09 — reverse simulation without inversion
 
 To show that a run of the interpreter comes from a source derivation, it is enough to show that a source evaluation out of fuel leaves the interpreter out of fuel. That is a goal-directed walk, like the forward direction. Then completeness, the forward direction, and determinism finish it. The interpreter's run is never taken apart.
+
+## 2026-11-10 — the host was built without optimisation, and a check passed a crash
+
+- The host's Lean objects had been compiled without optimisation since the host landed. Nobody noticed until `host/out/run` made the speed visible: about 3.7 million steps a second. With `-O3` it is about 34 million. Defining `NDEBUG` reaches about 45 million but removes Lean's runtime assertions on the generated C, so it stays off.
+- Review of `retire-circular-kernel` found shell checks of the form "a non-zero exit is a pass". Such a check also passes a crash. `host/check.sh` now asserts the exact exit status, empty standard output, and the exact error line.

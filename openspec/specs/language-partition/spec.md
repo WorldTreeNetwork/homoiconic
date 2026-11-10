@@ -1,6 +1,6 @@
 # language-partition
 
-What is built: Lean 4 owns evaluation semantics, Zig is the host and contains no evaluator, and Rust is absent. The metacircular theorem is still the kernel change's job.
+What is built: Lean 4 owns evaluation semantics, Zig is the host and contains no evaluator, and Rust is absent. The interpreter theorem is in `openspec/specs/code-as-data/spec.md`.
 
 ## Purpose
 
@@ -24,7 +24,7 @@ The system SHALL run IO, allocation, and the REPL in Zig. The Zig host SHALL cal
 
 #### Scenario: Host returns the kernel's result
 
-- GIVEN a program accepted by the covered fragment
+- GIVEN a program the kernel reads
 - WHEN the Zig host runs it
 - THEN the value returned is the Lean kernel's result
 
@@ -46,10 +46,10 @@ The first system SHALL NOT include a Rust component.
 
 ### Requirement: Circularity is metacircular
 
-The kernel change SHALL be accepted only when, for a named small fragment, evaluating an interpreter written as a term of the language on a program equals evaluating that program directly.
+The kernel SHALL prove that evaluating an interpreter written as a term of the language on a program equals evaluating that program directly. The statement SHALL cover every program of the language, not a fragment. The theorem and its exact statement are in `openspec/specs/code-as-data/spec.md`.
 
-#### Scenario: Fragment equality is the kernel's job
+#### Scenario: The interpreter theorem is the kernel's
 
-- GIVEN this partition and no kernel yet
-- WHEN someone asks what the first proof has to show
-- THEN the answer is that metacircular equality, and this change does not contain the proof
+- GIVEN this partition
+- WHEN someone asks what makes the language circular
+- THEN the answer is the theorem `reflective`, proved in Lean about the evaluator that runs
