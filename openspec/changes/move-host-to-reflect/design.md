@@ -129,7 +129,7 @@ Data renders in the same form the reader accepts, so printed data can be pasted 
 
 ## As built
 
-- The reader is `kernel/Surface/Read.lean`, 735 lines, total, with no parser library. Layout: a token that starts a line at or left of the enclosing statement's column ends the expression; inside `()` and `[]` layout is off. A body on a new line after `=` or `->` is a block.
+- The reader is `kernel/Surface/Read.lean`, 739 lines, total, with no parser library. Layout: a token that starts a line at or left of the enclosing statement's column ends the expression; inside `()` and `[]` layout is off. A body on a new line after `=` or `->` is a block.
 - `fn`, `case`, and `quote` may be the last argument of an application and extend as far right as they can. `~` takes one atom.
 - A `quote` inside a quotation is refused. So are number patterns other than `0`, nested patterns, and non-ASCII bytes outside comments.
 - A header (the names after `fn`, `let`, or `def` up to `=` or `->`, and an arm's pattern up to `->`) may continue on a following line only if that line is indented under it. Every token is consumed through one function that enforces this. Inside `()` and `[]` layout is off.
@@ -142,4 +142,4 @@ Data renders in the same form the reader accepts, so printed data can be pasted 
 
 ## Hypotheses, resolved
 
-- reader-size: no-go on the number. The reader is 735 lines, not under 500. No parser library was needed.
+- reader-size: no-go on the number. The reader is 739 lines, not under 500. No parser library was needed.
