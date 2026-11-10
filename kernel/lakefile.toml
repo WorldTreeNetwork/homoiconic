@@ -1,12 +1,15 @@
 name = "circularKernel"
 version = "0.1.0"
-defaultTargets = ["Circular", "Reflect"]
+defaultTargets = ["Circular", "Reflect", "Surface"]
 
 [[lean_lib]]
 name = "Circular"
 
 [[lean_lib]]
 name = "Reflect"
+
+[[lean_lib]]
+name = "Surface"
 
 [[lean_exe]]
 name = "reflectBench"

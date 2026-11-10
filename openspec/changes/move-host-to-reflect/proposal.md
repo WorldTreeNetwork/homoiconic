@@ -1,6 +1,6 @@
 # move-host-to-reflect
 
-> **PENDING**
+> **ACTIVE BUILD**
 
 **Rigor:** change
 
@@ -45,4 +45,4 @@ The surface is a program file and the text the host prints.
 - Upstream: living specs `code-as-data`, `bytecode-machine`, `zig-host`. `machine_exact` is what lets the host run the machine and call the answer the program's outcome.
 - Anchors: Zig carries bytes and contains no evaluator and no reader. The reader is Lean.
 - Outcome: a person can write a program with names and indentation, run it, and read the answer.
-- Authority: the user chose a text syntax and plain rendering, and approved the ML-family syntax in `design.md`, on 2026-11-09. The change itself is PENDING until activated.
+- Authority: the user chose a text syntax and plain rendering, and approved the ML-family syntax in `design.md`, on 2026-11-09. The user said "go" on 2026-11-09 for this change. Bounds are this contract; no file a contract depends on is edited.

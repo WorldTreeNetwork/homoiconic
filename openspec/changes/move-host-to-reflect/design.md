@@ -117,7 +117,7 @@ Data renders in the same form the reader accepts, so printed data can be pasted 
 
 ## Call
 
-`reflect_run` takes a pointer and length for the program, a pointer and capacity for the output, and a step budget. It returns the number of bytes the rendering needs. If that is more than the capacity, nothing useful was written and the host calls again with a larger buffer. Zig holds the bytes and prints them. Lean reads, compiles, runs `run budget (load (compile t))`, and renders.
+`reflect_run` takes a pointer and length for the program, a pointer and capacity for the output, and a step budget. It returns the number of bytes the rendering needs. If that is more than the capacity, nothing useful was written and the host calls again with a larger buffer. Zig holds the bytes and prints them. Lean reads, compiles, runs `runUntil budget (load (compile t))`, and renders. `runUntil` stops when the machine stops and is proved equal to `run`. If the rendering does not fit the buffer, nothing is written.
 
 `kernel_run` and the result code stay until `retire-circular-kernel`.
 
@@ -127,6 +127,17 @@ Data renders in the same form the reader accepts, so printed data can be pasted 
 - The reader, the renderer, the export, and the Zig side are handed off. They are ordinary code with examples to meet.
 - No file under `kernel/Reflect/` that a contract depends on is edited.
 
-## Unverified hypotheses
+## As built
 
-- reader-size: claim: the reader is under 500 lines of Lean and needs no parser library. confidence: medium. verification: none. synthesis path: this change.
+- The reader is `kernel/Surface/Read.lean`, 708 lines, total, with no parser library. Layout: a token that starts a line at or left of the enclosing statement's column ends the expression; inside `()` and `[]` layout is off. A body on a new line after `=` or `->` is a block.
+- `fn`, `case`, and `quote` may be the last argument of an application and extend as far right as they can. `~` takes one atom.
+- A `quote` inside a quotation is refused. So are number patterns other than `0`, nested patterns, and non-ASCII bytes outside comments.
+- A user binding named `interpret` shadows the interpreter.
+- A machine fault renders as `error: machine fault`.
+- Syntax errors read `syntax error: line L, column C: text`, columns from 1.
+- `kernel/Surface/Check.lean` runs every entry of `Surface.Expect` and exits non-zero on a mismatch. `host/check.sh` generates the Zig cases from the same list.
+- The scenario for a large unbound index is checked in Lean on the renderer. No surface program reaches it, because the reader refuses unbound names.
+
+## Hypotheses, resolved
+
+- reader-size: no-go on the number. The reader is 708 lines, not under 500. No parser library was needed.

@@ -1,0 +1,161 @@
+import Reflect.Interpreter
+
+/-!
+What the reader must produce. Each entry pairs program text with the exact
+`Reflect` term it reads as. This file is the reader's specification by
+example; `openspec/changes/move-host-to-reflect/design.md` has the prose.
+
+Translation, as fixed by these examples:
+- `fn x y -> b` is `lam (lam b)`.
+- `let x = v` followed by the rest of the block `r` is `app (lam r) v`.
+- `def f x = b` followed by `r` is `app (lam r) (lam b)` when `b` does not
+  mention `f`, and `app (lam r) (app recur (lam (lam b)))` when it does,
+  with `f` the outermost binder.
+- A number is `lit (nat n)`. `[]` is `lit (arr [])`. `[a, b, ...t]` is
+  `cons a (cons b t)`; without `...t` the chain ends in `lit (arr [])`.
+  Arrays are never folded into one literal.
+- `e + 1` is `succ e`. Application binds tighter than `+`, and `+` tighter
+  than `|>`. `x |> f` is `app f x`.
+- `case e` with arms is `dcase e zero succ empty cons`. The successor arm
+  binds its name at index 0. The non-empty arm binds the head at 1 and the
+  tail at 0. A missing arm is `wrongT`.
+- A catch-all arm `x -> b` (or `_ -> b`) binds the scrutinee:
+  `app (lam (dcase (var 0) ...)) e`, and `b` fills every arm not given.
+- `quote e` with no splice is `lit (reify e)`. With splices, every largest
+  subterm without a splice is `lit (reify subterm)`, a splice `~e` is `e`
+  read outside the quotation, and each node on the way is the `cons` chain
+  that builds that node's data form.
+- `interpret` is the term `interp`.
+-/
+namespace Surface
+open Reflect
+
+/-- The fixed point `def` uses for a self-call. -/
+def recur : Term := B.compile [] B.fix
+
+/-- What a missing `case` arm reads as: applying a number, which is `wrong`. -/
+def wrongT : Term := .app (.lit (.nat 0)) (.lit (.nat 0))
+
+def num (k : Nat) : Term := .lit (.nat k)
+def nil : Term := .lit (.arr [])
+def arr2 (a b : Term) : Term := .cons a (.cons b nil)
+
+def countdownText : String :=
+"def countdown n =
+  case n
+    0 -> 0
+    m + 1 -> countdown m
+
+countdown 1000"
+
+def appendText : String :=
+"def append xs ys =
+  case xs
+    [] -> ys
+    [head, ...tail] -> [head, ...append tail ys]
+
+append [1, 2] [3, 4]"
+
+def addText : String :=
+"def add a b =
+  case a
+    0 -> b
+    m + 1 -> add m b + 1
+
+add 2 3"
+
+def spliceText : String :=
+"; code with a hole in it
+let inner = quote 41
+interpret (quote (~inner + 1))"
+
+/-- Program text and the term it must read as. -/
+def reads : List (String × Term) := [
+  ("42", num 42),
+  ("fn x -> x", .lam (.var 0)),
+  ("fn x y -> x", .lam (.lam (.var 1))),
+  ("let id = fn x -> x\nid id", .app (.lam (.app (.var 0) (.var 0))) (.lam (.var 0))),
+  ("[]", nil),
+  ("[1, 2]", arr2 (num 1) (num 2)),
+  ("[1, [2, 3]]", arr2 (num 1) (arr2 (num 2) (num 3))),
+  ("fn x -> [x, ...x]", .lam (.cons (.var 0) (.var 0))),
+  ("fn f x -> f x + 1", .lam (.lam (.succ (.app (.var 1) (.var 0))))),
+  ("fn x f -> x |> f", .lam (.lam (.app (.var 0) (.var 1)))),
+  ("(fn x -> x) 5", .app (.lam (.var 0)) (num 5)),
+  ("; hello\n\n7 ; seven\n", num 7),
+  (countdownText,
+    .app (.lam (.app (.var 0) (num 1000)))
+      (.app recur (.lam (.lam
+        (.dcase (.var 0) (num 0) (.app (.var 2) (.var 0)) wrongT wrongT))))),
+  (appendText,
+    .app (.lam (.app (.app (.var 0) (arr2 (num 1) (num 2))) (arr2 (num 3) (num 4))))
+      (.app recur (.lam (.lam (.lam
+        (.dcase (.var 1) wrongT wrongT (.var 0)
+          (.cons (.var 1) (.app (.app (.var 4) (.var 0)) (.var 2))))))))),
+  (addText,
+    .app (.lam (.app (.app (.var 0) (num 2)) (num 3)))
+      (.app recur (.lam (.lam (.lam
+        (.dcase (.var 1) (.var 0) (.succ (.app (.app (.var 3) (.var 0)) (.var 1)))
+          wrongT wrongT)))))),
+  ("def twice f x = f (f x)\ntwice",
+    .app (.lam (.var 0)) (.lam (.lam (.app (.var 1) (.app (.var 1) (.var 0)))))),
+  ("def f x =\n  let y = x + 1\n  [x, y]\nf 1",
+    .app (.lam (.app (.var 0) (num 1)))
+      (.lam (.app (.lam (arr2 (.var 1) (.var 0))) (.succ (.var 0))))),
+  ("fn x ->\n  case x\n    0 -> 1\n    other -> other",
+    .lam (.app (.lam (.dcase (.var 0) (num 1) (.var 1) (.var 0) (.var 2))) (.var 0))),
+  ("fn x ->\n  case x\n    [_, ...rest] -> rest\n    _ -> []",
+    .lam (.app (.lam (.dcase (.var 0) nil nil nil (.var 0))) (.var 0))),
+  ("quote (fn x -> x)", .lit (reify (.lam (.var 0)))),
+  ("quote (interpret 1)", .lit (reify (.app interp (num 1)))),
+  (spliceText,
+    .app (.lam (.app interp (.cons (num 3) (.cons (.var 0) nil))))
+      (.lit (reify (num 41)))),
+  ("let f = quote (fn x -> x)\nlet a = quote 7\nquote (~f ~a)",
+    .app (.lam (.app (.lam (.cons (num 0) (.cons (.var 1) (.cons (.var 0) nil))))
+        (.lit (reify (num 7)))))
+      (.lit (reify (.lam (.var 0))))),
+  ("let a = quote 7\nquote ((fn x -> x) ~a)",
+    .app (.lam (.cons (num 0) (.cons (.lit (reify (.lam (.var 0)))) (.cons (.var 0) nil))))
+      (.lit (reify (num 7))))
+]
+
+/-- Text the reader must refuse, with a word the message must contain. -/
+def refused : List (String × String) := [
+  ("f 1", "f"),
+  ("", "empty"),
+  ("let x = 1", "value"),
+  ("(1", ")"),
+  ("1 + 2", "+"),
+  ("fn x ->\n\tx", "tab"),
+  ("let y = quote 1\nquote (fn x -> ~y)", "splice"),
+  ("let y = 1\nquote y", "y"),
+  ("case 1\n  0 -> 1\n  0 -> 2", "arm")
+]
+
+/-- Program text, step budget, and the text the host must print. -/
+def prints : List (String × Nat × String) := [
+  ("42", 1000, "42"),
+  ("let id = fn x -> x\nid id", 1000, "<function>"),
+  (countdownText, 1000000, "0"),
+  (appendText, 1000000, "[1, 2, 3, 4]"),
+  (addText, 1000000, "5"),
+  ("quote (fn x -> x)", 1000, "[1, 0]"),
+  (spliceText, 1000000, "[0, [1, 42]]"),
+  ("[1, [2, 3], []]", 1000, "[1, [2, 3], []]"),
+  ("1 2", 1000, "error: wrong"),
+  ("interpret (quote 5) 6", 1000000, "error: wrong"),
+  ("interpret [9]", 1000000, "[2]"),
+  ("def loop x = loop x\nloop 0", 10000, "no result within 10000 steps")
+]
+
+/-- Outcomes that no surface program reaches directly, and their text. -/
+def renders : List (Outcome × String) := [
+  (.unbound 2147483647, "error: unbound 2147483647"),
+  (.unbound 0, "error: unbound 0"),
+  (.wrong, "error: wrong"),
+  (.value (.data (.arr [.nat 1, .arr []])), "[1, []]"),
+  (.value (.closure (.var 0) []), "<function>")
+]
+
+end Surface

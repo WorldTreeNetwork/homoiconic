@@ -20,6 +20,8 @@ example : ∀ n m s, run (n + m) s = run m (run n s) := Reflect.run_add
 
 example : ∀ n o, run n (.halted o) = .halted o := Reflect.run_halted
 
+example : ∀ n s, runUntil n s = run n s := Reflect.runUntil_eq
+
 example : ∀ t, decompile (compile t) = some t := Reflect.decompile_compile
 
 example : ∀ n s, depth (run n s) ≤ depth s + n := Reflect.depth_bound
@@ -31,3 +33,4 @@ example : ∀ n s, depth (run n s) ≤ depth s + n := Reflect.depth_bound
 #print axioms Reflect.run_halted
 #print axioms Reflect.decompile_compile
 #print axioms Reflect.depth_bound
+#print axioms Reflect.runUntil_eq
