@@ -77,3 +77,9 @@ So the claim "without redoing the fixed-point simulation" is false. The simulati
 - Errors propagate function-first, as in the kernel: a data value in function position is `wrong` before the argument is evaluated.
 - Flat tags `0`–`5` for the six compound forms. `design.md` D8 sketched a nested primitive tag; the flat form is shorter to dispatch.
 - Bytes are an inert leaf for this theorem and are added with the parametric statement.
+
+## Afterword, 2026-11-09
+
+The proof in `kernel/Reflect/Proof.lean` found a fault in this spike's interpreter that the seventeen programs did not reach. The helper that continues from a recursive call's result reused a name, so an erroring scrutinee of a case form returned the wrong data. The kernel's interpreter is fixed and two scenarios cover it. `src/Spike.lean` is left as it was run.
+
+The environment-style simulation worked. Forward is one walking tactic over 24 rules. Reverse did not need inversion of the interpreter's run: it shows that a source evaluation out of fuel leaves the interpreter out of fuel, then uses the forward direction and determinism.

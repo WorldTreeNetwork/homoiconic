@@ -51,7 +51,8 @@ def tagcase (tag : Expr) : List Expr → Expr
   | b :: bs => .dcase tag b "tag'" (tagcase (v "tag'") bs) W "_" "_" W
 /-- Continue with the payload of an `ok` result; pass any other result on. -/
 def bind (r : String) (x : String) (k : Expr) : Expr :=
-  uncons (v r) "tg" "rs" (ifZero (v "tg") (uncons (v "rs") x "_" k) (v r))
+  uncons (v r) "bind.tag" "bind.rest"
+    (ifZero (v "bind.tag") (uncons (v "bind.rest") x "_" k) (v r))
 
 /-- The call-by-value fixed-point combinator. -/
 def fix : Expr :=
