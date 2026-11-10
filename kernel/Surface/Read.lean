@@ -337,7 +337,7 @@ mutual
       match ← peek l with
       | some t@⟨.plus, _, _, _⟩ =>
         advance
-        match ← peekRaw with
+        match ← peek l with
         | some ⟨.num 1, _, _, _⟩ => do advance; plusLoop f l (.succ e)
         | _ => failAt (some t) "`+` only means the successor, written `e + 1`; the right side must be the number 1"
       | _ => pure e
@@ -664,14 +664,18 @@ def tr : Scope → Expr → Except String TT
   | sc, .caseE s z m sn n h t c a any => do
     let s' ← tr sc s
     let caught := !any.isMissing
-    let base := if caught then sc.push a else sc
+    -- With a catch-all, the scrutinee is bound once. Only the catch-all body may
+    -- name it; the written arms see that slot under a name no program can write.
+    let hidden := "\x00scrutinee"
+    let base := if caught then sc.push hidden else sc
+    let fill := sc.push a
     let wrong : TT := .term wrongTerm
-    let z' ← if z.isMissing then (if caught then tr base any else pure wrong) else tr base z
-    let sn' ← if sn.isMissing then (if caught then tr (base.push "_") any else pure wrong)
+    let z' ← if z.isMissing then (if caught then tr fill any else pure wrong) else tr base z
+    let sn' ← if sn.isMissing then (if caught then tr (fill.push hidden) any else pure wrong)
       else tr (base.push m) sn
-    let n' ← if n.isMissing then (if caught then tr base any else pure wrong) else tr base n
+    let n' ← if n.isMissing then (if caught then tr fill any else pure wrong) else tr base n
     let c' ← if c.isMissing then
-        (if caught then tr ((base.push "_").push "_") any else pure wrong)
+        (if caught then tr ((fill.push hidden).push hidden) any else pure wrong)
       else tr ((base.push h).push t) c
     if caught then pure (.app (.lam (.dcase (.var 0) z' sn' n' c')) s')
     else pure (.dcase s' z' sn' n' c')

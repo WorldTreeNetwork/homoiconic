@@ -133,6 +133,7 @@ Data renders in the same form the reader accepts, so printed data can be pasted 
 - `fn`, `case`, and `quote` may be the last argument of an application and extend as far right as they can. `~` takes one atom.
 - A `quote` inside a quotation is refused. So are number patterns other than `0`, nested patterns, and non-ASCII bytes outside comments.
 - A user binding named `interpret` shadows the interpreter.
+- A catch-all arm matches any data. Its name is in scope only in its own body. On a function it is `wrong`, like every arm.
 - A machine fault renders as `error: machine fault`.
 - Syntax errors read `syntax error: line L, column C: text`, columns from 1.
 - `kernel/Surface/Check.lean` runs every entry of `Surface.Expect` and exits non-zero on a mismatch. `host/check.sh` generates the Zig cases from the same list.

@@ -106,6 +106,23 @@ def reads : List (String × Term) := [
     .lam (.app (.lam (.dcase (.var 0) (num 1) (.var 1) (.var 0) (.var 2))) (.var 0))),
   ("fn x ->\n  case x\n    [_, ...rest] -> rest\n    _ -> []",
     .lam (.app (.lam (.dcase (.var 0) nil nil nil (.var 0))) (.var 0))),
+  -- A catch-all's name is visible only in the catch-all's own body.
+  ("let x = 99\ncase 0\n  0 -> x\n  x -> x",
+    .app (.lam (.app (.lam (.dcase (.var 0) (.var 1) (.var 1) (.var 0) (.var 2))) (num 0)))
+      (num 99)),
+  ("let x = 99\ncase 3\n  m + 1 -> x\n  x -> 0",
+    .app (.lam (.app (.lam (.dcase (.var 0) (num 0) (.var 2) (num 0) (num 0))) (num 3)))
+      (num 99)),
+  ("let x = 99\ncase [1]\n  [h, ...t] -> x\n  x -> 0",
+    .app (.lam (.app (.lam (.dcase (.var 0) (num 0) (num 0) (num 0) (.var 3)))
+        (.cons (num 1) nil)))
+      (num 99)),
+  ("let x = 99\ncase []\n  [] ->\n    let y = x\n    y\n  x -> 0",
+    .app (.lam (.app (.lam (.dcase (.var 0) (num 0) (num 0)
+        (.app (.lam (.var 0)) (.var 1)) (num 0))) nil))
+      (num 99)),
+  -- An indented line continues `+`; a line at the statement's column does not.
+  ("let x = 0 +\n  1\nx", .app (.lam (.var 0)) (.succ (num 0))),
   ("quote (fn x -> x)", .lit (reify (.lam (.var 0)))),
   ("quote (interpret 1)", .lit (reify (.app interp (num 1)))),
   (spliceText,
@@ -130,7 +147,10 @@ def refused : List (String × String) := [
   ("fn x ->\n\tx", "tab"),
   ("let y = quote 1\nquote (fn x -> ~y)", "splice"),
   ("let y = 1\nquote y", "y"),
-  ("case 1\n  0 -> 1\n  0 -> 2", "arm")
+  ("case 1\n  0 -> 1\n  0 -> 2", "arm"),
+  ("case 0\n  0 -> ghost\n  ghost -> 2", "ghost"),
+  ("let x = 0 +\n1\nx", "+"),
+  ("let x = 0 +\n1\n  + 1\nx", "+")
 ]
 
 /-- Program text, step budget, and the text the host must print. -/
@@ -146,7 +166,20 @@ def prints : List (String × Nat × String) := [
   ("1 2", 1000, "error: wrong"),
   ("interpret (quote 5) 6", 1000000, "error: wrong"),
   ("interpret [9]", 1000000, "[2]"),
-  ("def loop x = loop x\nloop 0", 10000, "no result within 10000 steps")
+  ("def loop x = loop x\nloop 0", 10000, "no result within 10000 steps"),
+  ("let w = fn x -> x x\nw w", 10000, "no result within 10000 steps"),
+  ("let x = 99\ncase 0\n  0 -> x\n  x -> x", 1000, "99"),
+  ("let x = 99\ncase 3\n  m + 1 -> x\n  x -> 0", 1000, "99"),
+  ("let x = 99\ncase [1]\n  [h, ...t] -> x\n  x -> 0", 1000, "99"),
+  ("fn f -> case f\n  _ -> 1", 1000, "<function>")
+]
+
+/-- Terms no surface text reads as, run on the machine: term, budget, text. -/
+def runs : List (Term × Nat × String) := [
+  (.var 2147483647, 100, "error: unbound 2147483647"),
+  (.app (.var 4294967296) (num 1), 100, "error: unbound 4294967296"),
+  (.app (.lam (.app (.var 0) (.var 0))) (.lam (.app (.var 0) (.var 0))), 100,
+    "no result within 100 steps")
 ]
 
 /-- Outcomes that no surface program reaches directly, and their text. -/

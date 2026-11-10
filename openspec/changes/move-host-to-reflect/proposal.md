@@ -20,8 +20,8 @@ The host still calls the quote-free kernel, takes de Bruijn text, and answers wi
 ## Impact
 
 - Capabilities: ADDED `surface-syntax`; MODIFIED `zig-host` (at fold)
-- `lean-kernel` and `Circular` stay until `retire-circular-kernel`, the next change. After this change nothing calls them
-- Bead `homoiconic-3gx` closes: there is no result code
+- `lean-kernel` and `Circular` stay until `retire-circular-kernel`, the next change. The host check still calls `kernel_run` for its older cases
+- Bead `homoiconic-3gx` stays open until `retire-circular-kernel`: `reflect_run` has no result code, and `kernel_run` still has the ambiguous one
 
 ## User journey & surfaces
 

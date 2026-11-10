@@ -71,6 +71,12 @@ def main : IO UInt32 := do
       if !roundTrip d then
         IO.println s!"FAIL roundtrip {show1 text}: `{renderData d}` does not read back"
         fails := fails + 1
+  for (t, budget, out) in runs do
+    total := total + 1
+    let got := renderState budget (runUntil budget (load (compile t)))
+    if got != out then
+      fails := fails + 1
+      IO.println s!"FAIL runs: `{got}`, expected `{out}`"
   for (o, out) in renders do
     total := total + 1
     let got := render o
