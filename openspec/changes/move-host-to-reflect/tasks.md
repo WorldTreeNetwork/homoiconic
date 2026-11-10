@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] Owner: the user approves or amends the syntax in `design.md`.
+- [x] Owner: the user approved the syntax in `design.md`, 2026-11-09.
 - [ ] Owner: `kernel/Surface/Examples.lean` pairs each example program with the `Reflect` term it must read as.
 - [ ] `Surface.read : ByteArray → Except String Term`, in Lean, meeting those examples and refusing unknown names, tabs in indentation, and a block that does not end in a value.
 - [ ] `Surface.render` for outcomes, as the table in `design.md`. Rendered data reads back as the same data.

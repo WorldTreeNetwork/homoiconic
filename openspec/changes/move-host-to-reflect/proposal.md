@@ -12,7 +12,7 @@ The host still calls the quote-free kernel, takes de Bruijn text, and answers wi
 
 ## What
 
-- ADD capability `surface-syntax`: an indentation syntax with names, in the manner of Wisp, read by a Lean function into `Reflect` terms
+- ADD capability `surface-syntax`: an indentation syntax with names, from the ML family, with quotation and splicing, read by a Lean function into `Reflect` terms
 - A plain text rendering of outcomes
 - MODIFY `zig-host`: the host passes program text to a new export, which reads it, compiles it, runs the machine under a step budget, and writes the rendering back
 - The reader and the renderer are implementation. They are tested and not proved, as the vision decided for wire formats. What runs is the proved machine
@@ -37,7 +37,7 @@ The surface is a program file and the text the host prints.
 - Retiring `Circular` (`retire-circular-kernel`).
 - CBOR on the wire and dCBOR in the log. Those arrive with messages and the event log.
 - A proof about the reader or the renderer.
-- Modules, imports, strings, or macros.
+- Modules, imports, strings, macros, nested patterns, or declared constructors. `design.md` lists what comes later and in what order.
 - A REPL.
 
 ## Preparation
@@ -45,4 +45,4 @@ The surface is a program file and the text the host prints.
 - Upstream: living specs `code-as-data`, `bytecode-machine`, `zig-host`. `machine_exact` is what lets the host run the machine and call the answer the program's outcome.
 - Anchors: Zig carries bytes and contains no evaluator and no reader. The reader is Lean.
 - Outcome: a person can write a program with names and indentation, run it, and read the answer.
-- Authority: the user chose a Wisp-like text syntax and plain rendering on 2026-11-09. The syntax in `design.md` is a proposal and has not been approved. This change is PENDING.
+- Authority: the user chose a text syntax and plain rendering, and approved the ML-family syntax in `design.md`, on 2026-11-09. The change itself is PENDING until activated.

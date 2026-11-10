@@ -4,7 +4,7 @@
 
 ### Requirement: Programs are written with names and indentation
 
-The kernel package SHALL define a reader, in Lean, from program text to `Reflect` terms. A line SHALL be an application of its first item to the rest. Lines indented under a line SHALL be further arguments of it. A colon SHALL open a group that runs to the end of the line. Names SHALL be resolved to de Bruijn indices by the reader. A program that uses an unbound name SHALL be refused and SHALL NOT be run.
+The kernel package SHALL define a reader, in Lean, from program text to `Reflect` terms. Application SHALL be juxtaposition. Lines indented under a line SHALL continue it. Functions SHALL be written `fn x -> body`, bindings `let x = value` and `def f x = body`, arrays `[a, b, ...rest]`, and the successor `e + 1`. Data SHALL be taken apart by `case` with arms `pattern -> body`, where a pattern is `0`, `m + 1`, `[]`, `[head, ...tail]`, a name, or `_`. Names SHALL be resolved to de Bruijn indices by the reader. A program that uses an unbound name SHALL be refused and SHALL NOT be run.
 
 #### Scenario: Recursion by name
 
@@ -20,29 +20,35 @@ The kernel package SHALL define a reader, in Lean, from program text to `Reflect
 
 ### Requirement: Quotation is written in the syntax
 
-`quote e` SHALL read as the literal whose data is `reify` of the term `e` reads as. Data written in brackets SHALL read as a literal and SHALL NOT be evaluated.
+`quote e` SHALL denote the data that is `reify` of the term `e` reads as. Inside a quotation, `~e` SHALL place the code that `e` evaluates to at that position. A quotation that mentions a name bound outside it, or a splice enclosed by a binder of its quotation, SHALL be refused.
 
 #### Scenario: A quoted function is its code
 
-- GIVEN the text `quote : fn x : x`
+- GIVEN the text `quote (fn x -> x)`
 - WHEN it is read and run
-- THEN the outcome is the data `[1 0]`
+- THEN the outcome is the data `[1, 0]`
 
-#### Scenario: Code built at run time is run
+#### Scenario: Code with a hole is filled and run
 
-- GIVEN a program that builds the data `[3 [2 41]]` with `cons` and applies `interpret` to it
+- GIVEN a program that binds `inner` to `quote 41` and applies `interpret` to `quote (~inner + 1)`
 - WHEN it is read and run
-- THEN the outcome is the data `[0 [1 42]]`
+- THEN the outcome is the data `[0, [1, 42]]`
+
+#### Scenario: A splice under a binder is refused
+
+- GIVEN the text `quote (fn x -> ~y)` with `y` bound outside
+- WHEN it is read
+- THEN the reader reports a syntax error, and nothing is run
 
 ### Requirement: Outcomes render as plain text
 
-The package SHALL define a rendering of outcomes as text. A number SHALL render as its decimal digits. An array SHALL render in brackets with items separated by spaces. Rendered data SHALL read back, as a bracket literal, to the same data. A function SHALL render as `<function>`. `unbound i` and `wrong` SHALL render as errors that say which.
+The package SHALL define a rendering of outcomes as text. A number SHALL render as its decimal digits. An array SHALL render in brackets with items separated by a comma and a space. Rendered data SHALL read back, as a bracket literal, to the same data. A function SHALL render as `<function>`. `unbound i` and `wrong` SHALL render as errors that say which.
 
 #### Scenario: Data round-trips through text
 
-- GIVEN the data `[1 2 [3 4]]`
+- GIVEN the data `[1, 2, [3, 4]]`
 - WHEN it is rendered and the text is read as a program
-- THEN the program's outcome is the data `[1 2 [3 4]]`
+- THEN the program's outcome is the data `[1, 2, [3, 4]]`
 
 ### Requirement: The reader and renderer are not part of the proof
 

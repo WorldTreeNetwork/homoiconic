@@ -23,7 +23,7 @@ The Zig host SHALL pass one program's bytes, an output buffer, and a step budget
 
 - GIVEN the append program in the change's design
 - WHEN the Zig check runs it
-- THEN the printed text is `[1 2 3 4]`
+- THEN the printed text is `[1, 2, 3, 4]`
 
 #### Scenario: A diverging term has no result
 
