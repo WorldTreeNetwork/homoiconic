@@ -71,14 +71,16 @@ Direction from the user, 2026-11-09: reuse identikey-protocol's choices where us
 | Authority | Biscuit capability tokens with attenuation | The host's side of P12 |
 | Text form | `ur:envelope/…` for a whole envelope; base58 or base64 by size for one value | Host output only |
 
-Boundary: the kernel's program, value, or event is the op's `body` — canonical dCBOR bytes. Lean defines and proves the reading and writing of that body. The op wrapper, signatures, clocks, and tokens are the host's. They are checked by Zig and enter the proofs as hypotheses, the way the hash does.
+Boundary, revised 2026-11-09 by the user: the wire format is an implementation detail outside the language and is not proved. The language has an abstract data type (D1) and code is a value of it (D8). That is inside the proofs. How a data value becomes bytes is not. The reader and writer are tested against the identikey-protocol fixtures. That they round-trip, and that the hash has no collisions, are assumptions of the same kind as the toolchain. The op wrapper, signatures, clocks, and tokens are the host's.
+
+What this gives up: "equal hashes mean equal programs" and receipt soundness hold given a correct codec, not unconditionally. The likely codec fault, two byte strings for one value, fails closed: hashes differ and a check is refused.
 
 Constraints this puts on us:
 
 - **No Rust.** The identikey crates are Rust and the partition excludes Rust. We adopt the formats and the committed fixtures as test vectors, not the crates.
-- **A strict decoder.** dCBOR rejects non-canonical bytes. P4 therefore gets its converse on accepted input: `parse b = some x → print x = b`. Equal hashes then mean equal values in both directions.
+- **A strict decoder.** dCBOR rejects non-canonical bytes. The round trip is tested in both directions.
 - **Two hashes exist upstream.** The log's identity is Blake3 of canonical bytes. Envelope digests are SHA-256. Code identity here is Blake3, to match the log.
-- **Start with a subset.** Unsigned integers, byte strings, and arrays first. Maps, text, negative integers, and tags are added through P8 when something needs them. Map-key ordering is a proof of its own.
+- **Start with a subset.** The language's data type is unsigned integers, byte strings, and arrays. More is added through P8 when something needs it. The wire format can carry more than the language can inspect.
 - **Biscuit carries Datalog.** Evaluating a token is evaluation. It stays outside the kernel and outside the theorems until someone decides otherwise.
 
 ### D8. Code is a value of the data type — proposed
@@ -126,6 +128,16 @@ The canonical form stays the term (D8). That is what is hashed, quoted, and reas
 
 WebAssembly as the language is declined: code is not a value in it, it has no closures, and a self-interpreter and its proof would be far larger than everything here. WebAssembly as packaging is welcome: the compiled kernel can be built for it so a receipt can be checked in a browser.
 
+### D10. Channels are requests; names are identikey's — decided 2026-11-09
+
+Programs communicate in the style of the pi-calculus: channels are values, and a channel can be sent over a channel. The kernel gains nothing for this. `send`, `receive`, `spawn`, and `new` are request operations (D3).
+
+- A channel name is unforgeable because it is an identikey key or capability. The host enforces that. The proofs take it as a hypothesis.
+- A fresh name is an answer from the host, recorded like any other answer, so replay (P10) covers it.
+- A program can use only the channels it was given or received (P12).
+- Delivery order is recorded (D4). Agreement on order between parties is not provided.
+- Properties of a particular concurrent algorithm, such as freedom from deadlock, are proved per algorithm, later.
+
 ## Proof obligations
 
 Ordered by dependency. "Free" means it follows from earlier results with little new work.
@@ -143,8 +155,8 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 
 | | Statement | Why | Needs |
 |---|---|---|---|
-| **P4** | Over dCBOR (D7): `parse (print x) = some x` and `parse b = some x → print x = b`, for data, terms, values, outcomes, and machine states | One canonical form, in both directions. The text parser is replaced or gets the same theorem. | D7, D8 |
-| **P5** | Given a hash with no collisions on a set `S`: `hash (print a) = hash (print b) → a = b` for `a b ∈ S` | A hash names a program. | P4, D5 |
+| **P4** | *Assumed, tested.* The dCBOR reader and writer round-trip in both directions for data, terms, values, outcomes, and machine states | One canonical form. Not proved, by decision (D7). | D7, D8 |
+| **P5** | *Assumed.* The hash has no collisions on the values in play | A hash names a program. | P4, D5 |
 
 ### Wider language
 
@@ -152,6 +164,7 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 |---|---|---|---|
 | **P6** | `metacircular` at an arbitrary pure environment | A shipped closure is never at `[]`. The internal lemma `source_beta` already carries an environment. | — |
 | **P7** | For every depth `k`, the interpreter interpreting itself `k` times agrees with `Direct`. **Free:** `interpreterApplication` is pure, so `metacircular` applies to it; induct on `k` and compose `Represents`. | Rules can be stacked: a metering interpreter under a tracing one. | P6 helps |
+| **P8a** | With primitive data, a case primitive, and `quote` evaluating to a program's data value: for every program `p`, including programs that use `quote`, `Direct env p o ↔` the interpreter applied to `quote p` derives a value that is the data form of `o` | Code-as-data inside the language. `encode` is no longer a Lean function beside it. The quote-free restriction ends. | D1, D8 |
 | **P8** | For a signature of primitives, each with a rule and an object-level implementation satisfying one local lemma, `metacircular` holds for the extended language | Adding numbers or bytes costs one lemma each, not a new 785-line simulation. | D1 |
 | **P9** | The interpreter's step count is bounded by a stated function of the program's step count and size | A step budget means something at every interpreter depth. | P1 |
 
@@ -175,7 +188,7 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 | | Statement | Why | Needs |
 |---|---|---|---|
 | **P15** | `run n (parse (print s)) = run n s`, and: a request answered by sending a closure to another VM, running it, and returning the bytes gives the outcome of running it locally. **Mostly free** from P4, P2, P6. | Location does not change meaning. | P4, P2, P6 |
-| **P16** | For a named class of handlers, the final configuration is the same for every delivery schedule | Some programs need no ordering. The class must be decidable or checked by a proved checker. | P13 |
+| **P16** | *Future work.* For a named class of handlers, the final configuration is the same for every delivery schedule | Some programs need no ordering. Not on the roadmap. | P13 |
 | **P17** | The network configuration after a schedule is a function of the initial configuration, the schedule, and the answers | Everything else is replayable given the order. | P13, P10 |
 
 ### Model calls

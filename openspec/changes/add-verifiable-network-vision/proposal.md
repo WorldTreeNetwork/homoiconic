@@ -78,21 +78,23 @@ Model calls live in layer 2 as requests. The model is outside the proof. The pro
 
 ### Roadmap
 
-Each stage is one or more changes. A stage is done when its theorems are checked by Lean with no admitted steps and its demonstration runs. The proof obligations `P1`–`P21` are stated in `design.md`.
+Each stage is one or more changes. A stage is done when its theorems are checked by Lean with no admitted steps and its demonstration runs. The proof obligations are stated in `design.md`.
 
-| Stage | Name | What lands | Demonstration | Proofs |
-|---|---|---|---|---|
-| 0 | Floor | The metacircular theorem and the Zig call. **Done.** | `sh host/check.sh` | — |
-| 1 | Bytes | Canonical bytes for terms and values. The kernel returns its outcome as bytes. The data-carrier decision is made. The ambiguous result code is retired. | A value leaves the kernel, comes back in, and is the same value. | P4, P5 |
-| 2 | Machine | A step machine that agrees with `Direct`, can pause and resume, and has a step and space budget. | A long program is run in three slices and gives the same outcome as one run. | P1, P2, P3 |
-| 3 | Wider language | The theorem at any environment and any interpreter depth. Primitives added through one parametric statement. | The interpreter runs itself running a program that does arithmetic on bytes. | P6, P7, P8, P9 |
-| 4 | Requests | Programs can make a request and continue from an answer. | A program asks twice; replaying the recorded answers gives the same outcome. | P10, P11, P12 |
-| 5 | One VM | A VM whose state is a replay of its event log. Snapshots. Duplicate events ignored. | Kill the VM, restart from the log, and the state hash is unchanged. | P13, P14 |
-| 6 | Two VMs | Closures and paused machines move between VMs. A network model with recorded delivery order. | A computation starts on one VM and finishes on another with the same receipt as a local run. | P15, P16, P17 |
-| 7 | Model calls | Requests answered by a model. Outputs labelled by dependence. Checked use of answers. | A program takes a model's proposal, checks it, and the receipt shows which outputs depended on the model. | P18, P19 |
-| 8 | Receipts | Receipt checking and dispute by bisection. | A wrong receipt is rejected, and a dispute over a million steps is settled by checking one. | P20, P21 |
+Two tracks. The spine pushes the metacircular theorem as far as it goes, because every later stage rests on it and it is the largest risk. The machine track is textbook work that can run beside it.
 
-Stages 1 and 2 are independent and can run in parallel. Stage 4 needs stage 2. Stages 5 onward are in order. Stage 8's receipt check for plain programs (P20) needs only stage 1 and can land early.
+| Stage | Track | Name | What lands | Demonstration | Proofs |
+|---|---|---|---|---|---|
+| 0 | — | Floor | The metacircular theorem and the Zig call. **Done.** | `sh host/check.sh` | — |
+| 1 | Spine | Code is data | Primitive data in the language. `quote` gives a program as data. The interpreter takes that data. The theorem covers programs that use quote, at any environment and any interpreter depth. | The interpreter runs itself running a program that builds and runs another program. | P6, P7, P8a |
+| 2 | Machine | Bytecode | A stack machine that agrees with `Direct`, pauses and resumes, and has a step and space budget. A speed measurement. | A long program run in three slices gives the outcome of one run. | P1, P1b, P2, P3 |
+| 3 | Spine | Primitives | New primitives added through one parametric statement, with native implementations. | Arithmetic and hashing on bytes, interpreted and direct, agree. | P8, P9 |
+| 4 | Spine | Requests and channels | Programs make requests and continue from answers. Send, receive, spawn, and fresh name are requests. The interpreter preserves what a program asks for. | Two processes exchange a channel name and then talk over it; replaying the recorded answers gives the same outcome. | P10, P11, P12 |
+| 5 | Join | One VM | A VM whose state is a replay of its event log. Events are identikey-log ops. | Kill the VM, restart from the log, and the state hash is unchanged. | P13, P14 |
+| 6 | Join | Two VMs | Closures and paused machines move between VMs. Delivery order is recorded. | A computation starts on one VM and finishes on another with the same receipt as a local run. | P15, P17 |
+| 7 | Join | Model calls | Requests answered by a model. Outputs labelled by dependence. Checked use of answers. | A program takes a model's proposal, checks it, and the receipt shows which outputs depended on the model. | P18, P19 |
+| 8 | Join | Receipts | Receipt checking and dispute by bisection. | A wrong receipt is rejected, and a dispute over a million steps is settled by checking one. | P20, P21 |
+
+Stages 1 and 2 start together. Stage 4 needs stages 1 and 2. Stage 8's receipt check for plain programs (P20) can land any time after stage 1.
 
 ### Success
 
@@ -113,11 +115,17 @@ No new UI because this change is a vision and a roadmap.
 ## Out of scope
 
 - Any implementation. This change does not edit `kernel/` or `host/`.
-- Choosing a consensus or ordering mechanism.
+- Choosing a consensus or ordering mechanism. Agreement on order is not part of this system. Tools for it may come later.
+- Proofs about particular concurrent algorithms. Those are future work, one algorithm at a time.
+- A proved wire format. dCBOR and the identikey formats are implementation, tested and not proved.
 - Choosing how model execution is attested.
 - A surface syntax, module system, or editor.
 
 ## Changelog
+
+### 2026-11-09 (third entry)
+
+- Direction from the user: the wire format is an implementation detail and is not proved; channel-style programming is in, with unforgeability resting on identikey; proofs of concurrent algorithms and consensus are out. Roadmap reordered into a spine that pushes metacircularity first and a machine track beside it.
 
 ### 2026-11-09 (second entry)
 
