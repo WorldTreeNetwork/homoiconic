@@ -45,7 +45,10 @@ mutual
     | x :: xs, out => writeAll xs (writeTo x out)
 end
 
-/-- The byte form of a data value. Total: every value has one. -/
+/-- The byte form of a data value. A CBOR length is below 2^64, so an array of
+    2^64 items or more, or a number of 2^64 bytes or more, has no byte form;
+    for those the bytes written are not read back. No such value fits in a
+    machine. -/
 def write (d : Data) : ByteArray := writeTo d ByteArray.empty
 
 /-- `k` bytes at `pos` as a number, most significant first. -/

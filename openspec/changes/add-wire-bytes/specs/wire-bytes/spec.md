@@ -4,7 +4,7 @@
 
 ### Requirement: A data value has one byte form
 
-The kernel SHALL provide a writer from data to bytes that is defined for every data value, and a reader from bytes to data. A number below 2^64 SHALL be written as a CBOR unsigned integer in the shortest form that holds it. A number of 2^64 or more SHALL be written as CBOR tag 2 over a byte string of its bytes, most significant first, with no leading zero. An array SHALL be written as a definite-length CBOR array with its length in the shortest form. The reader SHALL refuse a number or length in a longer form than it needs, an indefinite length, bytes after the value, a value cut short, a bignum with a leading zero or one that fits an unsigned integer, and every kind of CBOR value other than these three. The reader and writer are tested, not proved.
+The kernel SHALL provide a writer from data to bytes, for every data value in which each array has fewer than 2^64 items and each number fewer than 2^64 bytes, and a reader from bytes to data. A number below 2^64 SHALL be written as a CBOR unsigned integer in the shortest form that holds it. A number of 2^64 or more SHALL be written as CBOR tag 2 over a byte string of its bytes, most significant first, with no leading zero. An array SHALL be written as a definite-length CBOR array with its length in the shortest form. The reader SHALL refuse a number or length in a longer form than it needs, an indefinite length, bytes after the value, a value cut short, a bignum with a leading zero or one that fits an unsigned integer, and every kind of CBOR value other than these three. The reader and writer are tested, not proved.
 
 #### Scenario: The standard's examples
 
@@ -48,10 +48,16 @@ The byte form of a program SHALL be the byte form of the data value `reify` give
 
 ### Requirement: A machine value has a byte form
 
-A machine value that is data `d` SHALL have the data form `[0, d]`. A function value SHALL have the data form `[1, body, captured]`, where `body` is the quoted form of the program its code was compiled from and `captured` is the array of the forms of the values it holds. Reading SHALL compile `body`. A value written, read and written again SHALL give the same bytes.
+A machine value that is data `d` SHALL have the data form `[0, d]`. A function value SHALL have the data form `[1, body, captured]`, where `body` is the quoted form of the program its code was compiled from and `captured` is the array of the forms of the values it holds. Reading SHALL compile `body`. A function whose code is not exactly the compilation of a program SHALL have no byte form. A value written, read and written again SHALL give the same bytes.
 
 #### Scenario: A waiting run is kept as bytes
 
 - GIVEN a program that has asked twice and been answered once
 - WHEN the waiting function is written as bytes, read back, and resumed with the second answer
 - THEN it gives the result the uninterrupted run gives
+
+#### Scenario: Code that no program compiles to
+
+- GIVEN a function value whose code is a literal followed by a check that no compilation puts there
+- WHEN its byte form is asked for
+- THEN there is none

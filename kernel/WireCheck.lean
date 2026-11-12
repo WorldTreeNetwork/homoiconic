@@ -172,6 +172,13 @@ def keptRun : String :=
 
 #eval IO.println keptRun
 
+-- Code that is not the compilation of a program reads back as a program
+-- (`decompile` drops its checks), so a function holding it has no byte form.
+#eval IO.println (line
+  ((valueBytes (.closure (.literal (.nat 0) (.checkFun .done)) [])).isNone
+    && (valueBytes (.closure (.literal (.nat 0) .done) [])).isSome)
+  "a function whose code is not a compiled program has no byte form")
+
 /-- Data that is no program's form is refused, not guessed at. -/
 def notPrograms : List (String × Data) :=
   [ ("an empty array", .arr []), ("an unknown tag", .arr [.nat 7, .nat 0]),

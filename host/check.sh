@@ -129,6 +129,13 @@ sameFromBytes "$EXAMPLES/code.hom"
 sameFromBytes "$EXAMPLES/factorial.hom"
 sameFromBytes "$EXAMPLES/forever.hom" 5000
 sameFromBytes "$OUT/long.hom"
+# A byte form longer than the command's first buffer is written in full.
+awk 'BEGIN { printf "["; for (i = 0; i < 30000; i++) printf "70000, "; printf "1]\n" }' > "$OUT/wide.hom"
+sameFromBytes "$OUT/wide.hom"
+if [ "$(wc -c < "$OUT/program.bytes" | tr -d ' ')" -le 65536 ]; then
+    echo "the wide program's byte form does not exceed the first buffer" >&2
+    exit 1
+fi
 # The identity function is three bytes, and the kernel writes those three.
 printf 'fn x -> x\n' > "$OUT/identity.hom"
 "$OUT/bytes" "$OUT/identity.hom" > "$OUT/identity.bytes"

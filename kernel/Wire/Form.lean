@@ -28,14 +28,25 @@ theorem unreify_reify : ∀ t : Term, unreify (reify t) = some t := by
   intro t
   induction t <;> simp_all [reify, unreify]
 
+deriving instance BEq for Reflect.Code
+
+/-- The program a block of code was compiled from, when it is exactly the
+    compilation of one. `decompile` alone also reads code no compilation
+    gives, so the result is compiled again and compared. -/
+def blockTerm (c : Code) : Option Term :=
+  match decompile c with
+  | some t => if compile t == c then some t else none
+  | none => none
+
 mutual
   /-- A machine value as data: `[0, d]` for data, `[1, body, captured]` for a
-      function, where `body` is the quoted program of its code. `none` only
-      for code that is not a compiled block, which no compiled program makes. -/
+      function, where `body` is the quoted program of its code. `none` for a
+      function whose code is not the compilation of a program; no compiled
+      program makes such a value. -/
   def valueData : MValue → Option Data
     | .data d => some (.arr [.nat 0, d])
     | .closure c env =>
-        match decompile c, valuesData env with
+        match blockTerm c, valuesData env with
         | some t, some ds => some (.arr [.nat 1, reify t, .arr ds])
         | _, _ => none
   def valuesData : List MValue → Option (List Data)
