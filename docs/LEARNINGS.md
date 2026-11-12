@@ -41,3 +41,9 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 
 - The request driver was defined once, over an abstract way of evaluating (`Sys`), with one simulation lemma (`Sim.drive`) that lifts turn-by-turn agreement to whole runs. The interpreter and machine agreement theorems for requests then each cost only a turn-level equivalence, proved from the existing `reflective` and machine theorems.
 - Review caught that a request carries no mark. The driver reads every function a turn ends in as a request, so `fn x -> 42` asks `42` and a driven program cannot finish with a function. The first description said such functions end as `wrong`; only some do.
+
+## 2026-11-11 — one type for pieces, progress one place at a time
+
+- Pieces use one type, `P`, for data, values and environments. Resolution, `Unf`, is then one inductive relation, and the store proofs go by induction on it. Mutual definitions remain only where a piece is built from the machine's own separate types.
+- Progress of the lazy machine is proved by forcing one place at a time (`force`): induction on the resolution of the piece at that place, fetching until it is not a reference. No global measure on the store or the state was needed.
+- The check cuts a state as a tree, with no sharing. The interpreter interpreting itself on `2`, stopped after 300 steps, gave 1,110,817 pieces. Storing by content removes the duplicates, and needs bytes.

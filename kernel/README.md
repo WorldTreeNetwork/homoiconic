@@ -15,12 +15,14 @@ lake build
 lake env lean ReflectContract.lean   # the interpreter theorems, exact statements
 lake env lean MachineContract.lean   # the machine theorems, exact statements
 lake env lean RequestContract.lean   # the request theorems, exact statements
+lake env lean StoreContract.lean     # the stored-state theorems, exact statements
 lake env lean ReflectRun.lean        # the scenarios, executed
 lake env lean Surface/Check.lean     # the reader and renderer against examples
+lake env lean StoreCheck.lean        # runs cut into pieces and continued
 lake exe reflectBench                # steps per second
 ```
 
-All three contract files print each theorem's axioms. They are Lean's standard
+All four contract files print each theorem's axioms. They are Lean's standard
 three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 
 ## Reflect
@@ -38,6 +40,8 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 | `Reflect/RunUntil.lean`, `RunUntilProof.lean` | `runUntil`, which stops when the machine stops, and `runUntil_eq` |
 | `Reflect/Request.lean` | `askTerm`, `payloadTerm`, `resumeTerm`; `Sys`, a way of evaluating; `Drive`, the driver over any `Sys`; `Interact`, `InteractI`, `InteractM`; `driveRun` and `converse`, the executable driver |
 | `Reflect/RequestProof.lean` | Determinism, resume and extra answers; `Sim.drive`, which lifts turn-by-turn agreement to runs; the interpreter and machine instances; soundness of `converse` |
+| `Reflect/Store.lean` | `P`, a piece; `Store`; `Unf`, which resolves a piece; partial states; `lstep` and `lrun`, the lazy machine, with a pause; `RState` |
+| `Reflect/StoreProof.lean` | Saving loses nothing; the lazy machine reaches every plain state; a missing piece is a pause; more pieces change nothing; stores that agree give the same result; a turn of the request driver from a stored continuation |
 | `Reflect/Examples.lean` | Worked cases, checked by the kernel |
 
 `reflective` says: for every term `p` and outcome `o`, `p` evaluates to `o`
@@ -75,6 +79,29 @@ answer left the run is waiting.
 `interact_machine_exact`, `converse_finished` and `converse_waiting`, each as
 `∀ [Ops], …`. `converse` gives each machine run a fresh step budget and is
 proved sound, not complete.
+
+## Stored state
+
+A piece, `P R`, is a number, an empty list, a pair, a function (code and its
+environment), or a reference `ref r`. One type serves for data, values and
+environments. `R` is the kind of reference and is a parameter of every
+definition and theorem; nothing in the kernel says how a reference is made. A
+store, `Store R`, maps references to pieces and may lack any of them. `Unf`
+says a piece resolves to a value by following every reference, and `RState`
+says the same of a partial machine state.
+
+The lazy machine, `lstep` and `lrun`, runs a partial state. When a step has to
+look at a reference it fetches that one piece. When the store lacks it the run
+pauses, holding the reference and the state it stopped in. It does not write
+fetched pieces back. `StoreContract.lean` states `saved_resolves`,
+`cut_resolves`, `RState.mono`, `Unf.unique`, `resolve_unique`,
+`lazy_simulates`, `lazy_complete`, `lazy_sound`, `lazy_pause`, `lrun_mono`,
+`lazy_agree`, `lazy_program`, `lazy_turn_complete` and `lazy_turn_sound`, for
+every table and every kind of reference. `StoreCheck.lean` stops eight
+programs at four points, cuts each at every value, and continues it with the
+whole store and with one piece withheld; it also keeps a waiting run and
+continues it from its root. A line that starts with `FAIL` fails the check.
+Hashing, bytes, disk, the network and attestation are outside the kernel.
 
 ## Surface
 

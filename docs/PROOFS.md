@@ -2,10 +2,10 @@
 
 A record of what the Lean proofs say, how they got there, and what they leave
 out. The exact statements are in `kernel/ReflectContract.lean`,
-`kernel/MachineContract.lean` and `kernel/RequestContract.lean`; the
-requirements are in `openspec/specs/`.
+`kernel/MachineContract.lean`, `kernel/RequestContract.lean` and
+`kernel/StoreContract.lean`; the requirements are in `openspec/specs/`.
 Written 2026-11-10, after `add-operation-tables`; updated 2026-11-10, after
-`add-requests`.
+`add-requests`, and 2026-11-11, after `add-state-store`.
 
 ## In one sentence
 
@@ -43,6 +43,14 @@ the language, evaluation, the interpreter or the machine changed, and no
 earlier theorem statement changed. The driver is defined once over any way of
 evaluating, so the agreement of the interpreter and the machine with direct
 evaluation carries over to whole runs of requests and answers.
+
+**2026-11-11: stored state.** A running program's state can be held in pieces
+and fetched on first use (`f022a06`, `9348a9d`). A piece is a number, an empty
+list, a pair, a function, or a reference to another piece. A lazy machine runs
+a partial state, fetches a piece when a step first looks at it, and pauses
+when the store lacks it. The kind of reference is a parameter, as the
+operation table is. Nothing in the language, evaluation, the interpreter or
+the machine changed, and no earlier theorem statement changed.
 
 ## The definitions
 
@@ -104,13 +112,34 @@ order, and how it ends (finished with an outcome, or waiting on a request).
 | `interact_machine_exact` | Whatever the machine's run ends with is the compiled form of the program's ending |
 | `converse_finished`, `converse_waiting` | What the executable driver reports as finished or waiting is a run of the program by direct evaluation |
 
+### Stored state
+
+A store holds pieces under references and may lack any of them. A piece
+resolves to a value when following every reference gives that value. These
+hold for every operation table and every kind of reference.
+
+| Theorem | Says |
+|---|---|
+| `saved_resolves` | A state held whole resolves to itself |
+| `cut_resolves` | A stored piece can be replaced by its reference, and what resolves is the same |
+| `RState.mono` | A state that resolves still does when the store holds more |
+| `Unf.unique`, `resolve_unique` | A piece resolves to one thing, and a partial outcome to one outcome |
+| `lazy_simulates` | For every number of plain steps, the lazy machine with the whole store reaches a state that resolves to the plain machine's state |
+| `lazy_complete` | The lazy machine halts with what the plain machine halts with |
+| `lazy_sound` | Under any part of the store, what the lazy machine halts with is what the plain machine halts with |
+| `lazy_pause` | A run pauses only on a reference the store lacks, and under a store that holds more, the run from the start passes through the paused state |
+| `lrun_mono` | More pieces change no run that did not pause |
+| `lazy_agree` | Two stores that agree wherever both hold a piece give the same result from the same state, when both runs halt |
+| `lazy_program` | A program run through any store has exactly the outcome direct evaluation gives it |
+| `lazy_turn_complete`, `lazy_turn_sound` | A turn of the request driver from a stored continuation is a turn of the machine |
+
 ## Why these proofs can be trusted
 
 - **Both directions.** The main theorems are "if and only if". Errors map
   across exactly, and a program that never finishes never halts the machine.
 - **Nothing assumed.** No `sorry`, no added axiom. The contract files print
   each theorem's axioms on every check.
-- **The contract cannot rot.** The three contract files restate each theorem
+- **The contract cannot rot.** The four contract files restate each theorem
   with its exact signature, so a weakened theorem fails to compile. They do
   not import an operation table, so nothing is proved for one table only.
 - **New operations cost no proof.** Adding a table changes no lemma.
@@ -119,7 +148,8 @@ order, and how it ends (finished with an outcome, or waiting on a request).
 - **Compiled code is still data.** Bytecode decompiles to the term it came
   from.
 - **Read by another model family.** Each change went to an outside reviewer
-  before it was folded. Reviews sent work back six times before accepting.
+  before it was folded. Reviews have sent work back six times before
+  accepting. `add-state-store` was accepted on first reading.
 
 ## What the proofs do not cover
 
@@ -149,10 +179,31 @@ order, and how it ends (finished with an outcome, or waiting on a request).
 - **A budget for a whole run.** The step budget is per machine run: the first
   evaluation, each reading of a payload, and each running of the rest on an
   answer get it afresh.
+- **What a reference means.** That a reference names one piece, for ever, is
+  assumed. The theorems state it as a hypothesis on the stores they compare.
+  How a reference is made and checked is outside the kernel.
+- **Bytes, hashing and disk.** The store is in memory. A piece has no byte
+  form yet, references are not hashes, and nothing is written to disk.
+- **Writing back.** The lazy machine does not write fetched pieces back to the
+  state or the store. Remembering them is the store's.
+- **Partial arguments.** An operation fetches its whole argument before it
+  runs.
+- **Finer cuts.** Code, the stack and the frame list are held whole. Their
+  values and environments can be references.
+- **Garbage collection.** Nothing is deleted. Which pieces no kept root
+  reaches is not computed.
+- **Fetch steps.** There is no bound on the number of steps the lazy machine
+  takes to fetch.
+- **An executable driver over stored state.** The theorems cover each turn.
+  `converse` and the `ask` command still run in memory and replay from the
+  start.
+- **Sharing in the check.** `StoreCheck.lean` cuts a state as a tree, so a
+  value held in two places is stored twice.
 - **The network.** What a payload means, logs, several VMs and model calls
   are the roadmap in `openspec/changes/add-verifiable-network-vision/`.
 
 ## Next
 
-The event log and one VM (vision stage 5, P13 and P14). It needs the
-decision on bytes and hashing first.
+The store needs bytes and hashing to go on disk: `add-wire-bytes`
+(`homoiconic-q59.12`). The event log and one VM follow (vision stage 5, P13
+and P14).

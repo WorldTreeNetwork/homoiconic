@@ -8,4 +8,4 @@
 - [x] `kernel/StoreCheck.lean`: eight programs stopped at four points, cut at every value, run whole and with a piece withheld then supplied; a waiting run kept and continued.
 - [x] `lake build`, the contracts, the checks and `sh host/check.sh` exit 0.
 - [x] Advise by a reader from another model family. Accept, 2026-11-11, no required fixes; two notes answered. Review in `reviews/`.
-- [ ] Fold: add `state-store`; amend `ARCHITECTURE.md`, `kernel/README.md` and `docs/PROOFS.md`; note the state half of stage 5 in the vision.
+- [x] Fold: add `state-store`; amend `ARCHITECTURE.md`, `kernel/README.md` and `docs/PROOFS.md`; note the state half of stage 5 in the vision.

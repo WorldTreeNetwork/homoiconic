@@ -123,6 +123,10 @@ No new UI because this change is a vision and a roadmap.
 
 ## Changelog
 
+### 2026-11-11
+
+- The state half of stage 5 landed as `add-state-store`: a running program's state can be cut into pieces held under references, and a snapshot taken at any step can be continued, with the same result, proved. A waiting run can be kept. For stage 6 a closure can travel as a root and its pieces, once pieces have bytes and references are hashes (`add-wire-bytes`). P13 as a fold over an event log, P14 and P15 remain. Annotated in `design.md`.
+
 ### 2026-11-10
 
 - Stage 4's P10 and P11 landed as `add-requests`, in the form "a request is a value, the driver is outside evaluation" rather than a `request` outcome. P12, `send`, `receive`, `spawn`, fresh names and the meaning of a payload remain. Annotated in `design.md`.
