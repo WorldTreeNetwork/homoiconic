@@ -74,8 +74,8 @@ def kept (size : Nat) (p : P Ref) : Saver (P Ref) := do
     alone: it was stored before and is not written again. A long list ends up
     as a chain of stored runs, each a little over `size` bytes. -/
 def cut (size : Nat) : P Ref → Saver (P Ref)
-  | .nat n => pure (.nat n)
-  | .nil => pure .nil
+  | .nat n => kept size (.nat n)
+  | .nil => kept size .nil
   | .ref r => pure (.ref r)
   | .cons h t => do
       let h' ← cut size h

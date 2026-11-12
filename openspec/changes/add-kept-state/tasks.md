@@ -8,5 +8,5 @@
 - [x] `kernel/Surface/Keep.lean`: a session for one turn against a store; the `reflect_keep_*` exports; `kernel_retain`.
 - [x] `host/keep.zig`; `examples/keep.hom`.
 - [x] `kernel/KeepCheck.lean` and the keep scenarios in `host/check.sh`; `sh host/check.sh` exits 0.
-- [ ] Advise by a reader from another model family.
+- [x] Advise by a reader from another model family. Send-back, 2026-11-12, two required fixes, both made; review in `reviews/`.
 - [ ] Fold.

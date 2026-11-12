@@ -44,6 +44,44 @@ def vectors : List (Nat × String) :=
   for (n, h) in vectors do
     IO.println (line (hex (Blake3.hash (input n)) == h) s!"blake3 of {n} bytes")
 
+-- A number or an empty list is cut as anything else is.
+#eval do
+  let big : P Ref := .cons (.nat (2 ^ 2400)) .nil
+  let isRef : P Ref → Bool
+    | .ref _ => true
+    | _ => false
+  let ok := match (cut 256 big).run #[], (cut 0 (.cons (.nat 1) .nil : P Ref)).run #[] with
+    | some (.cons h .nil, one), some (top, three) => isRef h && one.size == 1 && isRef top && three.size == 3
+    | _, _ => false
+  IO.println (line ok "a number over the size is stored on its own, and cutting at 0 stores every part")
+
+/-- The host's part for one session, over a store of pieces by name. -/
+def supply (m : Std.HashMap Ref ByteArray) : Nat → Surface.Keep.Session → String
+  | 0, _ => "did not finish"
+  | fuel + 1, s =>
+      match s.need with
+      | some r =>
+          match m[r]? with
+          | some b => supply m fuel (Surface.Keep.give s b)
+          | none => "lacks a piece"
+      | none => s.text
+
+-- A value behind a long chain of references is still the value. A function
+-- that forces the chain and then returns its reference is answered from a root.
+#eval do
+  let name (p : P Ref) : Ref × ByteArray :=
+    match pieceBytes p with
+    | some b => (Blake3.hash b, b)
+    | none => (ByteArray.empty, ByteArray.empty)
+  let first := name (.nat 42)
+  let chain := (List.range 70).foldl (fun (acc : List (Ref × ByteArray)) _ =>
+    name (.ref (acc.headD first).1) :: acc) [first]
+  let top := (chain.headD first).1
+  let k := name (.closure (compile (.app (.lam (.var 2)) (.succ (.var 1)))) (.cons (.ref top) .nil))
+  let m : Std.HashMap Ref ByteArray := (k :: chain).foldl (fun m (rb : Ref × ByteArray) => m.insert rb.1 rb.2) {}
+  let text := supply m 1000 (Surface.Keep.answer (hex k.1) "0".toUTF8 10000)
+  IO.println (line (text.startsWith "42\n") s!"a result behind 70 references is found: {(text.splitOn "\n").headD ""}")
+
 abbrev Pieces := Std.HashMap Ref ByteArray
 
 /-- Save every value in a machine state, as `Wire.cut` does for one. -/

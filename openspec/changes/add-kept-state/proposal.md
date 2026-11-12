@@ -29,7 +29,7 @@ From `host/check.sh`, on `examples/keep.hom`, which builds a list of 2000 number
 - With one piece file moved away the command exits 3 and writes nothing. With the file back, the same turn runs.
 - A piece file with a byte added is refused by the kernel.
 
-Storing by content also removes the duplication the state-store check had. The interpreter-twice state after 40 steps, cut at every value, is 84,408 saves and 745 distinct pieces.
+Storing by content also removes the duplication the state-store check had. The interpreter-twice state after 40 steps, cut at every value, is 168,796 saves and 774 distinct pieces.
 
 ## What is proved, and what is tested
 
@@ -41,6 +41,8 @@ Tested (`kernel/KeepCheck.lean`, `host/check.sh`):
 
 - Blake3 gives the 32-byte hash of each of the 22 official test vectors that ship in Zig's standard library, from 0 to 102,400 bytes.
 - Eight programs are stopped at three points and saved, cut at 256 bytes and at every value. Every stored piece is named by its hash and reads back to the same bytes, and the lazy machine continues from the stored pieces to the plain machine's result.
+- A number larger than the size is stored on its own, and cutting at 0 stores every part.
+- A result that sits behind 70 references is found.
 - Three turns, each a new session over the pieces the last one left, give what one run against both answers gives.
 - The host scenarios above.
 
@@ -85,3 +87,4 @@ host/out/keep store answer 5664… b.hom           # [2000, 42]
 ## Changelog
 
 - 2026-11-12: opened and built.
+- 2026-11-12: review (send-back, two fixes). A turn whose result sat behind a long chain of references ended with no text; references are now followed without a limit, and a turn that does not settle says so. Numbers and empty lists are now cut by size as everything else is. The sharing figure changed with that. Review in `reviews/`.

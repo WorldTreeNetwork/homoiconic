@@ -105,8 +105,10 @@ def steps (σ : Store Ref) : Nat → PState Ref → LRun Ref × Nat
           | .needs r => (.paused r s, n + 1)
 
 /-- A piece as whole data: `error r` when the store lacks `r`, `none` when
-    there is a function in it. It ends because a reference is the hash of the
-    piece it names, so no piece can reach itself. -/
+    there is a function in it. It ends when no piece reaches itself. That
+    holds for pieces made by saving, where a reference is made after the piece
+    it names. For other pieces it is assumed: a piece that reached itself
+    would hold a hash of bytes that contain that hash. -/
 partial def full (σ : Store Ref) : P Ref → Except Ref (Option Data)
   | .nat n => .ok (some (.nat n))
   | .nil => .ok (some (.arr []))
@@ -120,6 +122,17 @@ partial def full (σ : Store Ref) : P Ref → Except Ref (Option Data)
       | some p => full σ p
       | none => .error r
 
+/-- Follow references to the piece they name. Gives the last reference passed
+    (or the piece, when it was not a reference) and the piece. `error r` when
+    the store lacks `r`. It ends on the same condition as `full`. -/
+partial def chase (σ : Store Ref) : P Ref → Except Ref (P Ref × P Ref)
+  | .ref r =>
+      match σ r with
+      | none => .error r
+      | some (.ref r') => chase σ (.ref r')
+      | some p => .ok (.ref r, p)
+  | p => .ok (p, p)
+
 /-- What a run that stopped without a value says. -/
 def Session.stopped (s : Session) : PState Ref → Session
   | .halted (.unbound i) => s.finish (renderMOutcome (.unbound i))
@@ -128,10 +141,11 @@ def Session.stopped (s : Session) : PState Ref → Session
   | _ => s.finish s!"no result within {s.budget} steps of a turn"
 
 /-- Carry the turn on until it is over or needs a piece. Each phase is entered
-    at most once, apart from following a reference, so a small `fuel` is never
-    used up. This is `Reflect.driveRun` for one turn, on the lazy machine. -/
+    at most once in a call and the phases come in one order, so `fuel` above
+    their number is never used up; if it were, the turn says so and is over.
+    This is `Reflect.driveRun` for one turn, on the lazy machine. -/
 def advance : Nat → Session → Session
-  | 0, s => s
+  | 0, s => s.finish "error: the turn did not settle"
   | fuel + 1, s =>
       match s.phase with
       | .run st =>
@@ -139,20 +153,16 @@ def advance : Nat → Session → Session
           | (.paused r st', left) => { s with phase := .run st', left, need := some r }
           | (.at (.halted (.value v)), _) => advance fuel { s with phase := .classify v }
           | (.at st', _) => s.stopped st'
-      | .classify (.ref r) =>
-          match s.store r with
-          | some (.closure _ _) =>
-              -- The function stays a reference, so saving it writes nothing.
-              let next := Phase.payload (.ref r)
-                (.running (compile payloadTerm) (.cons (.ref r) .nil) [] [])
+      | .classify v =>
+          match chase s.store v with
+          | .error r => { s with need := some r }
+          | .ok (k, .closure _ _) =>
+              -- `k` is the function as it is held: a reference when it was
+              -- stored, so that saving it again writes nothing.
+              let next := Phase.payload k
+                (.running (compile payloadTerm) (.cons k .nil) [] [])
               advance fuel { s with left := s.budget, phase := next }
-          | some p => advance fuel { s with phase := .classify p }
-          | none => { s with need := some r }
-      | .classify (.closure c e) =>
-          let next := Phase.payload (.closure c e)
-            (.running (compile payloadTerm) (.cons (.closure c e) .nil) [] [])
-          advance fuel { s with left := s.budget, phase := next }
-      | .classify d => advance fuel { s with phase := .result d }
+          | .ok (_, d) => advance fuel { s with phase := .result d }
       | .payload k st =>
           match steps s.store s.left st with
           | (.paused r st', left) => { s with phase := .payload k st', left, need := some r }
@@ -170,7 +180,7 @@ def advance : Nat → Session → Session
           | .ok none => s.finish "error: machine fault"
       | .done => s
 
-def fuel : Nat := 64
+def fuel : Nat := 8
 
 /-- Begin a program from its source. -/
 def start (src : ByteArray) (budget : Nat) : Session :=
