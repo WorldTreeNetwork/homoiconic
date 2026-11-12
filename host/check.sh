@@ -11,11 +11,18 @@ lake build
 lake env lean ReflectContract.lean
 lake env lean MachineContract.lean
 lake env lean RequestContract.lean
+lake env lean StoreContract.lean
 lake env lean Surface/Check.lean
 # The scenarios print one line each; a line that starts with FAIL fails the check.
 lake env lean ReflectRun.lean > "$OUT/scenarios.txt"
 if grep -q "^FAIL" "$OUT/scenarios.txt"; then
     grep "^FAIL" "$OUT/scenarios.txt" >&2
+    exit 1
+fi
+
+lake env lean StoreCheck.lean > "$OUT/store.txt"
+if grep -q "^FAIL" "$OUT/store.txt" || ! grep -q "^ok" "$OUT/store.txt"; then
+    cat "$OUT/store.txt" >&2
     exit 1
 fi
 

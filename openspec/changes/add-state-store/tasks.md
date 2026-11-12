@@ -1,11 +1,11 @@
 # Tasks
 
-- [ ] Owner: go from the user. Bead `homoiconic-q59.18`.
-- [ ] `Reflect/Store.lean`: references as a parameter, partial data, partial values, partial states, the store, `Resolves`, saving, the lazy step and run with a `needs` stop.
-- [ ] `Reflect/StoreProof.lean`: saving loses nothing; the lazy machine simulates the plain one; missing is a pause; adding pieces changes no result; stores that agree give the same results.
-- [ ] The request driver over stored state: end a run with a root, continue from a root; lift `interact_resume`.
-- [ ] `kernel/StoreContract.lean`: the statements as `∀ [Ops], …` for every kind of reference, no table imported, axioms printed.
-- [ ] An executable store in memory and a check: every example cut at every value, run whole and run with pieces withheld then supplied.
-- [ ] `lake build`, the contracts, `Surface/Check.lean` and `sh host/check.sh` exit 0.
+- [x] Owner: go from the user, 2026-11-11. Bead `homoiconic-q59.18`.
+- [x] `Reflect/Store.lean`: pieces, the store, `Unf`, partial states, `lstep` and `lrun` with a pause, `RState`.
+- [x] `Reflect/StoreProof.lean`: saving loses nothing; the lazy machine reaches every plain state; a missing piece is a pause; more pieces change nothing; stores that agree give the same result; a program through the store has its direct outcome.
+- [x] A turn of the request driver from a stored continuation agrees with the machine.
+- [x] `kernel/StoreContract.lean`: fourteen statements for every operation table and every kind of reference, no table imported, axioms printed.
+- [x] `kernel/StoreCheck.lean`: eight programs stopped at four points, cut at every value, run whole and with a piece withheld then supplied; a waiting run kept and continued.
+- [x] `lake build`, the contracts, the checks and `sh host/check.sh` exit 0.
 - [ ] Advise by a reader from another model family.
 - [ ] Fold: add `state-store`; amend `ARCHITECTURE.md`, `kernel/README.md` and `docs/PROOFS.md`; note the state half of stage 5 in the vision.
