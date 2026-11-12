@@ -26,6 +26,12 @@ if grep -q "^FAIL" "$OUT/wire.txt" || ! grep -q "^ok" "$OUT/wire.txt"; then
     exit 1
 fi
 
+lake env lean KeepCheck.lean > "$OUT/keep.txt"
+if grep -q "^FAIL" "$OUT/keep.txt" || ! grep -q "^ok" "$OUT/keep.txt" || grep -q "error" "$OUT/keep.txt"; then
+    cat "$OUT/keep.txt" >&2
+    exit 1
+fi
+
 lake env lean StoreCheck.lean > "$OUT/store.txt"
 if grep -q "^FAIL" "$OUT/store.txt" || ! grep -q "^ok" "$OUT/store.txt"; then
     cat "$OUT/store.txt" >&2
@@ -38,9 +44,9 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request \
-              Wire/Cbor Wire/Form \
-              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Host; do
+for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Store \
+              Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece \
+              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Keep Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
         -c "$OUT/$name.c" "$module.lean"
@@ -49,7 +55,7 @@ for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machi
 done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
 lake env leanc -c -o "$OUT/runtime.o" "$HOST/runtime.c"
-for program in check run ask bytes; do
+for program in check run ask bytes keep; do
     zig build-obj "$HOST/$program.zig" -femit-bin="$OUT/zig-$program.o" \
         --cache-dir "$OUT/zig-cache" --global-cache-dir "$OUT/zig-global-cache"
     # shellcheck disable=SC2086
@@ -210,3 +216,112 @@ refuseAsk "ask: cannot read the program file: FileNotFound" "$EXAMPLES/missing.h
 refuseAsk "ask: cannot read the answers file: FileNotFound" "$EXAMPLES/ask.hom" "$EXAMPLES/$NEWLINE"
 refuseAsk "ask: the step budget must be a whole number" "$EXAMPLES/ask.hom" "$EXAMPLES/ask.answers" "$NEWLINE"
 echo "ask command checks passed"
+
+# The keep command: one turn for each call, with the program's state in a
+# directory between calls.
+STORE="$OUT/store"
+rm -rf "$STORE"
+mkdir -p "$STORE"
+echo 20 > "$OUT/twenty.hom"
+echo 22 > "$OUT/twenty-two.hom"
+echo 30 > "$OUT/thirty.hom"
+# Run a turn; the lines it printed are in $ASKED (first line), $ROOT, $FETCHED
+# and $WROTE.
+turn() {
+    "$OUT/keep" "$STORE" "$@" > "$OUT/turn.txt"
+    ASKED="$(sed -n 1p "$OUT/turn.txt")"
+    ROOT="$(sed -n 's/^root: //p' "$OUT/turn.txt")"
+    FETCHED="$(sed -n 's/^store: fetched \([0-9]*\), wrote [0-9]*$/\1/p' "$OUT/turn.txt")"
+    WROTE="$(sed -n 's/^store: fetched [0-9]*, wrote \([0-9]*\)$/\1/p' "$OUT/turn.txt")"
+    echo "keep $(echo "$*" | cut -c1-24) => $ASKED (fetched $FETCHED, wrote $WROTE)"
+}
+want() {
+    if [ "$1" != "$2" ]; then
+        echo "keep: expected '$2', got '$1'" >&2
+        exit 1
+    fi
+}
+turn start "$EXAMPLES/keep.hom"
+want "$ASKED" "asked: [1]"
+FIRST="$ROOT"
+PIECES="$WROTE"
+want "$(ls "$STORE" | wc -l | tr -d ' ')" "$PIECES"
+# Every file is named by the Blake3 hash of its bytes; the names are the
+# kernel's. Where b3sum is installed, an outside program agrees.
+if command -v b3sum > /dev/null; then
+    for piece in "$STORE"/*; do
+        want "$(b3sum --no-names "$piece")" "$(basename "$piece")"
+    done
+    echo "keep: b3sum agrees with every piece name"
+fi
+# The second turn does not read the long list and does not write it again.
+turn answer "$FIRST" "$OUT/twenty.hom"
+want "$ASKED" "asked: [2, 20]"
+SECOND="$ROOT"
+if [ "$FETCHED" -ge "$PIECES" ] || [ "$WROTE" -ge "$PIECES" ] || [ "$PIECES" -lt 20 ]; then
+    echo "keep: the second turn fetched $FETCHED and wrote $WROTE of $PIECES pieces" >&2
+    exit 1
+fi
+# The last turn reads the list, and gives what one run against both answers gives.
+turn answer "$SECOND" "$OUT/twenty-two.hom"
+want "$ASKED" "[2000, 42]"
+want "$WROTE" "0"
+printf '[20, 22]\n' > "$OUT/keep.answers"
+want "$ASKED" "$("$OUT/ask" "$EXAMPLES/keep.hom" "$OUT/keep.answers" | tail -1)"
+# A root is kept: the first one can be answered again, differently, and the
+# two runs share the list.
+BEFORE="$(ls "$STORE" | wc -l | tr -d ' ')"
+turn answer "$FIRST" "$OUT/thirty.hom"
+want "$ASKED" "asked: [2, 30]"
+turn answer "$ROOT" "$OUT/twenty-two.hom"
+want "$ASKED" "[2000, 52]"
+AFTER="$(ls "$STORE" | wc -l | tr -d ' ')"
+if [ $((AFTER - BEFORE)) -ge 10 ]; then
+    echo "keep: a second run from the same root added $((AFTER - BEFORE)) pieces" >&2
+    exit 1
+fi
+# A turn run twice gives the same root and the same files: nothing is added.
+turn answer "$FIRST" "$OUT/twenty.hom"
+want "$ROOT" "$SECOND"
+want "$(ls "$STORE" | wc -l | tr -d ' ')" "$AFTER"
+# A missing piece: exit 3, nothing printed, and the turn runs once it is back.
+mv "$STORE/$SECOND" "$OUT/hidden.piece"
+status=0
+"$OUT/keep" "$STORE" answer "$SECOND" "$OUT/twenty-two.hom" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+printf 'keep: the store lacks piece %s\n' "$SECOND" > "$OUT/refuse.expected"
+if [ "$status" != 3 ] || [ -s "$OUT/refuse.out" ]; then
+    echo "keep with a piece missing: expected exit 3 and no output; got exit $status" >&2
+    exit 1
+fi
+cmp "$OUT/refuse.expected" "$OUT/refuse.err"
+mv "$OUT/hidden.piece" "$STORE/$SECOND"
+turn answer "$SECOND" "$OUT/twenty-two.hom"
+want "$ASKED" "[2000, 42]"
+# A piece whose bytes were changed is refused by the kernel.
+cp "$STORE/$SECOND" "$OUT/good.piece"
+printf 'x' >> "$STORE/$SECOND"
+want "$("$OUT/keep" "$STORE" answer "$SECOND" "$OUT/twenty-two.hom")" "store error: piece $SECOND does not match its name"
+cp "$OUT/good.piece" "$STORE/$SECOND"
+# The kernel's text for a bad root, an answer that is not data, and a program
+# that asks nothing.
+want "$("$OUT/keep" "$STORE" answer nothex "$OUT/twenty.hom")" "store error: a root is 64 hex digits"
+want "$("$OUT/keep" "$STORE" answer "$SECOND" "$EXAMPLES/ask.hom")" "answer: not data"
+want "$("$OUT/keep" "$STORE" start "$EXAMPLES/append.hom" | sed -n 1p)" "[1, 2, 3, 4]"
+want "$("$OUT/keep" "$STORE" start "$EXAMPLES/forever.hom" 5000 | sed -n 1p)" "no result within 5000 steps of a turn"
+refuseKeep() {
+    status=0
+    "$OUT/keep" "$@" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+    if [ "$status" != 2 ] || [ -s "$OUT/refuse.out" ] || ! [ -s "$OUT/refuse.err" ]; then
+        echo "keep $*: expected exit 2, no output and a message; got exit $status" >&2
+        exit 1
+    fi
+    echo "keep refused: $(sed -n 1p "$OUT/refuse.err")"
+}
+refuseKeep
+refuseKeep "$STORE" start
+refuseKeep "$STORE" resume "$EXAMPLES/keep.hom"
+refuseKeep "$STORE" start "$EXAMPLES/missing.hom"
+refuseKeep "$OUT/no-such-store" start "$EXAMPLES/keep.hom"
+refuseKeep "$STORE" start "$EXAMPLES/keep.hom" many
+refuseKeep "$STORE" answer "$SECOND" "$OUT/twenty.hom" 1 extra
+echo "keep command checks passed"

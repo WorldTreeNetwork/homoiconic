@@ -1,5 +1,6 @@
 import Surface.Run
 import Surface.Bytes
+import Surface.Keep
 
 namespace Surface.Host
 
@@ -44,5 +45,55 @@ unsafe def reflectRunBytes (program length out capacity : USize) (budget : UInt6
 @[export reflect_source_bytes]
 unsafe def reflectSourceBytes (program length out capacity : USize) : USize :=
   storeBytes out capacity (Surface.sourceBytes (copyBytes program length))
+
+/-! A turn against a store. The session is a Lean value the host holds between
+    calls and cannot look inside. Every call that takes a session uses it up,
+    as Lean's exported functions do; a caller that will use the session again
+    calls `kernel_retain` on it first (`ffi.c`). -/
+
+/-- C ABI: begin a program from its source. -/
+@[export reflect_keep_start]
+unsafe def keepStart (program length : USize) (budget : UInt64) : Keep.Session :=
+  Keep.start (copyBytes program length) budget.toNat
+
+/-- C ABI: answer the waiting program stored under the root named by the text
+    at `root`, with the result of the program at `answer`. -/
+@[export reflect_keep_answer]
+unsafe def keepAnswer (root rootLength answer answerLength : USize) (budget : UInt64) :
+    Keep.Session :=
+  Keep.answer ((String.fromUTF8? (copyBytes root rootLength)).getD "")
+    (copyBytes answer answerLength) budget.toNat
+
+/-- C ABI: the name of the piece the session needs, as 64 hex digits; no bytes
+    when it needs none. Returns the number of bytes. -/
+@[export reflect_keep_need]
+unsafe def keepNeed (s : Keep.Session) (out capacity : USize) : USize :=
+  storeBytes out capacity (match s.need with
+    | some r => (Keep.hex r).toUTF8
+    | none => ByteArray.empty)
+
+/-- C ABI: supply the needed piece. The session passed in is used up. -/
+@[export reflect_keep_give]
+unsafe def keepGive (s : Keep.Session) (piece length : USize) : Keep.Session :=
+  Keep.give s (copyBytes piece length)
+
+/-- C ABI: how many pieces the session has to be stored. -/
+@[export reflect_keep_count]
+def keepCount (s : Keep.Session) : USize := s.written.size.toUSize
+
+/-- C ABI: the name of piece `index` to be stored, as 64 hex digits. -/
+@[export reflect_keep_name]
+unsafe def keepName (s : Keep.Session) (index out capacity : USize) : USize :=
+  storeBytes out capacity (Keep.hex (s.written[index.toNat]!).1).toUTF8
+
+/-- C ABI: the bytes of piece `index` to be stored. -/
+@[export reflect_keep_piece]
+unsafe def keepPiece (s : Keep.Session) (index out capacity : USize) : USize :=
+  storeBytes out capacity (s.written[index.toNat]!).2
+
+/-- C ABI: what the turn says. Empty while a piece is needed. -/
+@[export reflect_keep_text]
+unsafe def keepText (s : Keep.Session) (out capacity : USize) : USize :=
+  storeBytes out capacity s.text.toUTF8
 
 end Surface.Host

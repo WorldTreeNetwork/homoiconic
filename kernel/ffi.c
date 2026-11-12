@@ -24,3 +24,9 @@ size_t reflect_store_bytes(size_t out, size_t capacity, b_lean_obj_arg bytes) {
     }
     return size;
 }
+
+/* Every exported function that takes a Lean value uses it up. A caller that
+   will pass the same value again keeps it with this first. */
+void kernel_retain(lean_object *value) {
+    lean_inc(value);
+}

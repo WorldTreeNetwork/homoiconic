@@ -1,0 +1,18 @@
+; builds a long list, then asks twice. The list is kept between turns and is
+; only read at the end, to answer with its length and the two numbers.
+def fill n =
+  case n
+    0 -> []
+    m + 1 -> [n, ...fill m]
+
+def count xs =
+  case xs
+    [] -> 0
+    [x, ...rest] -> add 1 (count rest)
+
+def main big =
+  ask [1] (fn a ->
+    ask [2, a] (fn b ->
+      [count big, add a b]))
+
+main (fill 2000)

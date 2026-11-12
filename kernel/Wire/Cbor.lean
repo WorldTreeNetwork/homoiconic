@@ -4,7 +4,8 @@ import Reflect.Syntax
 
     A number below 2^64 is a CBOR unsigned integer in its shortest form. A
     larger number is tag 2 (a positive bignum) over its big-endian bytes with
-    no leading zero. An array is a definite-length CBOR array.
+    no leading zero. An array is a definite-length CBOR array. A byte string,
+    which is not data, is a definite-length CBOR byte string.
 
     The reader is strict: it accepts exactly the bytes the writer produces, so
     a value has one byte form. Nothing here is proved. It is tested
@@ -12,6 +13,37 @@ import Reflect.Syntax
 
 namespace Wire
 open Reflect
+
+/-- What the reader and writer handle: data, and byte strings. A byte string
+    is not data. It is how a reference to a stored piece is written
+    (`Wire.Piece`); a program cannot hold one. -/
+inductive Item where
+  | nat : Nat → Item
+  | arr : List Item → Item
+  | bytes : ByteArray → Item
+
+mutual
+  def Item.ofData : Data → Item
+    | .nat n => .nat n
+    | .arr xs => .arr (Item.ofDatas xs)
+  def Item.ofDatas : List Data → List Item
+    | [] => []
+    | x :: xs => Item.ofData x :: Item.ofDatas xs
+end
+
+mutual
+  /-- `none` when there is a byte string anywhere in it. -/
+  def Item.toData : Item → Option Data
+    | .nat n => some (.nat n)
+    | .arr xs => (Item.toDatas xs).map .arr
+    | .bytes _ => none
+  def Item.toDatas : List Item → Option (List Data)
+    | [] => some []
+    | x :: xs =>
+        match Item.toData x, Item.toDatas xs with
+        | some d, some ds => some (d :: ds)
+        | _, _ => none
+end
 
 /-- The low `k` bytes of `n`, most significant first, appended to `out`. -/
 def pushBE : Nat → Nat → ByteArray → ByteArray
@@ -33,23 +65,26 @@ def pushHead (major : UInt8) (n : Nat) (out : ByteArray) : ByteArray :=
 def limit : Nat := 0x10000000000000000
 
 mutual
-  def writeTo : Data → ByteArray → ByteArray
+  def writeTo : Item → ByteArray → ByteArray
     | .nat n, out =>
         if n < limit then pushHead 0 n out
         else
           let k := byteLength n
           pushBE k n (pushHead 2 k (out.push 0xc2))
     | .arr xs, out => writeAll xs (pushHead 4 xs.length out)
-  def writeAll : List Data → ByteArray → ByteArray
+    | .bytes b, out => pushHead 2 b.size out ++ b
+  def writeAll : List Item → ByteArray → ByteArray
     | [], out => out
     | x :: xs, out => writeAll xs (writeTo x out)
 end
+
+def writeItem (i : Item) : ByteArray := writeTo i ByteArray.empty
 
 /-- The byte form of a data value. A CBOR length is below 2^64, so an array of
     2^64 items or more, or a number of 2^64 bytes or more, has no byte form;
     for those the bytes written are not read back. No such value fits in a
     machine. -/
-def write (d : Data) : ByteArray := writeTo d ByteArray.empty
+def write (d : Data) : ByteArray := writeItem (.ofData d)
 
 /-- `k` bytes at `pos` as a number, most significant first. -/
 def takeBE (b : ByteArray) (pos : Nat) : Nat → Nat → Nat
@@ -81,25 +116,27 @@ def readHead (b : ByteArray) (pos : Nat) : Except String (UInt8 × Nat × Nat) :
     far, last first. -/
 structure Frame where
   left : Nat
-  items : List Data
+  items : List Item
 
 /-- Hand a finished value to the array being read, closing every array it
     completes. `some` is the whole value. -/
-def deliver (d : Data) : List Frame → Option Data × List Frame
+def deliver (d : Item) : List Frame → Option Item × List Frame
   | [] => (some d, [])
   | f :: rest =>
       if f.left ≤ 1 then deliver (.arr (d :: f.items).reverse) rest
       else (none, { left := f.left - 1, items := d :: f.items } :: rest)
 
+def notData : String := "a kind of value that is not a number or an array"
+
 /-- One value is read each turn and each turn takes at least one byte, so
     `fuel` above the number of bytes is never used up. Arrays are kept on a
     list, not on the call stack, and nothing is reserved for a length before
     its items arrive. -/
-def readGo (b : ByteArray) : Nat → Nat → List Frame → Except String Data
+def readGo (b : ByteArray) : Nat → Nat → List Frame → Except String Item
   | 0, _, _ => .error "the bytes end inside a value"
   | fuel + 1, pos, stack => do
       let (major, n, pos) ← readHead b pos
-      let next (d : Data) (pos : Nat) : Except String Data :=
+      let next (d : Item) (pos : Nat) : Except String Item :=
         match deliver d stack with
         | (some whole, _) =>
             if pos == b.size then .ok whole else .error "there are bytes after the value"
@@ -108,6 +145,9 @@ def readGo (b : ByteArray) : Nat → Nat → List Frame → Except String Data
       else if major == 4 then
         if n == 0 then next (.arr []) pos
         else readGo b fuel pos ({ left := n, items := [] } :: stack)
+      else if major == 2 then
+        if pos + n > b.size then .error "the bytes end inside a value"
+        else next (.bytes (b.extract pos (pos + n))) (pos + n)
       else if major == 6 then
         if n != 2 then .error "a tag other than a positive bignum"
         else do
@@ -119,10 +159,16 @@ def readGo (b : ByteArray) : Nat → Nat → List Frame → Except String Data
             let v := takeBE b pos k 0
             if v < limit then .error "a bignum that fits an unsigned integer"
             else next (.nat v) (pos + k)
-      else .error "a kind of value that is not a number or an array"
+      else .error notData
 
-/-- Read one data value from exactly these bytes. Bytes the writer would not
-    have produced are refused. -/
-def read (b : ByteArray) : Except String Data := readGo b (b.size + 1) 0 []
+/-- Read one item from exactly these bytes. Bytes the writer would not have
+    produced are refused. -/
+def readItem (b : ByteArray) : Except String Item := readGo b (b.size + 1) 0 []
+
+/-- Read one data value from exactly these bytes. A byte string is refused. -/
+def read (b : ByteArray) : Except String Data := do
+  match (← readItem b).toData with
+  | some d => .ok d
+  | none => .error notData
 
 end Wire
