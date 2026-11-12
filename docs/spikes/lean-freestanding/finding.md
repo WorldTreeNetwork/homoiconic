@@ -5,7 +5,7 @@ source_synthesis: null
 run_at: 2026-11-12T02:20:00-08:00
 time_spent_min: 50
 verdict: go
-version-pinned: lean 4.35.0, zig 0.16.0, cloud-hypervisor 53.0, gcc 16.2.1 with static glibc, linux 7.2.6 (KVM host)
+version-pinned: lean 4.35.0, zig 0.16.0 (musl 1.2.5 bundled), cloud-hypervisor 53.0, gcc 16.2.1 with static glibc, linux 7.2.6 (KVM host)
 ---
 
 # Spike: the Lean runtime in an image with no operating system
@@ -52,6 +52,18 @@ What it took, each found by running:
 - **Cloud Hypervisor's loader keeps the last note segment's answer.** A static link has three note segments and the PVH entry is in the first, so the loader reported no PVH header. With the other two made empty the image boots.
 - **The processor state has to be turned on before the C library starts.** The C library picks AVX routines when the processor reports them usable.
 
+## Second run: musl, and no other compiler
+
+`repro-musl.sh` links the same image against the musl that Zig carries, with Zig as the only compiler and linker. It booted in 43 ms and printed the same value (`evidence-musl.log`). This removes gcc and the system's glibc from the build, and musl's licence is MIT.
+
+What it took:
+
+- **Nine glibc-only names.** The Lean toolchain's libraries were compiled against glibc and use its checked variants (`__fprintf_chk`, `__read_chk` and so on), `backtrace`, and `gnu_get_libc_version`. `src/glibc_names.c` gives them in terms of standard functions.
+- **Lean's own C++ library, not Zig's.** Zig's is older than the one the Lean runtime was compiled with. Lean's archives name `pthread`, `rt` and `dl` as libraries to link, which musl does not have as separate files, so that section is removed from a copy of each archive.
+- **A weak `initialize_libuv`.** Zig's linker has no `--wrap`. The symbol is made weak in a copy of the runtime archive and the program defines the empty one.
+
+Both edits to archives need `objcopy`. One more system call appears on this path, `sched_getaffinity`; it is answered "not provided" and nothing depends on it.
+
 ## Not shown
 
 - Cloud Hypervisor 54.0, the version mjolnir pins. This ran on 53.0.
@@ -59,5 +71,5 @@ What it took, each found by running:
 - More than one thread. Lean tasks and Lean input and output would fail.
 - A real random source and a calibrated clock. Both are stand-ins here.
 - Memory handed back well: freed ranges are reused first-fit and never merged.
-- musl in place of glibc. glibc is LGPL, which matters if the image is distributed as one static file. The Lean toolchain's libraries were built against glibc.
+- Which C library the image should ship with. Both run. glibc is LGPL, which matters if the image is distributed as one static file; musl needs the three archive edits above.
 - That `host/check.sh` passes on Linux. Its last link fails there (`_start` defined twice: Zig's and the C library's). Tracked separately.
