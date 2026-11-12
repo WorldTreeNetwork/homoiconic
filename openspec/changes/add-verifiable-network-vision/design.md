@@ -87,6 +87,8 @@ Constraints this puts on us:
 - **Start with a subset.** The language's data type is unsigned integers, byte strings, and arrays. More is added through P8 when something needs it. The wire format can carry more than the language can inspect.
 - **Biscuit carries Datalog.** Evaluating a token is evaluation. It stays outside the kernel and outside the theorems until someone decides otherwise.
 
+> **2026-11-11, `add-wire-bytes`:** P4 holds, tested, for data, programs and machine values; not yet for outcomes, whole machine states, or a piece that holds references. The language's numbers have no upper limit. A number of 2^64 or more is written as CBOR tag 2 over its bytes with no leading zero, and only such a number. That is this project's rule: dCBOR's numeric rules cover 64-bit numbers and neither define nor forbid tag 2. The statements are in `openspec/specs/wire-bytes/spec.md`.
+
 ### D8. Code is a value of the data type — confirmed by spike 2026-11-09
 
 The spike used flat tags `0`–`5` and a single case form in place of the nested primitive tag sketched below. `add-code-as-data/design.md` has the table that stands.
@@ -226,7 +228,7 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 ## Unverified hypotheses
 
 - primitive-data-restatement: claim: `metacircular` can be restated for a language with one primitive first-order data type by changing the encoding and three dispatch lemmas, without redoing the fixed-point simulation. confidence: medium. verification: empirically-tested. synthesis path: add-code-as-data. spike-artifact: docs/spikes/primitive-data-restatement/finding.md. Validated by spike primitive-data-restatement on 2026-11-09. — go, with a correction: the restatement works and is simpler, but the simulation is redone, not kept.
-- lean-dcbor-subset: claim: a Lean reader and writer for the D7 subset reproduces the identikey-protocol fixtures byte for byte. confidence: high. verification: none. synthesis path: stage 1.
+- lean-dcbor-subset: claim: a Lean reader and writer for the D7 subset reproduces the identikey-protocol fixtures byte for byte. confidence: high. verification: none. synthesis path: stage 1. 2026-11-11, `add-wire-bytes`: still open. The reader and writer landed for numbers and arrays, but the claim could not be checked: the identikey fixtures (`crates/identikey-log/tests/fixtures`) are Gordian envelopes of maps, text and byte strings, which `Data` lacks. RFC 8949 appendix A was used as the test vectors instead. The claim can be checked once `Data` has byte strings and the log op is read (stage 5).
 - parametric-primitives: claim: P8 can be stated so each new primitive adds one local lemma. confidence: medium. verification: none. synthesis path: stage 3.
 - interpreter-overhead: claim: P9's bound is a constant times program size times source steps. Variable lookup walks a Church index, so the factor is not a pure constant. confidence: medium. verification: none. synthesis path: stage 3.
 - order-free-class: claim: there is a useful class for P16 that a proved checker can recognise. confidence: low. verification: none. synthesis path: stage 6.

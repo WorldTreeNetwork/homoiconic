@@ -4,8 +4,8 @@ From the repository root, run `sh host/check.sh` with Zig 0.16.0 and the
 Lean toolchain pinned in `kernel/lean-toolchain` installed. The script builds
 the package, checks `ReflectContract.lean`, `MachineContract.lean`,
 `RequestContract.lean`, `StoreContract.lean` and `Surface/Check.lean`, runs
-`ReflectRun.lean` and `StoreCheck.lean` and fails on a line that starts with
-`FAIL`, writes the
+`ReflectRun.lean`, `WireCheck.lean` and `StoreCheck.lean` and fails on a line
+that starts with `FAIL`, writes the
 programs to run, compiles Lean to C and C to objects, compiles the Zig check to
 an object, and links with `leanc`. Generated C, objects, the generated
 `cases.zig`, the executable and Zig caches stay in ignored `out/`.
@@ -73,6 +73,50 @@ standard error that does not repeat the arguments, for a wrong argument count, a
 number, a file it cannot read, or an answer it cannot write. An answer longer than 65536 bytes is asked
 for a second time with a buffer of the needed size, which runs the program
 twice.
+
+## Programs as bytes
+
+```
+size_t reflect_run_bytes(const uint8_t *program, size_t length,
+                         uint8_t *out, size_t capacity, uint64_t budget);
+size_t reflect_source_bytes(const uint8_t *program, size_t length,
+                            uint8_t *out, size_t capacity);
+```
+
+`reflect_run_bytes` is `reflect_run` for a program given in its byte form
+(`openspec/specs/wire-bytes/spec.md`). It reads the bytes with `Wire`, runs the
+machine, and renders as `reflect_run` does. Bytes that are not the one form of
+a value, or a value that is no program, render as `bytes error: ` and the
+reason. `reflect_source_bytes` evaluates nothing. It reads a program's source
+and answers one status byte, then either the program's byte form (status 0) or
+the syntax error (status 1). Both return the number of bytes needed, as
+`reflect_run` does. The Lean side is `kernel/Surface/Bytes.lean` and
+`kernel/Surface/Host.lean`.
+
+`check.sh` also builds `out/bytes`:
+
+```
+host/out/bytes examples/append.hom > append.bytes
+host/out/run --bytes append.bytes         # prints [1, 2, 3, 4]
+```
+
+`run --bytes <file> [step-budget]` passes the file to `reflect_run_bytes` and
+otherwise behaves as `run`. It exits 0 whenever the kernel answered, bad bytes
+included, as `run` does on a syntax error. `bytes <program-file>` passes the
+source to `reflect_source_bytes` and writes the byte form to standard output
+with nothing added; Zig does not make or inspect the bytes. On a syntax error
+it writes nothing to standard output, writes the kernel's text to standard
+error, and exits 1, because standard output is for the byte form alone. It
+exits 2, with one line on standard error, for a wrong argument count, a file it
+cannot read, a kernel that did not start or answer, or a byte form it cannot
+write. A byte form longer than 65536
+bytes is asked for a second time with a buffer of the needed size.
+
+`check.sh` writes each example as bytes, runs it with `--bytes`, and compares
+the text with the source's; it includes a program whose byte form is longer
+than the first buffer. It checks that `fn x -> x` is the three bytes
+`82 01 00`, that `18 17` and an empty array are refused with the kernel's text,
+and the exit codes of `bytes` on a syntax error and with no file.
 
 ## Running a program against answers
 

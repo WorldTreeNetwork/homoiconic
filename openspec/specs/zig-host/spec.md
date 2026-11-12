@@ -1,6 +1,6 @@
 # zig-host
 
-What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
+What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
 
 ## Purpose
 
@@ -62,7 +62,7 @@ The Zig tree SHALL load the Lean exports and SHALL NOT define an evaluator or a 
 
 - GIVEN the Zig sources
 - WHEN they are reviewed against the partition
-- THEN every outcome comes from the Lean exports `reflect_run` and `reflect_converse`, and no Zig source decides an outcome
+- THEN every outcome comes from the Lean exports `reflect_run`, `reflect_converse` and `reflect_run_bytes`, and no Zig source decides an outcome
 
 ### Requirement: The link is the proved object path
 
@@ -129,3 +129,35 @@ The host SHALL provide a command that takes the path of a program file, the path
 - GIVEN a path to an answers file that does not exist
 - WHEN the command is run
 - THEN it exits 2 with one line on standard error and nothing on standard output
+
+### Requirement: A command runs a program given as bytes
+
+The run command SHALL accept `--bytes` before the file path. With it, the file SHALL be passed to `reflect_run_bytes` as a program in its byte form, and the command SHALL otherwise behave as it does for a source file. Bytes that are not the one form of a value, and a value that is no program, SHALL be the kernel's text and exit 0.
+
+#### Scenario: The same answer from bytes
+
+- GIVEN each example program and its byte form
+- WHEN the command is run on the source, and with `--bytes` on the byte form
+- THEN both print the same text
+
+#### Scenario: Bytes in a longer form
+
+- GIVEN a file holding the bytes `18 17`
+- WHEN the command is run on it with `--bytes`
+- THEN it prints `bytes error: a number or length is not in its shortest form` and exits 0
+
+### Requirement: A command writes a program's byte form
+
+The host SHALL provide a command that takes the path of a program file, passes its bytes to `reflect_source_bytes`, and writes the byte form that comes back to standard output, with nothing added. The host SHALL NOT make or inspect the byte form. On a syntax error it SHALL write nothing to standard output, write the kernel's text to standard error, and exit 1. It SHALL exit 2 with one line on standard error when it is called with the wrong number of arguments or cannot read the file.
+
+#### Scenario: Three bytes
+
+- GIVEN a file holding `fn x -> x`
+- WHEN the command is run on it
+- THEN standard output is the bytes `82 01 00`
+
+#### Scenario: A syntax error
+
+- GIVEN a file holding `fn x ->`
+- WHEN the command is run on it
+- THEN standard output is empty, standard error starts with `syntax error: `, and the exit is 1

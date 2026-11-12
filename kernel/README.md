@@ -1,12 +1,15 @@
 # Kernel
 
-One Lean package with two libraries, and the host that calls it.
+One Lean package with three libraries, and the host that calls it.
 
 - `Reflect` is the language and its proofs. A program is a data value, and
   one closed term of the language interprets programs given as data.
+- `Wire` is the byte form of data, programs and machine values. It is tested,
+  not proved, except `unreify_reify`.
 - `Surface` reads program text into `Reflect` terms and renders outcomes as
   text. It is tested, not proved.
-- The Zig host in `../host` calls the exports `reflect_run` and `reflect_converse`.
+- The Zig host in `../host` calls the exports `reflect_run`, `reflect_converse`,
+  `reflect_run_bytes` and `reflect_source_bytes`.
 
 Use Lean 4.35.0, pinned in `lean-toolchain`, and run from this directory:
 
@@ -19,6 +22,7 @@ lake env lean StoreContract.lean     # the stored-state theorems, exact statemen
 lake env lean ReflectRun.lean        # the scenarios, executed
 lake env lean Surface/Check.lean     # the reader and renderer against examples
 lake env lean StoreCheck.lean        # runs cut into pieces and continued
+lake env lean WireCheck.lean         # the byte form against vectors and programs
 lake exe reflectBench                # steps per second
 ```
 
@@ -101,12 +105,42 @@ every table and every kind of reference. `StoreCheck.lean` stops eight
 programs at four points, cuts each at every value, and continues it with the
 whole store and with one piece withheld; it also keeps a waiting run and
 continues it from its root. A line that starts with `FAIL` fails the check.
-Hashing, bytes, disk, the network and attestation are outside the kernel.
+Hashing, the byte form of a piece, disk, the network and attestation are not
+part of the store; the store is in memory.
+
+## Wire
+
+`Wire` is the byte form. It is its own library: no definition or theorem in
+`Reflect` mentions bytes.
+
+| File | Holds |
+|---|---|
+| `Wire/Cbor.lean` | `write : Data → ByteArray` and `read : ByteArray → Except String Data`, for the part of dCBOR that `Data` has. A number below 2^64 is a CBOR unsigned integer in its shortest form; a larger number is tag 2 over its bytes with no leading zero; an array is a definite-length CBOR array. The reader refuses every other spelling |
+| `Wire/Form.lean` | `unreify`, which reads a program back from its data form, and `unreify_reify`; `blockTerm`; `valueData` and `dataValue`, a machine value as data; `programBytes`, `readProgram`, `valueBytes`, `readValue` |
+
+A program's bytes are the bytes of `reify` of it; the identity function is
+`82 01 00`. A machine value is `[0, d]` for data and `[1, body, captured]` for
+a function, where `body` is the program its code was compiled from. Reading
+compiles `body` again. `decompile` also reads code that no compilation gives,
+so `blockTerm` compiles its result and compares: a function whose code is not
+exactly a compiled program has no byte form. Tag 2 for large numbers is this
+project's rule; dCBOR's numeric rules stop at 64 bits.
+
+Proved: `unreify_reify`, `unreify (reify t) = some t` for every program, with
+Lean's standard axioms. Everything else in `Wire` is tested, not proved
+(decision D7 of the vision). `WireCheck.lean` checks the RFC 8949 appendix A
+examples that are numbers or arrays, each integer width at its edges,
+twenty-six spellings that must be refused, every string of one or two bytes,
+eleven programs written, read back and run from their bytes, a waiting run
+kept as bytes and continued, data that is no program, and a function whose
+code no program compiles to. It prints the axioms of `unreify_reify`. A line
+that starts with `FAIL` fails the check.
 
 ## Surface
 
 `Surface/Read.lean` is the reader, `Render.lean` the renderer, `Run.lean` joins
-them to the machine, and `Host.lean` is the C export. `Expect.lean` is the
+them to the machine, `Bytes.lean` runs a program given as bytes and gives a
+program's byte form from its source, and `Host.lean` holds the C exports. `Expect.lean` is the
 specification by example that `Check.lean` runs.
 
 ## History

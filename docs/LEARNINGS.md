@@ -47,3 +47,9 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - Pieces use one type, `P`, for data, values and environments. Resolution, `Unf`, is then one inductive relation, and the store proofs go by induction on it. Mutual definitions remain only where a piece is built from the machine's own separate types.
 - Progress of the lazy machine is proved by forcing one place at a time (`force`): induction on the resolution of the piece at that place, fetching until it is not a reference. No global measure on the store or the state was needed.
 - The check cuts a state as a tree, with no sharing. The interpreter interpreting itself on `2`, stopped after 300 steps, gave 1,110,817 pieces. Storing by content removes the duplicates, and needs bytes.
+
+## 2026-11-11 — a byte form for code
+
+- `decompile` reads code that no compilation produces: `decomp` drops `checkFun`, `checkData` and `checkNat`. So "decompile, then compile" is not the identity on arbitrary code, and two different function values wrote the same bytes until review caught it. The writer now compiles the decompiled program again and compares (`Wire.blockTerm`). `decompile_compile` holds only in the other direction.
+- Lean 4.35 accepted `Wire.unreify` by structural recursion over the nested type `Data` (`arr : List Data`), with patterns several list items deep, and no termination proof. `unreify_reify` was `induction t <;> simp_all [reify, unreify]`.
+- In Lean 4.35 a doc comment (`/-- … -/`) directly before `#eval` is a parse error: a doc comment must precede a declaration. Use `--` there.

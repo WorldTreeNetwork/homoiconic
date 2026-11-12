@@ -3,9 +3,10 @@
 A record of what the Lean proofs say, how they got there, and what they leave
 out. The exact statements are in `kernel/ReflectContract.lean`,
 `kernel/MachineContract.lean`, `kernel/RequestContract.lean` and
-`kernel/StoreContract.lean`; the requirements are in `openspec/specs/`.
+`kernel/StoreContract.lean`, and for the byte form in `kernel/WireCheck.lean`;
+the requirements are in `openspec/specs/`.
 Written 2026-11-10, after `add-operation-tables`; updated 2026-11-10, after
-`add-requests`, and 2026-11-11, after `add-state-store`.
+`add-requests`, and 2026-11-11, after `add-state-store` and `add-wire-bytes`.
 
 ## In one sentence
 
@@ -51,6 +52,13 @@ a partial state, fetches a piece when a step first looks at it, and pauses
 when the store lacks it. The kind of reference is a parameter, as the
 operation table is. Nothing in the language, evaluation, the interpreter or
 the machine changed, and no earlier theorem statement changed.
+
+**2026-11-11: a byte form.** Data, programs and machine values can be written
+as bytes and read back (`8218a07`, `aafab3c`). The format is the part of dCBOR
+that numbers and arrays need, with CBOR tag 2 for numbers of 2^64 and above.
+By decision D7 the format is tested, not proved. One statement about it is
+proved: reading a program's data form gives the program. Nothing in `Reflect`
+changed.
 
 ## The definitions
 
@@ -133,6 +141,22 @@ hold for every operation table and every kind of reference.
 | `lazy_program` | A program run through any store has exactly the outcome direct evaluation gives it |
 | `lazy_turn_complete`, `lazy_turn_sound` | A turn of the request driver from a stored continuation is a turn of the machine |
 
+### The byte form
+
+One theorem. It does not depend on an operation table.
+
+| Theorem | Says |
+|---|---|
+| `Wire.unreify_reify` | Reading a program back from its data form gives the program: `unreify (reify t) = some t` for every `t` |
+
+It is checked, with its axioms printed, in `kernel/WireCheck.lean`, not in a
+contract file. The reader and writer of bytes are not proved. They are tested
+by `WireCheck.lean` (decision D7): the RFC 8949 appendix A examples that are
+numbers or arrays, each integer width at its edges, twenty-six spellings that
+must be refused, every string of one or two bytes, eleven programs written,
+read back and run from their bytes, and a waiting run kept as bytes and
+continued.
+
 ## Why these proofs can be trusted
 
 - **Both directions.** The main theorems are "if and only if". Errors map
@@ -148,8 +172,9 @@ hold for every operation table and every kind of reference.
 - **Compiled code is still data.** Bytecode decompiles to the term it came
   from.
 - **Read by another model family.** Each change went to an outside reviewer
-  before it was folded. Reviews have sent work back six times before
-  accepting. `add-state-store` was accepted on first reading.
+  before it was folded. Reviews have sent work back seven times.
+  `add-state-store` was accepted on first reading. `add-wire-bytes` was sent
+  back once, with two required fixes; both were made before the fold.
 
 ## What the proofs do not cover
 
@@ -182,8 +207,18 @@ hold for every operation table and every kind of reference.
 - **What a reference means.** That a reference names one piece, for ever, is
   assumed. The theorems state it as a hypothesis on the stores they compare.
   How a reference is made and checked is outside the kernel.
-- **Bytes, hashing and disk.** The store is in memory. A piece has no byte
-  form yet, references are not hashes, and nothing is written to disk.
+- **The byte form.** The reader and writer are tested, not proved, by
+  decision D7. That they round-trip, and that no two values share a byte form,
+  is tested on examples. Tag 2 for numbers of 2^64 and above is this project's
+  rule; dCBOR does not define it. The identikey-protocol fixtures have not
+  been compared: they hold maps, text and byte strings, which `Data` lacks.
+- **A function's code on the wire.** A function's byte form holds the program
+  its code was compiled from. The claims about function values hold for code
+  that is, at every depth, a compilation; a function whose code is not has no
+  byte form.
+- **Hashing and disk.** The store is in memory. A piece that holds references
+  has no byte form yet, references are not hashes, and nothing is written to
+  disk.
 - **Writing back.** The lazy machine does not write fetched pieces back to the
   state or the store. Remembering them is the store's.
 - **Partial arguments.** An operation fetches its whole argument before it
@@ -204,6 +239,6 @@ hold for every operation table and every kind of reference.
 
 ## Next
 
-The store needs bytes and hashing to go on disk: `add-wire-bytes`
-(`homoiconic-q59.12`). The event log and one VM follow (vision stage 5, P13
-and P14).
+Values and programs have bytes. The store needs two more things to go on disk:
+a byte form for a piece that holds references, and a hash to make those
+references. The event log and one VM follow (vision stage 5, P13 and P14).
