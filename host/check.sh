@@ -20,6 +20,12 @@ if grep -q "^FAIL" "$OUT/scenarios.txt"; then
     exit 1
 fi
 
+lake env lean WireCheck.lean > "$OUT/wire.txt"
+if grep -q "^FAIL" "$OUT/wire.txt" || ! grep -q "^ok" "$OUT/wire.txt"; then
+    cat "$OUT/wire.txt" >&2
+    exit 1
+fi
+
 lake env lean StoreCheck.lean > "$OUT/store.txt"
 if grep -q "^FAIL" "$OUT/store.txt" || ! grep -q "^ok" "$OUT/store.txt"; then
     cat "$OUT/store.txt" >&2
@@ -33,7 +39,8 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
 for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request \
-              Surface/Read Surface/Render Surface/Run Surface/Host; do
+              Wire/Cbor Wire/Form \
+              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
         -c "$OUT/$name.c" "$module.lean"
@@ -42,7 +49,7 @@ for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machi
 done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
 lake env leanc -c -o "$OUT/runtime.o" "$HOST/runtime.c"
-for program in check run ask; do
+for program in check run ask bytes; do
     zig build-obj "$HOST/$program.zig" -femit-bin="$OUT/zig-$program.o" \
         --cache-dir "$OUT/zig-cache" --global-cache-dir "$OUT/zig-global-cache"
     # shellcheck disable=SC2086
@@ -76,7 +83,7 @@ cmp "$OUT/long.expected" "$OUT/long.txt"
 
 # A call the command cannot make: exit 2, nothing on standard output, and
 # exactly the one expected line on standard error, byte for byte.
-USAGE="usage: run <program-file> [step-budget]   (default budget: 100000000 machine steps)"
+USAGE="usage: run [--bytes] <program-file> [step-budget]   (default budget: 100000000 machine steps)"
 BUDGET="run: the step budget must be a whole number"
 NEWLINE="x
 y"
@@ -101,6 +108,56 @@ refuse "run: cannot read the program file: IsDir" "$EXAMPLES"
 refuse "$BUDGET" "$EXAMPLES/append.hom" -1
 refuse "$BUDGET" "$EXAMPLES/append.hom" "$NEWLINE"
 echo "run command checks passed"
+
+# The byte form: each example is written as bytes by the kernel and run from
+# them, and prints what its source prints.
+sameFromBytes() {
+    "$OUT/bytes" "$1" > "$OUT/program.bytes"
+    shift_budget="${2:-}"
+    # shellcheck disable=SC2086
+    fromSource="$("$OUT/run" "$1" $shift_budget)"
+    # shellcheck disable=SC2086
+    fromBytes="$("$OUT/run" --bytes "$OUT/program.bytes" $shift_budget)"
+    if [ "$fromSource" != "$fromBytes" ]; then
+        echo "run --bytes $1: expected '$fromSource', got '$fromBytes'" >&2
+        exit 1
+    fi
+    echo "run --bytes $(basename "$1") ($(wc -c < "$OUT/program.bytes" | tr -d ' ') bytes) => $(printf '%s' "$fromBytes" | cut -c1-60)"
+}
+sameFromBytes "$EXAMPLES/append.hom"
+sameFromBytes "$EXAMPLES/code.hom"
+sameFromBytes "$EXAMPLES/factorial.hom"
+sameFromBytes "$EXAMPLES/forever.hom" 5000
+sameFromBytes "$OUT/long.hom"
+# The identity function is three bytes, and the kernel writes those three.
+printf 'fn x -> x\n' > "$OUT/identity.hom"
+"$OUT/bytes" "$OUT/identity.hom" > "$OUT/identity.bytes"
+printf '\202\001\000' > "$OUT/identity.expected"
+cmp "$OUT/identity.expected" "$OUT/identity.bytes"
+# Bytes that are not the one form, and bytes that are no program, are the
+# kernel's text and exit 0, as a syntax error is.
+printf '\030\027' > "$OUT/long-form.bytes"
+expect "bytes error: a number or length is not in its shortest form" --bytes "$OUT/long-form.bytes"
+printf '\200' > "$OUT/empty-array.bytes"
+expect "bytes error: the value is not a program" --bytes "$OUT/empty-array.bytes"
+expect "bytes error: a kind of value that is not a number or an array" --bytes "$EXAMPLES/append.hom"
+refuse "$USAGE" --bytes
+refuse "run: cannot read the program file: FileNotFound" --bytes "$EXAMPLES/missing.hom"
+# A syntax error leaves standard output empty: exit 1 and the kernel's text.
+printf 'fn x ->\n' > "$OUT/broken.hom"
+status=0
+"$OUT/bytes" "$OUT/broken.hom" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+if [ "$status" != 1 ] || [ -s "$OUT/refuse.out" ] || ! grep -q "^syntax error: " "$OUT/refuse.err"; then
+    echo "bytes on a syntax error: expected exit 1, no output and the error; got exit $status" >&2
+    exit 1
+fi
+status=0
+"$OUT/bytes" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+if [ "$status" != 2 ] || [ -s "$OUT/refuse.out" ]; then
+    echo "bytes with no file: expected exit 2 and no output; got exit $status" >&2
+    exit 1
+fi
+echo "byte form checks passed"
 
 # The ask command: a program file and an answers file in, the kernel's text out.
 converse() {

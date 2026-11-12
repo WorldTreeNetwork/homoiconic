@@ -1,4 +1,5 @@
 import Surface.Run
+import Surface.Bytes
 
 namespace Surface.Host
 
@@ -30,5 +31,18 @@ unsafe def reflectConverse (program length answers answersLength out capacity : 
   let text := Surface.converseText (copyBytes program length)
     (copyBytes answers answersLength) budget.toNat
   storeBytes out capacity text.toUTF8
+
+/-- C ABI: as `reflect_run`, for a program given in its byte form. -/
+@[export reflect_run_bytes]
+unsafe def reflectRunBytes (program length out capacity : USize) (budget : UInt64) : USize :=
+  let text := Surface.runBytes (copyBytes program length) budget.toNat
+  storeBytes out capacity text.toUTF8
+
+/-- C ABI: program source pointer and length, output pointer and capacity.
+    Answers one status byte, then the program's byte form (status 0) or the
+    syntax error (status 1). Returns the number of bytes needed. -/
+@[export reflect_source_bytes]
+unsafe def reflectSourceBytes (program length out capacity : USize) : USize :=
+  storeBytes out capacity (Surface.sourceBytes (copyBytes program length))
 
 end Surface.Host
