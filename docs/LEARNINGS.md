@@ -60,3 +60,9 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - A fuel counter spent on a data-dependent loop looked like success when it ran out. `Surface.Keep.advance` spent fuel following references, and at zero returned the session unchanged; with 70 references in a chain the turn ended with no text and exit 0. Review found it. References are now followed by `Keep.chase` with no limit, fuel only bounds phases that come in one order, and running out says `error: the turn did not settle`.
 - Blake3, written in Lean from its specification in about 100 lines (`kernel/Wire/Blake3.lean`), matched all 22 official vectors, and the reviewer's 135 further inputs against Python's `blake3`. The file has not changed since it landed.
 - Writing Lean through an unquoted shell heredoc (`<<EOF`) runs each backticked word in a doc comment as a command. Use a quoted heredoc (`<<'EOF'`) for Lean source.
+
+## 2026-11-12 — channels
+
+- The request driver's cases could not be reused for one turn of a process. `Drive` is indexed by the list of answers and the list of requests asked, so its four cases were restated without those lists as `Settle` (`kernel/Reflect/Channel.lean`). The cases are the same; the restatement is the cost.
+- The simulation from requests, `Sim`, carried over to schedules with one added field: `PSim` is `Sim` plus `start`, which says the two ways of evaluating start a program alike. The machine agreement theorems for schedules then followed from the turn-level ones already proved for requests.
+- Review found no fault in the definitions and two in what the printed text claimed. The last line, then `nothing more can happen`, described the chooser, which never offers an answer from outside and does not run the machine, not what the semantics allows. And a printed schedule replays to the same last line only when the first run was not refused and did not run out of budget.

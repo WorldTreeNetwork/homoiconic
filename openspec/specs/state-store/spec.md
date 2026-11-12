@@ -56,7 +56,7 @@ A turn of the request driver run by the lazy machine from a stored continuation 
 
 ### Requirement: What a reference means is assumed
 
-That a reference names one piece and never another SHALL be a stated hypothesis: a store is a function, a larger store holds the same piece under every reference the smaller one holds, and two stores are compared only when they agree wherever both hold a piece. How references are made and checked SHALL be outside the kernel.
+That a reference names one piece and never another SHALL be a stated hypothesis: a store is a function, a larger store holds the same piece under every reference the smaller one holds, and two stores are compared only when they agree wherever both hold a piece. No theorem of this spec SHALL depend on how references are made or checked. References are made by hashing a piece's bytes and checked by the session that runs a turn (`openspec/specs/wire-bytes/spec.md`); both are Lean definitions, tested and not proved.
 
 #### Scenario: The hypothesis is visible
 

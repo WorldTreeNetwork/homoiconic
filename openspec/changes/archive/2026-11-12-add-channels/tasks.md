@@ -10,4 +10,4 @@
 - [x] MODIFIED deltas for the two requirements `homoiconic-1e7` names.
 - [x] `sh host/check.sh` exits 0.
 - [x] Advise by a reader from another model family. Send-back, 2026-11-12, two required fixes about what the text claims, both made; review in `reviews/`.
-- [ ] Fold.
+- [x] Fold. 2026-11-12: `openspec/specs/channels/spec.md` is new; the ADDED and two MODIFIED deltas are in `openspec/specs/zig-host/spec.md`, the MODIFIED delta in `openspec/specs/state-store/spec.md`.

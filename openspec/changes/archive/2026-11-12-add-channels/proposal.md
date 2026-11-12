@@ -1,6 +1,6 @@
 # add-channels
 
-> **ACTIVE BUILD**
+> **FOLDED 2026-11-12** into `openspec/specs/channels/spec.md`, `openspec/specs/zig-host/spec.md` and `openspec/specs/state-store/spec.md`. Archived.
 
 **Rigor:** instrument
 
@@ -56,4 +56,4 @@ From `host/check.sh`:
 
 ## Disposition
 
-ACTIVE BUILD, 2026-11-12.
+ACTIVE BUILD, 2026-11-12. Folded and archived, 2026-11-12.

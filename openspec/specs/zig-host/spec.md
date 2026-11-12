@@ -1,6 +1,6 @@
 # zig-host
 
-What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The `reflect_keep_*` exports run one turn of a program against a store of pieces (`openspec/specs/state-store/spec.md`), and the command `host/out/keep <store-dir> start <program-file> [step-budget]` or `host/out/keep <store-dir> answer <root> <answer-file> [step-budget]` keeps a waiting program in a directory, one file per piece, named by the kernel. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
+What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The `reflect_keep_*` exports run one turn of a program against a store of pieces (`openspec/specs/state-store/spec.md`), and the command `host/out/keep <store-dir> start <program-file> [step-budget]` or `host/out/keep <store-dir> answer <root> <answer-file> [step-budget]` keeps a waiting program in a directory, one file per piece, named by the kernel. The export `reflect_channels` runs a program as the first of several processes that talk over channels (`openspec/specs/channels/spec.md`), and the command `host/out/chan <program-file> [schedule-file | -] [step-budget] [event-limit]`, also built by `host/check.sh`, prints the schedule it went through, each process, and how the run stopped. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
 
 ## Purpose
 
@@ -10,7 +10,7 @@ Name the host call into the kernel. This spec does not restate the surface synta
 
 ### Requirement: The host returns the kernel's result
 
-The Zig host SHALL pass one program's bytes, an output buffer, and a step budget to the Lean export `reflect_run`. That export SHALL read the surface syntax, compile the term, and run the machine for at most the budget. It SHALL write the plain text rendering of the outcome and SHALL return the number of bytes that rendering needs. The Zig sources SHALL pass and print bytes. They SHALL NOT read the syntax and SHALL NOT case-split on terms to produce an outcome. `reflect_run` SHALL NOT answer with a numeric result code. `reflect_run` and `reflect_converse` SHALL be the only exports that evaluate.
+The Zig host SHALL pass one program's bytes, an output buffer, and a step budget to the Lean export `reflect_run`. That export SHALL read the surface syntax, compile the term, and run the machine for at most the budget. It SHALL write the plain text rendering of the outcome and SHALL return the number of bytes that rendering needs. The Zig sources SHALL pass and print bytes. They SHALL NOT read the syntax and SHALL NOT case-split on terms to produce an outcome. `reflect_run` SHALL NOT answer with a numeric result code. The exports that evaluate SHALL be `reflect_run`, `reflect_converse`, `reflect_run_bytes`, `reflect_keep_start`, `reflect_keep_answer`, `reflect_keep_give` and `reflect_channels`, and each SHALL be a Lean definition.
 
 #### Scenario: Identity
 
@@ -62,7 +62,7 @@ The Zig tree SHALL load the Lean exports and SHALL NOT define an evaluator or a 
 
 - GIVEN the Zig sources
 - WHEN they are reviewed against the partition
-- THEN every outcome comes from the Lean exports `reflect_run`, `reflect_converse` and `reflect_run_bytes`, and no Zig source decides an outcome
+- THEN every outcome comes from a Lean export, and no Zig source decides an outcome
 
 ### Requirement: The link is the proved object path
 
@@ -189,3 +189,25 @@ The host SHALL provide a command that takes a store directory and either `start`
 - GIVEN a root whose file has a byte added
 - WHEN it is answered
 - THEN the command prints `store error: piece <name> does not match its name` and exits 0
+
+### Requirement: A command runs a program as processes
+
+The host SHALL provide a command that takes a program file, an optional schedule file or `-` for none, an optional step budget and an optional event limit. It SHALL pass the program's bytes, the schedule's bytes, the budget and the limit to the Lean export `reflect_channels` and SHALL print the text that comes back and a newline. With no schedule the kernel SHALL choose the events, at most the limit. With a schedule the kernel SHALL run exactly its events and stop at the first that cannot happen. The text SHALL be the schedule that happened, in the form a schedule file is written in, then one line for each process with what it finished with or is waiting on and the names it holds, then how the run stopped. A printed schedule given back SHALL run the same events and print the same schedule and process lines; the last line SHALL be the same when the first run was not refused and did not run out of budget. The host SHALL NOT read the program or the schedule, SHALL NOT choose an event, and SHALL exit 0 whenever the kernel answered. It SHALL exit 2 with a message on standard error for a wrong call, a file it cannot read, or a schedule file that is empty.
+
+#### Scenario: A recorded schedule replays
+
+- GIVEN `examples/ping.hom`
+- WHEN it is run with no schedule, the schedule line of the output is saved to a file, and it is run again with that file
+- THEN the two outputs are the same bytes
+
+#### Scenario: A refused event is the kernel's text
+
+- GIVEN `examples/guess.hom` and `examples/guess.schedule`
+- WHEN the command runs
+- THEN the last line is `refused: [2, 0, 1] cannot happen` and the command exits 0
+
+#### Scenario: Choosing stops at the limit
+
+- GIVEN `examples/spawns.hom`, which starts processes without end, and an event limit of 3
+- WHEN the command runs with no schedule
+- THEN three events happen, four processes are listed, and the last line is `an event is offered`

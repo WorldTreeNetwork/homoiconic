@@ -180,6 +180,8 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 
 > **2026-11-10, `add-requests`:** P10 and P11 are met in a different form from the one below. A request is a value, not a new outcome: `ask payload next` is a function that holds a payload and the rest of the program, and the driver that answers it is outside evaluation. P10 is `interact_deterministic`, and P11 is `interact_reflective` and `interact_coverage` (the interpreter on data), with `interact_machine` for the machine. A request carries no mark, so the driver reads every function a turn ends in as a request. The statements are in `openspec/specs/requests/spec.md`. P12 is still open: a payload is data, and nothing yet stops a program from naming what it was not handed.
 
+> **2026-11-12, `add-channels`:** P12 is met for channel names inside one machine. Four payload shapes are channel requests (new, send, receive, start), and a process can send or receive only on a name it holds: `Step.comm_held`, `Step.held_from` and `Network.held_issued`, for every table. Holding is kept by the scheduler. A name is a number, not yet an identikey key, so a process can write any name; it cannot use one it does not hold. A fresh name is an event of the schedule, as D10 says. P12 for every requested operation, including requests to the outside, is still open. The statements are in `openspec/specs/channels/spec.md`.
+
 | | Statement | Why | Needs |
 |---|---|---|---|
 | **P10** | With a `request op payload k` outcome: the final outcome and the request trace are a function of the code and the list of answers | Replay. This is `direct_deterministic` lifted to interactive programs. | P1, P2 |
@@ -198,6 +200,8 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 | **P14** | Handling an event whose identifier is already in the log leaves the state unchanged | At-least-once delivery behaves as exactly-once. | P13, P5 |
 
 ### Network
+
+> **2026-11-12, `add-channels`:** P17 is met for one machine as `network_deterministic`: a program and a schedule lead to at most one configuration, for every table. The schedule holds the new names and the answers from outside, so it is the whole record. This is uniqueness only: it does not say a schedule can happen or that a run makes progress. The machine runs a schedule as direct evaluation does (`network_machine`, `network_machine_exact`). The interpreter on data is not covered for schedules, P13 and P16 are not touched, and nothing here is about more than one machine. The statements are in `openspec/specs/channels/spec.md`.
 
 | | Statement | Why | Needs |
 |---|---|---|---|
