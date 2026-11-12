@@ -1,10 +1,10 @@
 # wire-bytes
 
-What is built: one byte form for data, for the part of dCBOR that `Data` has, numbers and arrays. A program's bytes are the bytes of its quoted form, and a machine value, a waiting program among them, has a byte form too. The reader and writer are in `kernel/Wire/Cbor.lean`, the forms of a program and a machine value in `kernel/Wire/Form.lean`, and the tests in `kernel/WireCheck.lean`, which `host/check.sh` runs. `Wire` is its own library; no definition or theorem in `Reflect` mentions bytes. The reader and writer are tested, not proved, by decision D7 of `add-verifiable-network-vision`. One statement is proved: `Wire.unreify_reify`. Numbers of 2^64 and above are written with CBOR tag 2; that is this project's rule, not dCBOR's.
+What is built: one byte form for data, for the part of dCBOR that `Data` has, numbers and arrays. A program's bytes are the bytes of its quoted form, and a machine value, a waiting program among them, has a byte form too. The reader and writer are in `kernel/Wire/Cbor.lean`, the forms of a program and a machine value in `kernel/Wire/Form.lean`, and the tests in `kernel/WireCheck.lean`, which `host/check.sh` runs. `Wire` is its own library; no definition or theorem in `Reflect` mentions bytes. The reader and writer are tested, not proved, by decision D7 of `add-verifiable-network-vision`. One statement is proved: `Wire.unreify_reify`. Numbers of 2^64 and above are written with CBOR tag 2; that is this project's rule, not dCBOR's. A piece of stored state (`openspec/specs/state-store/spec.md`) has a byte form too, and a reference to it is the 32-byte Blake3 hash of those bytes. Blake3 is written in Lean in `kernel/Wire/Blake3.lean`; the byte form of a piece and saving by cutting are in `kernel/Wire/Piece.lean`. The reader and writer also handle byte strings, for references; reading data refuses one. `kernel/KeepCheck.lean`, which `host/check.sh` runs, tests the hash against the official vectors and saves real runs. The hash, the byte form of a piece and saving are tested, not proved. That two different pieces do not share a hash is assumed (D5).
 
 ## Purpose
 
-State the byte form of a data value, of a program and of a machine value, what the reader refuses, and what is proved and what is tested about them. This spec does not cover the byte form of a piece that holds references, hashing, the event log or the network. The host commands that use the byte form are in `openspec/specs/zig-host/spec.md`.
+State the byte form of a data value, of a program, of a machine value and of a piece of stored state, how a reference is made, how a value is cut for saving, what the reader refuses, and what is proved and what is tested about them. This spec does not cover the event log, signatures or the network. The host commands that use the byte form are in `openspec/specs/zig-host/spec.md`.
 
 ## Requirements
 
@@ -67,3 +67,33 @@ A machine value that is data `d` SHALL have the data form `[0, d]`. A function v
 - GIVEN a function value whose code is a literal followed by a check that no compilation puts there
 - WHEN its byte form is asked for
 - THEN there is none
+
+### Requirement: A reference is the Blake3 hash of a piece's bytes
+
+The kernel SHALL define the 32-byte Blake3 hash in Lean. A reference to a stored piece SHALL be the hash of that piece's byte form. The definition is tested against the official test vectors and is not proved. That two different pieces do not share a hash is assumed.
+
+#### Scenario: The official vectors
+
+- GIVEN each official Blake3 test input, from 0 to 102,400 bytes
+- WHEN it is hashed
+- THEN the result is the first 32 bytes of the published output
+
+### Requirement: A piece has a byte form
+
+The reader and writer SHALL handle a definite-length CBOR byte string, with its length in the shortest form. Reading data SHALL refuse a byte string anywhere in it. A piece SHALL be written as follows: a number as itself; an empty list as an empty array; a pair as `[0, head, tail]`; a function as `[1, body, captured]`, where `body` is the quoted form of the program its code was compiled from; a reference as a byte string of 32 bytes. A function whose code is not exactly the compilation of a program SHALL have no byte form. A byte string of another length SHALL NOT be read as a piece.
+
+#### Scenario: A stored piece reads back
+
+- GIVEN a machine state saved into pieces
+- WHEN each piece's bytes are read and written again
+- THEN the bytes are the same, and the piece's name is the hash of them
+
+### Requirement: Saving cuts a value by size
+
+Saving SHALL cut a value from the leaves up, store each part whose byte form is larger than a given size under its hash, and replace it by its reference. It SHALL leave a part that is already a reference as it is. It SHALL store the top of the value whatever its size, and give its reference as the root.
+
+#### Scenario: A run continues from saved pieces
+
+- GIVEN a program stopped after some steps and saved, cut at 256 bytes or at every value
+- WHEN the lazy machine continues from the stored pieces
+- THEN it halts with what the plain machine halts with

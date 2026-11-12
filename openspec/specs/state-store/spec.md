@@ -1,10 +1,10 @@
 # state-store
 
-What is built: a running program's state can be held in pieces, in a store that may lack any of them. A lazy machine runs a partial state, fetches a piece when a step first looks at it, and pauses when the store lacks it. The kind of reference is a parameter. The definitions are in `kernel/Reflect/Store.lean`, the proofs in `kernel/Reflect/StoreProof.lean`, and the exact statements in `kernel/StoreContract.lean`.
+What is built: a running program's state can be held in pieces, in a store that may lack any of them. A lazy machine runs a partial state, fetches a piece when a step first looks at it, and pauses when the store lacks it. The kind of reference is a parameter. The definitions are in `kernel/Reflect/Store.lean`, the proofs in `kernel/Reflect/StoreProof.lean`, and the exact statements in `kernel/StoreContract.lean`. A session runs one turn of a program against a store it is handed piece by piece, and saves the waiting program when the turn ends in a request (`kernel/Surface/Keep.lean`). There a reference is the Blake3 hash of a piece's bytes, and the session checks each piece it is given against the name it asked for. The command `host/out/keep` keeps the pieces as files in a directory (`openspec/specs/zig-host/spec.md`). The theorems still hold for every kind of reference, hashes among them. The session is tested by `kernel/KeepCheck.lean` and `host/check.sh`, not proved.
 
 ## Purpose
 
-State what a piece, a store and a partial state are, what the lazy machine does with them, and what is proved about it. This spec does not say how a reference is made or checked, nor how a piece is written as bytes.
+State what a piece, a store and a partial state are, what the lazy machine does with them, what is proved about it, and what a session does to run one turn against a store. How a reference is made and how a piece is written as bytes are in `openspec/specs/wire-bytes/spec.md`.
 
 ## Requirements
 
@@ -63,3 +63,19 @@ That a reference names one piece and never another SHALL be a stated hypothesis:
 - GIVEN `kernel/StoreContract.lean`
 - WHEN a theorem relates two stores
 - THEN it states `σ.le τ` or `σ.Compatible τ`
+
+### Requirement: A turn runs against a store it is handed piece by piece
+
+The kernel SHALL provide a session that runs one turn of a program on the lazy machine: the first turn from a program's source, or a later turn from the root of a waiting program and an answer. When the turn needs a piece the session does not hold, the session SHALL stop and name that piece, and SHALL continue from where it stopped when the piece is supplied. It SHALL refuse a supplied piece whose hash is not the name it asked for. When the turn ends in a request it SHALL save the waiting program and report the request's payload, the root, and the pieces to be stored, leaving out any piece it was supplied. When the turn ends in a result it SHALL report the result. The session is tested, not proved.
+
+#### Scenario: Three turns are one run
+
+- GIVEN a program that asks twice
+- WHEN it is started, then answered from its root in a new session, then answered again from the new root in a third
+- THEN the requests and the result are those of one run against both answers
+
+#### Scenario: A turn reads only what it looks at
+
+- GIVEN a waiting program that holds a long list its next turn does not use
+- WHEN that turn runs
+- THEN it is supplied fewer pieces than the list has, and hands back none of the list's pieces

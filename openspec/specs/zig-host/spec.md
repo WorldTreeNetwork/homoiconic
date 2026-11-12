@@ -1,6 +1,6 @@
 # zig-host
 
-What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
+What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The `reflect_keep_*` exports run one turn of a program against a store of pieces (`openspec/specs/state-store/spec.md`), and the command `host/out/keep <store-dir> start <program-file> [step-budget]` or `host/out/keep <store-dir> answer <root> <answer-file> [step-budget]` keeps a waiting program in a directory, one file per piece, named by the kernel. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
 
 ## Purpose
 
@@ -161,3 +161,31 @@ The host SHALL provide a command that takes the path of a program file, passes i
 - GIVEN a file holding `fn x ->`
 - WHEN the command is run on it
 - THEN standard output is empty, standard error starts with `syntax error: `, and the exit is 1
+
+### Requirement: A command runs one turn with the program's state in a directory
+
+The host SHALL provide a command that takes a store directory and either `start` with a program file, or `answer` with a root and an answer file, and an optional step budget. It SHALL read from the directory the file named by each piece the kernel asks for and pass its bytes to the kernel. It SHALL write each piece the kernel hands back to a file with the name the kernel gives, before printing. It SHALL print the kernel's text and a newline. The host SHALL NOT read, hash or name a piece. It SHALL exit 0 whenever the kernel answered. It SHALL exit 3, print one line on standard error and write nothing when the directory lacks a piece the turn needs. It SHALL exit 2 with a message on standard error for a wrong call, a file or directory it cannot read, or a file it cannot write.
+
+#### Scenario: A program is kept between calls
+
+- GIVEN `examples/keep.hom` and an empty directory
+- WHEN it is started, answered with 20 from the root printed, and answered with 22 from the next root, each in its own call
+- THEN the calls print `asked: [1]`, `asked: [2, 20]` and `[2000, 42]`
+
+#### Scenario: A root can be answered again
+
+- GIVEN the first root of that run
+- WHEN it is answered with 30 and the next root with 22
+- THEN the last call prints `[2000, 52]`, and fewer than ten files were added
+
+#### Scenario: A piece is missing
+
+- GIVEN a root whose file has been moved out of the directory
+- WHEN it is answered
+- THEN the command prints nothing on standard output, names the piece on standard error, and exits 3
+
+#### Scenario: A piece was changed
+
+- GIVEN a root whose file has a byte added
+- WHEN it is answered
+- THEN the command prints `store error: piece <name> does not match its name` and exits 0

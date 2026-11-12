@@ -53,3 +53,10 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - `decompile` reads code that no compilation produces: `decomp` drops `checkFun`, `checkData` and `checkNat`. So "decompile, then compile" is not the identity on arbitrary code, and two different function values wrote the same bytes until review caught it. The writer now compiles the decompiled program again and compares (`Wire.blockTerm`). `decompile_compile` holds only in the other direction.
 - Lean 4.35 accepted `Wire.unreify` by structural recursion over the nested type `Data` (`arr : List Data`), with patterns several list items deep, and no termination proof. `unreify_reify` was `induction t <;> simp_all [reify, unreify]`.
 - In Lean 4.35 a doc comment (`/-- … -/`) directly before `#eval` is a parse error: a doc comment must precede a declaration. Use `--` there.
+
+## 2026-11-12 — kept state
+
+- Lean 4.35 refuses borrow annotations (`@&`) on an `@[export]` declaration ("marked as `export` but some of its parameters have borrow annotations"). An exported function therefore always uses up each Lean-object argument, and a C caller that will pass the same object again must `lean_inc` it first. The host does this through `kernel_retain` in `kernel/ffi.c` before every call that takes the session.
+- A fuel counter spent on a data-dependent loop looked like success when it ran out. `Surface.Keep.advance` spent fuel following references, and at zero returned the session unchanged; with 70 references in a chain the turn ended with no text and exit 0. Review found it. References are now followed by `Keep.chase` with no limit, fuel only bounds phases that come in one order, and running out says `error: the turn did not settle`.
+- Blake3, written in Lean from its specification in about 100 lines (`kernel/Wire/Blake3.lean`), matched all 22 official vectors, and the reviewer's 135 further inputs against Python's `blake3`. The file has not changed since it landed.
+- Writing Lean through an unquoted shell heredoc (`<<EOF`) runs each backticked word in a doc comment as a command. Use a quoted heredoc (`<<'EOF'`) for Lean source.

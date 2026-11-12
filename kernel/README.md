@@ -4,12 +4,14 @@ One Lean package with three libraries, and the host that calls it.
 
 - `Reflect` is the language and its proofs. A program is a data value, and
   one closed term of the language interprets programs given as data.
-- `Wire` is the byte form of data, programs and machine values. It is tested,
-  not proved, except `unreify_reify`.
+- `Wire` is the byte form of data, programs, machine values and pieces of
+  stored state, and Blake3, which names a stored piece. It is tested, not
+  proved, except `unreify_reify`.
 - `Surface` reads program text into `Reflect` terms and renders outcomes as
   text. It is tested, not proved.
 - The Zig host in `../host` calls the exports `reflect_run`, `reflect_converse`,
-  `reflect_run_bytes` and `reflect_source_bytes`.
+  `reflect_run_bytes`, `reflect_source_bytes` and the `reflect_keep_*`
+  exports.
 
 Use Lean 4.35.0, pinned in `lean-toolchain`, and run from this directory:
 
@@ -23,6 +25,7 @@ lake env lean ReflectRun.lean        # the scenarios, executed
 lake env lean Surface/Check.lean     # the reader and renderer against examples
 lake env lean StoreCheck.lean        # runs cut into pieces and continued
 lake env lean WireCheck.lean         # the byte form against vectors and programs
+lake env lean KeepCheck.lean         # Blake3, pieces as bytes, saving, turns from a store
 lake exe reflectBench                # steps per second
 ```
 
@@ -105,8 +108,10 @@ every table and every kind of reference. `StoreCheck.lean` stops eight
 programs at four points, cuts each at every value, and continues it with the
 whole store and with one piece withheld; it also keeps a waiting run and
 continues it from its root. A line that starts with `FAIL` fails the check.
-Hashing, the byte form of a piece, disk, the network and attestation are not
-part of the store; the store is in memory.
+The theorems do not say how a reference is made. `Wire` makes one: a
+reference is the Blake3 hash of a piece's bytes (see Wire), and
+`Surface/Keep.lean` runs a turn against a store of such pieces (see Keep). The
+network and attestation are not part of the store.
 
 ## Wire
 
@@ -117,6 +122,8 @@ part of the store; the store is in memory.
 |---|---|
 | `Wire/Cbor.lean` | `write : Data → ByteArray` and `read : ByteArray → Except String Data`, for the part of dCBOR that `Data` has. A number below 2^64 is a CBOR unsigned integer in its shortest form; a larger number is tag 2 over its bytes with no leading zero; an array is a definite-length CBOR array. The reader refuses every other spelling |
 | `Wire/Form.lean` | `unreify`, which reads a program back from its data form, and `unreify_reify`; `blockTerm`; `valueData` and `dataValue`, a machine value as data; `programBytes`, `readProgram`, `valueBytes`, `readValue` |
+| `Wire/Blake3.lean` | `hash : ByteArray → ByteArray`, the 32-byte Blake3 hash, written from the specification in about 100 lines. No keyed mode, no key derivation, no longer output |
+| `Wire/Piece.lean` | `pieceItem` and `itemPiece`, a piece of stored state as an item; `pieceBytes`, `readPiece`; `cut` and `save`, which cut a value from the leaves up and store each part whose bytes pass a size under its hash |
 
 A program's bytes are the bytes of `reify` of it; the identity function is
 `82 01 00`. A machine value is `[0, d]` for data and `[1, body, captured]` for
@@ -136,11 +143,49 @@ kept as bytes and continued, data that is no program, and a function whose
 code no program compiles to. It prints the axioms of `unreify_reify`. A line
 that starts with `FAIL` fails the check.
 
+`Wire/Cbor.lean` also reads and writes a definite-length CBOR byte string, for
+references. Reading data refuses one anywhere in it. A piece is written as: a
+number as itself, an empty list as `[]`, a pair as `[0, head, tail]`, a
+function as `[1, body, captured]`, and a reference as a byte string of 32
+bytes. A reference is the Blake3 hash of the bytes of the piece it names.
+Nothing about the hash, the byte form of a piece or saving is proved; that two
+different pieces do not share a hash is assumed (D5). `KeepCheck.lean` checks
+the 22 official Blake3 vectors from Zig's standard library, from 0 to 102,400
+bytes; eight programs stopped at three points, saved at 256 bytes and at every
+value, each piece named by its hash and read back to the same bytes, and the
+lazy machine continued from the pieces to the plain machine's result; a
+number larger than the size stored on its own; a result behind 70
+references; and three turns, each a new session, giving what one run against
+both answers gives.
+
+## Keep
+
+`Surface/Keep.lean` runs one turn of a program whose state is kept in a store
+between turns. `start` begins from source; `answer` begins from the root of a
+waiting program and an answer. A turn runs on the lazy machine. When it needs
+a piece the session does not hold, the session stops and names it; `give`
+supplies the bytes, checks that they hash to that name, and carries on. When
+the turn ends in a request the waiting program is saved, cut at 256 bytes, and
+the root and the new pieces are reported; a piece the session was given is not
+handed back. `advance`, which joins the machine runs, repeats the logic of
+`Reflect.driveRun` for one turn. Each machine run in it is covered by
+`lazy_turn_complete` and `lazy_turn_sound`; `advance` itself is tested, not
+proved.
+
+The C exports are `reflect_keep_start`, `reflect_keep_answer`,
+`reflect_keep_need`, `reflect_keep_give`, `reflect_keep_count`,
+`reflect_keep_name`, `reflect_keep_piece` and `reflect_keep_text`, in
+`Surface/Host.lean`. The session is a Lean value the host holds and cannot
+look inside. Each export that takes a session uses it up: Lean refuses borrow
+annotations on an exported function. A caller that will use the session again
+calls `kernel_retain` (`ffi.c`, which is `lean_inc`) on it first.
+
 ## Surface
 
 `Surface/Read.lean` is the reader, `Render.lean` the renderer, `Run.lean` joins
 them to the machine, `Bytes.lean` runs a program given as bytes and gives a
-program's byte form from its source, and `Host.lean` holds the C exports. `Expect.lean` is the
+program's byte form from its source, `Keep.lean` runs a turn against a store,
+and `Host.lean` holds the C exports. `Expect.lean` is the
 specification by example that `Check.lean` runs.
 
 ## History

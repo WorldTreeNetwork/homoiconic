@@ -6,7 +6,8 @@ out. The exact statements are in `kernel/ReflectContract.lean`,
 `kernel/StoreContract.lean`, and for the byte form in `kernel/WireCheck.lean`;
 the requirements are in `openspec/specs/`.
 Written 2026-11-10, after `add-operation-tables`; updated 2026-11-10, after
-`add-requests`, and 2026-11-11, after `add-state-store` and `add-wire-bytes`.
+`add-requests`, 2026-11-11, after `add-state-store` and `add-wire-bytes`, and
+2026-11-12, after `add-kept-state`.
 
 ## In one sentence
 
@@ -59,6 +60,14 @@ that numbers and arrays need, with CBOR tag 2 for numbers of 2^64 and above.
 By decision D7 the format is tested, not proved. One statement about it is
 proved: reading a program's data form gives the program. Nothing in `Reflect`
 changed.
+
+**2026-11-12: kept state.** A waiting program can be kept on disk and answered
+in a later process (`9d83f8a`, `edaee36`). A reference is the Blake3 hash of a
+piece's bytes, and Blake3 is a Lean definition. A piece has a byte form, and
+saving cuts a value by size. A session runs one turn against a store it is
+handed piece by piece, and the command `host/out/keep` keeps the pieces as
+files. Nothing new is proved. The hash, the byte form of a piece, saving and
+the session are tested.
 
 ## The definitions
 
@@ -157,6 +166,41 @@ must be refused, every string of one or two bytes, eleven programs written,
 read back and run from their bytes, and a waiting run kept as bytes and
 continued.
 
+### Kept state
+
+Nothing new is proved. What a kept program rests on is already in
+`kernel/StoreContract.lean`: where the cuts go cannot change what a program
+computes (`saved_resolves`, `cut_resolves`, `lazy_complete`, `lazy_sound`), a
+missing piece is a pause (`lazy_pause`), and a turn from a stored continuation
+is a turn of the machine (`lazy_turn_complete`, `lazy_turn_sound`). Those hold
+for every kind of reference, so they hold for hashes.
+
+Assumed: two different pieces do not share a hash (decision D5 of the vision).
+Given that, a reference names one piece for ever, which is the hypothesis the
+store theorems already state on the stores they compare. No theorem states
+collision resistance, and no axiom is added.
+
+Tested, not proved (`kernel/KeepCheck.lean`, `host/check.sh`):
+
+- Blake3 gives the hash of each of the 22 official test vectors that ship in
+  Zig's standard library, from 0 to 102,400 bytes. Where `b3sum` is
+  installed, `check.sh` also compares every stored file's name with it.
+- Eight programs are stopped at three points and saved, cut at 256 bytes and
+  at every value. Every stored piece is named by its hash and reads back to
+  the same bytes, and the lazy machine continues from the stored pieces to
+  the plain machine's result.
+- A number larger than the size is stored on its own, and cutting at 0 stores
+  every part.
+- A result that sits behind 70 references is found.
+- Three turns, each a new session over the pieces the last one left, give what
+  one run against both answers gives.
+- The command keeps `examples/keep.hom` across three processes, answers a root
+  twice, exits 3 with a piece missing, and refuses a piece with a byte added.
+
+The session that joins the machine runs, `Surface.Keep.advance`, repeats the
+logic of `Reflect.driveRun` for one turn, on the lazy machine. `driveRun` has
+theorems; `advance` is tested against it.
+
 ## Why these proofs can be trusted
 
 - **Both directions.** The main theorems are "if and only if". Errors map
@@ -172,9 +216,10 @@ continued.
 - **Compiled code is still data.** Bytecode decompiles to the term it came
   from.
 - **Read by another model family.** Each change went to an outside reviewer
-  before it was folded. Reviews have sent work back seven times.
-  `add-state-store` was accepted on first reading. `add-wire-bytes` was sent
-  back once, with two required fixes; both were made before the fold.
+  before it was folded. Reviews have sent work back eight times.
+  `add-state-store` was accepted on first reading. `add-wire-bytes` and
+  `add-kept-state` were each sent back once, with two required fixes; all
+  were made before the fold.
 
 ## What the proofs do not cover
 
@@ -212,13 +257,24 @@ continued.
   is tested on examples. Tag 2 for numbers of 2^64 and above is this project's
   rule; dCBOR does not define it. The identikey-protocol fixtures have not
   been compared: they hold maps, text and byte strings, which `Data` lacks.
+- **The hash and the byte form of a piece.** Blake3 is checked against the
+  official vectors, not proved to be Blake3. That no two pieces share a hash
+  is assumed (D5). The byte form of a piece and saving are tested.
+- **The session.** `Surface.Keep.advance` is tested against `driveRun`, not
+  proved equal to it. Each machine run inside it is a turn the store theorems
+  cover.
 - **A function's code on the wire.** A function's byte form holds the program
   its code was compiled from. The claims about function values hold for code
   that is, at every depth, a compilation; a function whose code is not has no
   byte form.
-- **Hashing and disk.** The store is in memory. A piece that holds references
-  has no byte form yet, references are not hashes, and nothing is written to
-  disk.
+- **Kept state on disk.** Only a waiting program is saved; a turn that runs
+  out of steps is not kept, and a whole machine state has no byte form. A
+  function's code is stored inside its piece, so two functions with the same
+  code store it twice. Saving walks a value as a tree, so a value held in two
+  places is encoded twice before the store holds it once. Fetching a whole
+  value re-walks it after each piece arrives. Files are not written
+  atomically. The hash, written in Lean, is slow next to a native one and has
+  not been measured (`homoiconic-q59.20`).
 - **Writing back.** The lazy machine does not write fetched pieces back to the
   state or the store. Remembering them is the store's.
 - **Partial arguments.** An operation fetches its whole argument before it
@@ -230,15 +286,18 @@ continued.
 - **Fetch steps.** There is no bound on the number of steps the lazy machine
   takes to fetch.
 - **An executable driver over stored state.** The theorems cover each turn.
-  `converse` and the `ask` command still run in memory and replay from the
-  start.
+  The session that runs a turn is tested, not proved. `converse` and the `ask`
+  command still run in memory and replay from the start.
 - **Sharing in the check.** `StoreCheck.lean` cuts a state as a tree, so a
-  value held in two places is stored twice.
+  value held in two places is stored twice. Storing by hash removes the
+  duplicates: the interpreter-twice state after 40 steps, cut at every value,
+  is 168,796 saves and 774 distinct pieces.
 - **The network.** What a payload means, logs, several VMs and model calls
   are the roadmap in `openspec/changes/add-verifiable-network-vision/`.
 
 ## Next
 
-Values and programs have bytes. The store needs two more things to go on disk:
-a byte form for a piece that holds references, and a hash to make those
-references. The event log and one VM follow (vision stage 5, P13 and P14).
+A waiting program can be kept on disk, under references made by Blake3. The
+event log and one VM follow (vision stage 5: P13 as a fold over the log, and
+P14). Signatures, garbage collection and a store shared between machines are
+not started.

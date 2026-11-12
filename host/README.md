@@ -4,8 +4,8 @@ From the repository root, run `sh host/check.sh` with Zig 0.16.0 and the
 Lean toolchain pinned in `kernel/lean-toolchain` installed. The script builds
 the package, checks `ReflectContract.lean`, `MachineContract.lean`,
 `RequestContract.lean`, `StoreContract.lean` and `Surface/Check.lean`, runs
-`ReflectRun.lean`, `WireCheck.lean` and `StoreCheck.lean` and fails on a line
-that starts with `FAIL`, writes the
+`ReflectRun.lean`, `WireCheck.lean`, `KeepCheck.lean` and `StoreCheck.lean`
+and fails on a line that starts with `FAIL`, writes the
 programs to run, compiles Lean to C and C to objects, compiles the Zig check to
 an object, and links with `leanc`. Generated C, objects, the generated
 `cases.zig`, the executable and Zig caches stay in ignored `out/`.
@@ -118,6 +118,75 @@ than the first buffer. It checks that `fn x -> x` is the three bytes
 `82 01 00`, that `18 17` and an empty array are refused with the kernel's text,
 and the exit codes of `bytes` on a syntax error and with no file.
 
+## Keeping a program's state in a directory
+
+```
+lean_object *reflect_keep_start(const uint8_t *program, size_t length, uint64_t budget);
+lean_object *reflect_keep_answer(const uint8_t *root, size_t root_length,
+                                 const uint8_t *answer, size_t answer_length,
+                                 uint64_t budget);
+size_t reflect_keep_need(lean_object *session, uint8_t *out, size_t capacity);
+lean_object *reflect_keep_give(lean_object *session, const uint8_t *piece, size_t length);
+size_t reflect_keep_count(lean_object *session);
+size_t reflect_keep_name(lean_object *session, size_t index, uint8_t *out, size_t capacity);
+size_t reflect_keep_piece(lean_object *session, size_t index, uint8_t *out, size_t capacity);
+size_t reflect_keep_text(lean_object *session, uint8_t *out, size_t capacity);
+void kernel_retain(lean_object *value);
+```
+
+A session is one turn of a program whose state is kept in a store between
+turns (`kernel/Surface/Keep.lean`). It is a Lean value the host holds and
+cannot look inside. Every exported function that takes a session uses it up,
+as Lean's exported functions do with every Lean value. Before each call that
+must leave the session usable, the host calls `kernel_retain` on it
+(`kernel/ffi.c`). `reflect_keep_give` takes the old session and returns the
+next one. `reflect_keep_need`, `reflect_keep_name`, `reflect_keep_piece` and
+`reflect_keep_text` return the number of bytes needed, as `reflect_run` does;
+`reflect_keep_need` gives no bytes when no piece is needed.
+
+`check.sh` also builds `out/keep`:
+
+```
+mkdir store
+host/out/keep store start examples/keep.hom          # asked: [1], root: a399…
+echo 20 > a.hom
+host/out/keep store answer a399… a.hom               # asked: [2, 20], root: 5664…
+echo 22 > b.hom
+host/out/keep store answer 5664… b.hom               # [2000, 42]
+```
+
+`keep <store-dir> start <program-file> [step-budget]` runs the first turn of a
+program. `keep <store-dir> answer <root> <answer-file> [step-budget]` runs the
+next turn of the waiting program stored under `root`; the answer file is a
+program whose result is the data to give. The default budget is 100000000
+steps for each machine run in the turn. While the kernel names a piece it
+needs, `keep.zig` reads the file of that name from the directory and passes
+its bytes in. When the turn is over it writes each piece the kernel hands
+back to a file with the name the kernel gives, then prints the kernel's text
+and a newline. That text is `asked: <payload>`, `root: <64 hex digits>` and
+`store: fetched N, wrote M` for a request, or the result and the `store:`
+line. `wrote` counts pieces handed back, not new files. Zig does not read,
+hash or name a piece: every name is the kernel's, and the kernel checks each
+piece against the name it asked for. Files are not written atomically, and
+nothing is deleted.
+
+Exit codes: 0 whenever the kernel answered, a refused piece included
+(`store error: piece <name> does not match its name`). 3 when the directory
+lacks a piece the turn needs: one line on standard error naming it, nothing on
+standard output, and nothing written; the same turn runs once the file is
+back. 2, with a message on standard error, for a wrong call, a budget that is
+not a whole number, a file or directory it cannot read, or a file it cannot
+write.
+
+`check.sh` runs `examples/keep.hom`, which builds a list of 2000 numbers and
+asks twice. It checks the three turns print `asked: [1]`, `asked: [2, 20]` and
+`[2000, 42]`, the same as `ask` against `[20, 22]`; that the second turn
+fetches and writes fewer pieces than the first stored; that `b3sum`, where it
+is installed, agrees with every file name; that the first root answered again
+with 30 ends in `[2000, 52]` and adds fewer than ten files; that a turn run
+twice gives the same root and no new file; the exit 3 with a piece moved away;
+the refusal of a piece with a byte added; and the exit 2 cases.
+
 ## Running a program against answers
 
 ```
@@ -152,7 +221,7 @@ no budget for the whole run. `ask.zig` reads both files, calls
 kernel answered, and 2, with one line on standard error, for a wrong argument
 count, a budget that is not a whole number, a file it cannot read, or an answer
 it cannot write. Each call runs the program from the start against the whole
-answers file; a paused run is not stored.
+answers file; a paused run is not stored. `keep`, above, stores one.
 
 A request carries no mark. Every function a turn ends in is read as a request,
 so `fn x -> x` prints `error: wrong` and `fn x -> 42` prints `asked: 42` and
