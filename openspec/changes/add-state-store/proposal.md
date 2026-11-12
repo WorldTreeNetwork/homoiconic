@@ -34,7 +34,7 @@ For every operation table and every kind of reference, with Lean's standard axio
 | `lazy_sound` | A missing piece is a pause: under any part of the store, what the lazy machine halts with is what the plain machine halts with |
 | `lazy_pause` | A run pauses only on a reference the store lacks, and under any store that holds more, the run from the start passes through the paused state |
 | `lrun_mono` | More pieces change nothing |
-| `lazy_agree` | Any substrate will do: two stores that agree wherever both hold a piece give the same result |
+| `lazy_agree` | Any substrate will do: from the same partial state, two stores that agree wherever both hold a piece give the same result when both runs halt. It promises neither that a piece is available nor that a run ends |
 | `lazy_program` | A program run through any store has exactly the outcome direct evaluation gives it |
 | `lazy_turn_complete`, `lazy_turn_sound` | A turn of the request driver from a stored continuation is a turn of the machine |
 

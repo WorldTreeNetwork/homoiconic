@@ -81,7 +81,7 @@ def plain (s : State) : String := shown (fun _ => none) (s.toP : PState Nat)
 def budget : Nat := 4000000
 
 /-- Stop `p` after `n` steps, cut everything, and continue lazily. -/
-def snapshot (name : String) (p : Term) (n : Nat) : String :=
+def snapshot (name : String) (p : Term) (n : Nat) : String × Nat :=
   let s := run n (load (compile p))
   let want := plain (runUntil budget s)
   let (ps, pieces) := (cutState s.toP).run #[]
@@ -104,7 +104,7 @@ def snapshot (name : String) (p : Term) (n : Nat) : String :=
   let same := results.all (·.1)
   let paused := (results.filter (·.2)).length
   let ok := whole && same && want != "running"
-  s!"{if ok then "ok  " else "FAIL"} {name} after {n} steps: {pieces.size} pieces, whole store {whole}, one piece withheld {picks.length} times (paused {paused}) {same}"
+  (s!"{if ok then "ok  " else "FAIL"} {name} after {n} steps: {pieces.size} pieces, whole store {whole}, one piece withheld {picks.length} times (paused {paused}) {same}", paused)
 
 def n (k : Nat) : Term := .lit (.nat k)
 def emptyArr : Term := .lit (.arr [])
@@ -120,9 +120,14 @@ def programs : List (String × Term) :=
     ("interpreter twice", level 2 (.succ (.succ (n 5)))) ]
 
 #eval do
+  let mut pauses := 0
   for (name, p) in programs do
     for k in [0, 7, 40, 300] do
-      IO.println (snapshot name p k)
+      let (line, paused) := snapshot name p k
+      pauses := pauses + paused
+      IO.println line
+  -- Without a pause, continuing from a paused state would go untested.
+  IO.println s!"{if pauses > 0 then "ok  " else "FAIL"} runs that paused and were continued: {pauses}"
 
 /-- `ask [1] (fn x -> ask [2, x] (fn y -> add x y))` -/
 def askTwice : Term :=
