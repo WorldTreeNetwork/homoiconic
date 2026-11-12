@@ -113,7 +113,9 @@ can write any name; it cannot use one it does not hold.
 `network_machine_exact`, `replay_true` and `auto_true`. `stepRun`, `schedRun`
 and `autoRun` run events on the machine with a step budget for each machine
 run, and are proved sound, not complete. `autoRun` chooses the first process,
-in order, that can do something; no theorem depends on how it chooses.
+in order, whose request has what it needs. It never offers an answer from
+outside, and an event it offers may still not halt within the budget. No
+theorem depends on how it chooses, and none is about what it would offer next.
 
 ## Stored state
 

@@ -248,17 +248,28 @@ host/out/chan examples/ping.hom
 schedule: [[0, 0, 0], [1, 0], [0, 0, 1], [2, 0, 1], [2, 0, 1], [2, 1, 0]]
 process 0: 42; holds [1, 0]
 process 1: [41]; holds [1, 0]
-nothing more can happen
+no event is offered
 ```
 
 The first line is the schedule that happened, in the form a schedule file is
-written in. Saved to a file and given as the second argument, it prints the
-same text. Then one line for each process: what it finished with, or the
-payload it is waiting on, and the names it holds. The last line is
-`nothing more can happen`, `more can happen`, `refused: <event> cannot happen`
-for a schedule whose next event is not possible, or
-`no result within N steps of a turn, at <event>`. After a refusal or a run out
-of budget the lines above it describe the run up to that event.
+written in. Saved to a file and given as the second argument, it runs the
+same events and prints the same schedule and process lines. The last line is
+the same too when the first run stopped by itself; after a refusal or a run
+out of budget it is not, because the event that failed is not in the printed
+schedule. Then one line for each process: what it finished with, or the
+payload it is waiting on, and the names it holds. The last line is one of:
+
+- `no event is offered`: the kernel's chooser has nothing to pick. An answer
+  from outside can still be given by a schedule; the chooser never offers one.
+- `an event is offered`: the chooser has a next event. Whether that event's
+  machine run halts within the budget is not known until it is tried.
+- `refused: <event> cannot happen`: the next event of a given schedule is not
+  possible.
+- `no result within N steps of a turn, at <event>`.
+
+After a refusal or a run out of budget the lines above describe the run up to
+that event. The theorems cover the schedule line and the process lines, not
+the last line.
 
 ```
 host/out/chan examples/race.hom                          # process 1 gets the message

@@ -9,5 +9,5 @@
 - [x] `examples/ping.hom`, `race.hom`, `race.schedule`, `guess.hom`, `guess.schedule`, `spawns.hom`; the chan scenarios in `host/check.sh`.
 - [x] MODIFIED deltas for the two requirements `homoiconic-1e7` names.
 - [x] `sh host/check.sh` exits 0.
-- [ ] Advise by a reader from another model family.
+- [x] Advise by a reader from another model family. Send-back, 2026-11-12, two required fixes about what the text claims, both made; review in `reviews/`.
 - [ ] Fold.

@@ -343,36 +343,36 @@ channels() {
 channels "schedule: [[0, 0, 0], [1, 0], [0, 0, 1], [2, 0, 1], [2, 0, 1], [2, 1, 0]]
 process 0: 42; holds [1, 0]
 process 1: [41]; holds [1, 0]
-nothing more can happen" "$EXAMPLES/ping.hom"
+no event is offered" "$EXAMPLES/ping.hom"
 # Replay: the schedule line of a run, given back, gives the same text.
 "$OUT/chan" "$EXAMPLES/ping.hom" > "$OUT/ping.txt"
 sed -n 's/^schedule: //p' "$OUT/ping.txt" > "$OUT/ping.schedule"
 "$OUT/chan" "$EXAMPLES/ping.hom" "$OUT/ping.schedule" > "$OUT/ping-replay.txt"
 cmp "$OUT/ping.txt" "$OUT/ping-replay.txt"
 echo "chan: the recorded schedule replays to the same text"
-# A prefix of the schedule stops part way, and says more can happen.
+# A prefix of the schedule stops part way, and the chooser has a next event.
 printf '[[0, 0, 0], [1, 0]]\n' > "$OUT/prefix.schedule"
 channels "schedule: [[0, 0, 0], [1, 0]]
 process 0: waiting on [0]; holds [0]
 process 1: waiting on [2, 0]; holds [0]
-more can happen" "$EXAMPLES/ping.hom" "$OUT/prefix.schedule"
+an event is offered" "$EXAMPLES/ping.hom" "$OUT/prefix.schedule"
 # One message, two receivers: the schedule decides, and supplies the name.
 channels "schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 0, 1]]
 process 0: []; holds [0]
 process 1: [7]; holds [0]
 process 2: waiting on [2, 0]; holds [0]
-nothing more can happen" "$EXAMPLES/race.hom"
+no event is offered" "$EXAMPLES/race.hom"
 channels "schedule: [[0, 0, 5], [1, 0], [1, 0], [2, 0, 2]]
 process 0: []; holds [5]
 process 1: waiting on [2, 5]; holds [5]
 process 2: [7]; holds [5]
-nothing more can happen" "$EXAMPLES/race.hom" "$EXAMPLES/race.schedule"
+no event is offered" "$EXAMPLES/race.hom" "$EXAMPLES/race.schedule"
 # A process that was not given a name cannot use it: nothing is chosen, and a
 # schedule that says they meet is refused.
 channels "schedule: [[0, 0, 0], [1, 0]]
 process 0: waiting on [1, 0, 7]; holds [0]
 process 1: waiting on [2, 0]; holds []
-nothing more can happen" "$EXAMPLES/guess.hom"
+no event is offered" "$EXAMPLES/guess.hom"
 channels "schedule: [[0, 0, 0], [1, 0]]
 process 0: waiting on [1, 0, 7]; holds [0]
 process 1: waiting on [2, 0]; holds []
@@ -388,19 +388,31 @@ printf 'ask [9] (fn a -> add a 1)\n' > "$OUT/outside.hom"
 printf '[[3, 0, 41]]\n' > "$OUT/outside.schedule"
 channels "schedule: []
 process 0: waiting on [9]; holds []
-nothing more can happen" "$OUT/outside.hom"
+no event is offered" "$OUT/outside.hom"
 channels "schedule: [[3, 0, 41]]
 process 0: 42; holds []
-nothing more can happen" "$OUT/outside.hom" "$OUT/outside.schedule"
+no event is offered" "$OUT/outside.hom" "$OUT/outside.schedule"
 # Choosing stops at the event limit.
 LIMITED="$("$OUT/chan" "$EXAMPLES/spawns.hom" - 100000000 3)"
 want "$(echo "$LIMITED" | sed -n 1p)" "schedule: [[1, 0], [1, 1], [1, 2]]"
-want "$(echo "$LIMITED" | tail -1)" "more can happen"
+want "$(echo "$LIMITED" | tail -1)" "an event is offered"
 want "$(echo "$LIMITED" | grep -c '^process')" "4"
 echo "chan: choosing stopped at the event limit"
+# After a refusal the printed schedule replays to the same processes; the last
+# line differs, because the refused event is not in it.
+"$OUT/chan" "$EXAMPLES/guess.hom" "$EXAMPLES/guess.schedule" > "$OUT/refused.txt"
+sed -n 's/^schedule: //p' "$OUT/refused.txt" > "$OUT/refused.schedule"
+"$OUT/chan" "$EXAMPLES/guess.hom" "$OUT/refused.schedule" > "$OUT/refused-replay.txt"
+want "$(sed '$d' "$OUT/refused-replay.txt")" "$(sed '$d' "$OUT/refused.txt")"
+want "$(tail -1 "$OUT/refused-replay.txt")" "no event is offered"
+# An offered event may not halt: the chooser offers it without running it.
+printf 'let w = fn x -> x x\nask [0] (fn a -> w w)\n' > "$OUT/stuck.hom"
+want "$("$OUT/chan" "$OUT/stuck.hom" - 5000 0 | tail -1)" "an event is offered"
+want "$("$OUT/chan" "$OUT/stuck.hom" - 5000 1 | tail -1)" "no result within 5000 steps of a turn, at [0, 0, 0]"
+echo "chan: the last line says what is offered, not what will finish"
 channels "schedule: []
 process 0: [1, 2, 3, 4]; holds []
-nothing more can happen" "$EXAMPLES/append.hom"
+no event is offered" "$EXAMPLES/append.hom"
 channels "no result within 5000 steps of a turn" "$EXAMPLES/forever.hom" - 5000
 channels "schedule: entry 0 is not an event" "$OUT/outside.hom" "$EXAMPLES/ask.answers"
 channels "schedule: not an array" "$OUT/outside.hom" "$EXAMPLES/factorial.hom"

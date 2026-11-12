@@ -277,7 +277,9 @@ def beginRun (budget : Nat) (p : Term) : Option MConfig :=
   | _ => none
 
 /-! Choosing. `pick` is one way to choose the next event: the first process, in
-    order, that can do something. It is a convenience for making a schedule; the
+    order, whose request has what it needs in the configuration. It does not run
+    the machine, so an event it offers may still not halt within a budget, and
+    it never offers an answer from outside. It is a convenience for making a schedule; the
     meaning of the schedule it makes is `Step`'s. -/
 
 /-- A name not made yet. -/

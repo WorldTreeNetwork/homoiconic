@@ -7,8 +7,12 @@ events, each `[0, i, n]` (process `i` is given the new name `n`), `[1, i]`
 (process `i` starts a process), `[2, i, j]` (process `i` sends to process `j`)
 or `[3, i, a]` (process `i` is answered `a` from outside). The schedule a run
 went through is printed in the same form, so it can be given back.
-Tested against examples; what the text reports is `Reflect.replay_true` and
-`Reflect.auto_true`.
+The schedule line and the process lines are covered by `Reflect.replay_true`
+and `Reflect.auto_true`: those events are a run of the program and lead to that
+configuration. The last line is not. `no event is offered` and `an event is
+offered` say what `Reflect.pick` would choose next, which never includes an
+answer from outside and may be an event whose machine run does not halt.
+Reading a schedule and rendering are tested against examples, not proved.
 -/
 namespace Surface
 open Reflect
@@ -44,13 +48,13 @@ def renderProcs : Nat → List (Proc MValue MOutcome) → String
       "; holds " ++ renderData (.arr (q.held.map .nat)) ++ "\n" ++ renderProcs (i + 1) qs
 
 /-- The schedule that happened, each process, and how the run stopped. `more`:
-    an event could still be chosen. -/
+    `pick` offers a next event. -/
 def renderRun (budget : Nat) (done : List Event) (cfg : MConfig) (stop : Stopped)
     (more : Bool) : String :=
   "schedule: " ++ renderData (.arr (done.map eventData)) ++ "\n" ++
     renderProcs 0 cfg.procs ++
     (match stop with
-     | .ran => if more then "more can happen" else "nothing more can happen"
+     | .ran => if more then "an event is offered" else "no event is offered"
      | .refused ev => "refused: " ++ renderData (eventData ev) ++ " cannot happen"
      | .unfinished ev =>
        s!"no result within {budget} steps of a turn, at " ++ renderData (eventData ev))

@@ -4,7 +4,7 @@
 
 ### Requirement: A command runs a program as processes
 
-The host SHALL provide a command that takes a program file, an optional schedule file or `-` for none, an optional step budget and an optional event limit. It SHALL pass the program's bytes, the schedule's bytes, the budget and the limit to the Lean export `reflect_channels` and SHALL print the text that comes back and a newline. With no schedule the kernel SHALL choose the events, at most the limit. With a schedule the kernel SHALL run exactly its events and stop at the first that cannot happen. The text SHALL be the schedule that happened, in the form a schedule file is written in, then one line for each process with what it finished with or is waiting on and the names it holds, then how the run stopped. The host SHALL NOT read the program or the schedule, SHALL NOT choose an event, and SHALL exit 0 whenever the kernel answered. It SHALL exit 2 with a message on standard error for a wrong call, a file it cannot read, or a schedule file that is empty.
+The host SHALL provide a command that takes a program file, an optional schedule file or `-` for none, an optional step budget and an optional event limit. It SHALL pass the program's bytes, the schedule's bytes, the budget and the limit to the Lean export `reflect_channels` and SHALL print the text that comes back and a newline. With no schedule the kernel SHALL choose the events, at most the limit. With a schedule the kernel SHALL run exactly its events and stop at the first that cannot happen. The text SHALL be the schedule that happened, in the form a schedule file is written in, then one line for each process with what it finished with or is waiting on and the names it holds, then how the run stopped. A printed schedule given back SHALL run the same events and print the same schedule and process lines; the last line SHALL be the same when the first run was not refused and did not run out of budget. The host SHALL NOT read the program or the schedule, SHALL NOT choose an event, and SHALL exit 0 whenever the kernel answered. It SHALL exit 2 with a message on standard error for a wrong call, a file it cannot read, or a schedule file that is empty.
 
 #### Scenario: A recorded schedule replays
 
@@ -22,7 +22,7 @@ The host SHALL provide a command that takes a program file, an optional schedule
 
 - GIVEN `examples/spawns.hom`, which starts processes without end, and an event limit of 3
 - WHEN the command runs with no schedule
-- THEN three events happen, four processes are listed, and the last line is `more can happen`
+- THEN three events happen, four processes are listed, and the last line is `an event is offered`
 
 ## MODIFIED Requirements
 
