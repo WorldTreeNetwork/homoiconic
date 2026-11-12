@@ -129,6 +129,20 @@ order, and how it ends (finished with an outcome, or waiting on a request).
 | `interact_machine_exact` | Whatever the machine's run ends with is the compiled form of the program's ending |
 | `converse_finished`, `converse_waiting` | What the executable driver reports as finished or waiting is a run of the program by direct evaluation |
 
+### Channels
+
+Several programs run as processes. A schedule is a list of events; a
+configuration is every process, the names each holds, and the names made.
+
+| Theorem | Says |
+|---|---|
+| `network_deterministic` | The configuration a program reaches is fixed by the program and the schedule. New names and outside answers are events of the schedule |
+| `Step.comm_held` | A send and a receive meet only on a name both processes hold |
+| `Step.held_from` | After an event a process holds a name only if it held it before, or the event made it for that process, or the event is a message to it, or a start, from a process that held it |
+| `Network.held_issued` | Every name a process holds was made by an event of the schedule |
+| `network_machine`, `network_machine_exact` | The machine runs a schedule exactly as direct evaluation does |
+| `replay_true`, `auto_true` | The events the executable scheduler reports as done, and the configuration it reports, are a run of the program by direct evaluation, however the run stopped |
+
 ### Stored state
 
 A store holds pieces under references and may lack any of them. A piece
@@ -156,7 +170,7 @@ One theorem. It does not depend on an operation table.
 
 | Theorem | Says |
 |---|---|
-| `Wire.unreify_reify` | Reading a program back from its data form gives the program: `unreify (reify t) = some t` for every `t` |
+| `Reflect.unreify_reify` | Reading a program back from its data form gives the program: `unreify (reify t) = some t` for every `t` |
 
 It is checked, with its axioms printed, in `kernel/WireCheck.lean`, not in a
 contract file. The reader and writer of bytes are not proved. They are tested
@@ -224,6 +238,10 @@ theorems; `advance` is tested against it.
 ## What the proofs do not cover
 
 - **Reader, renderer, Zig host.** Tested, not proved.
+- **That a channel name cannot be guessed.** A name is a number. What is proved
+  is that a process cannot use a name it does not hold, where holding is kept
+  by the scheduler. Nothing is proved about a particular program of processes:
+  not that it finishes, and not that it never waits forever.
 - **What an operation computes.** The arithmetic table is seven Lean
   definitions with test scenarios. No theorem is about it.
 - **Failure inside an operation.** An operation is a total function from data
@@ -297,7 +315,8 @@ theorems; `advance` is tested against it.
 
 ## Next
 
-A waiting program can be kept on disk, under references made by Blake3. The
+Programs can run side by side in one machine and talk over channels, under a
+recorded schedule. A waiting program can be kept on disk, under references made by Blake3. The
 event log and one VM follow (vision stage 5: P13 as a fold over the log, and
 P14). Signatures, garbage collection and a store shared between machines are
 not started.

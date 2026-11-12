@@ -4,4 +4,5 @@ import Surface.Render
 import Surface.Run
 import Surface.Bytes
 import Surface.Keep
+import Surface.Chan
 import Surface.Host

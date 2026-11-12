@@ -223,6 +223,63 @@ count, a budget that is not a whole number, a file it cannot read, or an answer
 it cannot write. Each call runs the program from the start against the whole
 answers file; a paused run is not stored. `keep`, above, stores one.
 
+## Running a program as processes
+
+```
+size_t reflect_channels(const uint8_t *program, size_t length,
+                        const uint8_t *schedule, size_t schedule_length,
+                        uint8_t *out, size_t capacity,
+                        uint64_t budget, uint64_t limit);
+```
+
+`reflect_channels` runs the program as the first of several processes that
+talk over channels (`kernel/README.md`, Channels). It runs
+`Surface.channelsText` (`kernel/Surface/Chan.lean`). With a schedule of no
+bytes the kernel chooses the events, at most `limit`. Otherwise the schedule
+text is a program whose result is an array of events, and exactly those are
+run. An event is `[0, i, n]` (process `i` is given the new name `n`), `[1, i]`
+(process `i` starts a process), `[2, i, j]` (process `i` sends to process `j`)
+or `[3, i, a]` (process `i` is answered `a` from outside).
+
+`check.sh` also builds `out/chan`:
+
+```
+host/out/chan examples/ping.hom
+schedule: [[0, 0, 0], [1, 0], [0, 0, 1], [2, 0, 1], [2, 0, 1], [2, 1, 0]]
+process 0: 42; holds [1, 0]
+process 1: [41]; holds [1, 0]
+nothing more can happen
+```
+
+The first line is the schedule that happened, in the form a schedule file is
+written in. Saved to a file and given as the second argument, it prints the
+same text. Then one line for each process: what it finished with, or the
+payload it is waiting on, and the names it holds. The last line is
+`nothing more can happen`, `more can happen`, `refused: <event> cannot happen`
+for a schedule whose next event is not possible, or
+`no result within N steps of a turn, at <event>`. After a refusal or a run out
+of budget the lines above it describe the run up to that event.
+
+```
+host/out/chan examples/race.hom                          # process 1 gets the message
+host/out/chan examples/race.hom examples/race.schedule   # process 2 gets it, on the name 5
+host/out/chan examples/guess.hom                         # a name not held: both left waiting
+host/out/chan examples/guess.hom examples/guess.schedule # refused: [2, 0, 1] cannot happen
+```
+
+The arguments after the program are a schedule file or `-` for none, the step
+budget for each machine run (default 100000000), and the most events to choose
+(default 10000). `chan.zig` reads the files, calls `reflect_channels`, and
+prints the bytes and a newline. It chooses nothing. It exits 0 whenever the
+kernel answered, and 2, with one line on standard error, for a wrong argument
+count, a number that is not a whole number, a file it cannot read, or a
+schedule file that is empty. The set of processes is not stored between calls.
+
+Under `chan` the payloads `[0]`, `[1, name, message]`, `[2, name]` and
+`[3, program, start]` are channel requests, so `examples/ask.hom`, whose
+second request is `[2, 20]`, waits to receive on 20. Under `ask` a payload
+means nothing to the kernel.
+
 A request carries no mark. Every function a turn ends in is read as a request,
 so `fn x -> x` prints `error: wrong` and `fn x -> 42` prints `asked: 42` and
 `waiting`. When a turn runs out of budget the requests printed before that

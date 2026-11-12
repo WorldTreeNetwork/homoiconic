@@ -12,6 +12,7 @@ lake env lean ReflectContract.lean
 lake env lean MachineContract.lean
 lake env lean RequestContract.lean
 lake env lean StoreContract.lean
+lake env lean ChannelContract.lean
 lake env lean Surface/Check.lean
 # The scenarios print one line each; a line that starts with FAIL fails the check.
 lake env lean ReflectRun.lean > "$OUT/scenarios.txt"
@@ -44,9 +45,9 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Store \
+for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Store \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece \
-              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Keep Surface/Host; do
+              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Keep Surface/Chan Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
         -c "$OUT/$name.c" "$module.lean"
@@ -55,7 +56,7 @@ for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machi
 done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
 lake env leanc -c -o "$OUT/runtime.o" "$HOST/runtime.c"
-for program in check run ask bytes keep; do
+for program in check run ask bytes keep chan; do
     zig build-obj "$HOST/$program.zig" -femit-bin="$OUT/zig-$program.o" \
         --cache-dir "$OUT/zig-cache" --global-cache-dir "$OUT/zig-global-cache"
     # shellcheck disable=SC2086
@@ -325,3 +326,104 @@ refuseKeep "$OUT/no-such-store" start "$EXAMPLES/keep.hom"
 refuseKeep "$STORE" start "$EXAMPLES/keep.hom" many
 refuseKeep "$STORE" answer "$SECOND" "$OUT/twenty.hom" 1 extra
 echo "keep command checks passed"
+
+# The chan command: a program run as the first of several processes that talk
+# over channels. With no schedule the kernel chooses the events and prints the
+# schedule it went through; given that schedule back, it prints the same text.
+channels() {
+    wanted="$1"
+    shift
+    got="$("$OUT/chan" "$@")"
+    if [ "$got" != "$wanted" ]; then
+        echo "chan $*: expected '$wanted', got '$got'" >&2
+        exit 1
+    fi
+    echo "chan $* => $(echo "$got" | tr '\n' '|')"
+}
+channels "schedule: [[0, 0, 0], [1, 0], [0, 0, 1], [2, 0, 1], [2, 0, 1], [2, 1, 0]]
+process 0: 42; holds [1, 0]
+process 1: [41]; holds [1, 0]
+nothing more can happen" "$EXAMPLES/ping.hom"
+# Replay: the schedule line of a run, given back, gives the same text.
+"$OUT/chan" "$EXAMPLES/ping.hom" > "$OUT/ping.txt"
+sed -n 's/^schedule: //p' "$OUT/ping.txt" > "$OUT/ping.schedule"
+"$OUT/chan" "$EXAMPLES/ping.hom" "$OUT/ping.schedule" > "$OUT/ping-replay.txt"
+cmp "$OUT/ping.txt" "$OUT/ping-replay.txt"
+echo "chan: the recorded schedule replays to the same text"
+# A prefix of the schedule stops part way, and says more can happen.
+printf '[[0, 0, 0], [1, 0]]\n' > "$OUT/prefix.schedule"
+channels "schedule: [[0, 0, 0], [1, 0]]
+process 0: waiting on [0]; holds [0]
+process 1: waiting on [2, 0]; holds [0]
+more can happen" "$EXAMPLES/ping.hom" "$OUT/prefix.schedule"
+# One message, two receivers: the schedule decides, and supplies the name.
+channels "schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 0, 1]]
+process 0: []; holds [0]
+process 1: [7]; holds [0]
+process 2: waiting on [2, 0]; holds [0]
+nothing more can happen" "$EXAMPLES/race.hom"
+channels "schedule: [[0, 0, 5], [1, 0], [1, 0], [2, 0, 2]]
+process 0: []; holds [5]
+process 1: waiting on [2, 5]; holds [5]
+process 2: [7]; holds [5]
+nothing more can happen" "$EXAMPLES/race.hom" "$EXAMPLES/race.schedule"
+# A process that was not given a name cannot use it: nothing is chosen, and a
+# schedule that says they meet is refused.
+channels "schedule: [[0, 0, 0], [1, 0]]
+process 0: waiting on [1, 0, 7]; holds [0]
+process 1: waiting on [2, 0]; holds []
+nothing more can happen" "$EXAMPLES/guess.hom"
+channels "schedule: [[0, 0, 0], [1, 0]]
+process 0: waiting on [1, 0, 7]; holds [0]
+process 1: waiting on [2, 0]; holds []
+refused: [2, 0, 1] cannot happen" "$EXAMPLES/guess.hom" "$EXAMPLES/guess.schedule"
+# A name that was already made is refused.
+printf '[[0, 0, 3], [1, 0], [0, 0, 3]]\n' > "$OUT/twice.schedule"
+channels "schedule: [[0, 0, 3], [1, 0]]
+process 0: waiting on [0]; holds [3]
+process 1: waiting on [2, 3]; holds [3]
+refused: [0, 0, 3] cannot happen" "$EXAMPLES/ping.hom" "$OUT/twice.schedule"
+# A request that is none of the four is the outside's, answered by the schedule.
+printf 'ask [9] (fn a -> add a 1)\n' > "$OUT/outside.hom"
+printf '[[3, 0, 41]]\n' > "$OUT/outside.schedule"
+channels "schedule: []
+process 0: waiting on [9]; holds []
+nothing more can happen" "$OUT/outside.hom"
+channels "schedule: [[3, 0, 41]]
+process 0: 42; holds []
+nothing more can happen" "$OUT/outside.hom" "$OUT/outside.schedule"
+# Choosing stops at the event limit.
+LIMITED="$("$OUT/chan" "$EXAMPLES/spawns.hom" - 100000000 3)"
+want "$(echo "$LIMITED" | sed -n 1p)" "schedule: [[1, 0], [1, 1], [1, 2]]"
+want "$(echo "$LIMITED" | tail -1)" "more can happen"
+want "$(echo "$LIMITED" | grep -c '^process')" "4"
+echo "chan: choosing stopped at the event limit"
+channels "schedule: []
+process 0: [1, 2, 3, 4]; holds []
+nothing more can happen" "$EXAMPLES/append.hom"
+channels "no result within 5000 steps of a turn" "$EXAMPLES/forever.hom" - 5000
+channels "schedule: entry 0 is not an event" "$OUT/outside.hom" "$EXAMPLES/ask.answers"
+channels "schedule: not an array" "$OUT/outside.hom" "$EXAMPLES/factorial.hom"
+
+CHANUSAGE="usage: chan <program-file> [schedule-file | -] [step-budget] [event-limit]   (default budget: 100000000 machine steps for each turn; default limit: 10000 events)"
+refuseChan() {
+    wanted="$1"
+    shift
+    status=0
+    "$OUT/chan" "$@" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+    printf '%s\n' "$wanted" > "$OUT/refuse.expected"
+    if [ "$status" -ne 2 ] || [ -s "$OUT/refuse.out" ] || ! cmp -s "$OUT/refuse.expected" "$OUT/refuse.err"; then
+        echo "chan $*: expected exit 2 and no output; got exit $status" >&2
+        exit 1
+    fi
+    echo "chan refused: $wanted"
+}
+refuseChan "$CHANUSAGE"
+refuseChan "$CHANUSAGE" "$EXAMPLES/ping.hom" - 1 1 extra
+refuseChan "chan: cannot read the program file: FileNotFound" "$EXAMPLES/missing.hom"
+refuseChan "chan: cannot read the schedule file: FileNotFound" "$EXAMPLES/ping.hom" "$EXAMPLES/missing.schedule"
+: > "$OUT/empty.schedule"
+refuseChan "chan: the schedule file is empty" "$EXAMPLES/ping.hom" "$OUT/empty.schedule"
+refuseChan "chan: the step budget must be a whole number" "$EXAMPLES/ping.hom" - many
+refuseChan "chan: the event limit must be a whole number" "$EXAMPLES/ping.hom" - 5000 many
+echo "chan command checks passed"

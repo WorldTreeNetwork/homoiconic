@@ -194,4 +194,4 @@ def notPrograms : List (String × Data) :=
 
 /-- Proved, not tested: reading a program's data form gives the program. -/
 example : ∀ t : Term, unreify (reify t) = some t := unreify_reify
-#print axioms Wire.unreify_reify
+#print axioms Reflect.unreify_reify

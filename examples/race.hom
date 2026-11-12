@@ -1,0 +1,7 @@
+; two processes wait on one channel and one message is sent.
+; The schedule says which of them gets it.
+let waiter = quote (fn ch -> ask [2, ch] (fn x -> [x]))
+ask [0] (fn ch ->
+  ask [3, waiter, ch] (fn first ->
+    ask [3, waiter, ch] (fn second ->
+      ask [1, ch, 7] (fn sent -> []))))

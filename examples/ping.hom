@@ -1,0 +1,15 @@
+; two processes exchange a channel name, then talk over it.
+; [0] makes a channel, [1, name, message] sends, [2, name] receives, and
+; [3, program, start] starts a quoted program on `start` as a new process.
+let child = quote (fn meet ->
+  ask [2, meet] (fn line ->
+    ask [2, line] (fn n ->
+      ask [1, line, add n 1] (fn sent ->
+        [n]))))
+ask [0] (fn meet ->
+  ask [3, child, meet] (fn started ->
+    ask [0] (fn line ->
+      ask [1, meet, line] (fn sent ->
+        ask [1, line, 41] (fn sent ->
+          ask [2, line] (fn reply ->
+            reply))))))

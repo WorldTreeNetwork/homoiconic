@@ -6,12 +6,12 @@ One Lean package with three libraries, and the host that calls it.
   one closed term of the language interprets programs given as data.
 - `Wire` is the byte form of data, programs, machine values and pieces of
   stored state, and Blake3, which names a stored piece. It is tested, not
-  proved, except `unreify_reify`.
+  proved.
 - `Surface` reads program text into `Reflect` terms and renders outcomes as
   text. It is tested, not proved.
 - The Zig host in `../host` calls the exports `reflect_run`, `reflect_converse`,
-  `reflect_run_bytes`, `reflect_source_bytes` and the `reflect_keep_*`
-  exports.
+  `reflect_run_bytes`, `reflect_source_bytes`, `reflect_channels` and the
+  `reflect_keep_*` exports.
 
 Use Lean 4.35.0, pinned in `lean-toolchain`, and run from this directory:
 
@@ -21,6 +21,7 @@ lake env lean ReflectContract.lean   # the interpreter theorems, exact statement
 lake env lean MachineContract.lean   # the machine theorems, exact statements
 lake env lean RequestContract.lean   # the request theorems, exact statements
 lake env lean StoreContract.lean     # the stored-state theorems, exact statements
+lake env lean ChannelContract.lean   # the channel theorems, exact statements
 lake env lean ReflectRun.lean        # the scenarios, executed
 lake env lean Surface/Check.lean     # the reader and renderer against examples
 lake env lean StoreCheck.lean        # runs cut into pieces and continued
@@ -47,6 +48,8 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 | `Reflect/RunUntil.lean`, `RunUntilProof.lean` | `runUntil`, which stops when the machine stops, and `runUntil_eq` |
 | `Reflect/Request.lean` | `askTerm`, `payloadTerm`, `resumeTerm`; `Sys`, a way of evaluating; `Drive`, the driver over any `Sys`; `Interact`, `InteractI`, `InteractM`; `driveRun` and `converse`, the executable driver |
 | `Reflect/RequestProof.lean` | Determinism, resume and extra answers; `Sim.drive`, which lifts turn-by-turn agreement to runs; the interpreter and machine instances; soundness of `converse` |
+| `Reflect/Channel.lean` | `classify`, which reads a payload as a channel request; `PSys`; `Settle`, `Turn`; `Event`, `Step`, `Sched`, `Network`; `stepRun`, `schedRun`, `autoRun`, the executable scheduler; `pick`, which chooses an event |
+| `Reflect/ChannelProof.lean` | A schedule leads to one configuration; a process uses only names it holds, and where a held name comes from; `PSim`, agreement of two ways of evaluating on schedules; soundness of the executable scheduler |
 | `Reflect/Store.lean` | `P`, a piece; `Store`; `Unf`, which resolves a piece; partial states; `lstep` and `lrun`, the lazy machine, with a pause; `RState` |
 | `Reflect/StoreProof.lean` | Saving loses nothing; the lazy machine reaches every plain state; a missing piece is a pause; more pieces change nothing; stores that agree give the same result; a turn of the request driver from a stored continuation |
 | `Reflect/Examples.lean` | Worked cases, checked by the kernel |
@@ -87,6 +90,31 @@ answer left the run is waiting.
 `∀ [Ops], …`. `converse` gives each machine run a fresh step budget and is
 proved sound, not complete.
 
+## Channels
+
+Several programs run side by side as processes and talk over channels. Nothing
+is added to the language: four shapes of payload are channel requests. `[0]`
+makes a channel and is answered with its name, a number. `[1, name, message]`
+sends, `[2, name]` receives, and `[3, program, start]` starts a quoted program
+on the data `start` as a new process. Every other payload is a request to the
+outside. A send and a receive on one name meet; there is no queue.
+
+A schedule is a list of events, and `Step` says what each does and when it can
+happen: a process is given a new name, a process starts a process, one process
+sends to another, a process is answered from outside. The new names and the
+outside answers are in the events. Each process holds a list of names: the ones
+it made, the ones its starter held that occur in its start data, and the ones
+its sender held that occur in a message it received. A send or a receive on a
+name the process does not hold cannot happen. A name is a number, so a process
+can write any name; it cannot use one it does not hold.
+
+`ChannelContract.lean` states `network_deterministic`, `Step.comm_held`,
+`Step.held_from`, `Network.held_issued`, `network_machine`,
+`network_machine_exact`, `replay_true` and `auto_true`. `stepRun`, `schedRun`
+and `autoRun` run events on the machine with a step budget for each machine
+run, and are proved sound, not complete. `autoRun` chooses the first process,
+in order, that can do something; no theorem depends on how it chooses.
+
 ## Stored state
 
 A piece, `P R`, is a number, an empty list, a pair, a function (code and its
@@ -121,7 +149,7 @@ network and attestation are not part of the store.
 | File | Holds |
 |---|---|
 | `Wire/Cbor.lean` | `write : Data → ByteArray` and `read : ByteArray → Except String Data`, for the part of dCBOR that `Data` has. A number below 2^64 is a CBOR unsigned integer in its shortest form; a larger number is tag 2 over its bytes with no leading zero; an array is a definite-length CBOR array. The reader refuses every other spelling |
-| `Wire/Form.lean` | `unreify`, which reads a program back from its data form, and `unreify_reify`; `blockTerm`; `valueData` and `dataValue`, a machine value as data; `programBytes`, `readProgram`, `valueBytes`, `readValue` |
+| `Wire/Form.lean` | `blockTerm`; `valueData` and `dataValue`, a machine value as data; `programBytes`, `readProgram`, `valueBytes`, `readValue` |
 | `Wire/Blake3.lean` | `hash : ByteArray → ByteArray`, the 32-byte Blake3 hash, written from the specification in about 100 lines. No keyed mode, no key derivation, no longer output |
 | `Wire/Piece.lean` | `pieceItem` and `itemPiece`, a piece of stored state as an item; `pieceBytes`, `readPiece`; `cut` and `save`, which cut a value from the leaves up and store each part whose bytes pass a size under its hash |
 
@@ -133,7 +161,7 @@ so `blockTerm` compiles its result and compares: a function whose code is not
 exactly a compiled program has no byte form. Tag 2 for large numbers is this
 project's rule; dCBOR's numeric rules stop at 64 bits.
 
-Proved: `unreify_reify`, `unreify (reify t) = some t` for every program, with
+Proved, in `Reflect/Syntax.lean`: `unreify_reify`, `unreify (reify t) = some t` for every program, with
 Lean's standard axioms. Everything else in `Wire` is tested, not proved
 (decision D7 of the vision). `WireCheck.lean` checks the RFC 8949 appendix A
 examples that are numbers or arrays, each integer width at its edges,

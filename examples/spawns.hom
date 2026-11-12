@@ -1,0 +1,3 @@
+; a process that starts a copy of itself, which does the same, without end
+let again = quote (fn self -> ask [3, self, self] (fn started -> []))
+ask [3, again, again] (fn started -> [])

@@ -10,24 +10,6 @@ import Reflect.Machine
 namespace Wire
 open Reflect
 
-/-- Read a program back from its data form. The inverse of `reify`
-    (`unreify_reify`). Data that is no program's form is refused. -/
-def unreify : Data → Option Term
-  | .nat i => some (.var i)
-  | .arr [.nat 0, f, a] => do pure (.app (← unreify f) (← unreify a))
-  | .arr [.nat 1, b] => do pure (.lam (← unreify b))
-  | .arr [.nat 2, d] => some (.lit d)
-  | .arr [.nat 3, t] => do pure (.succ (← unreify t))
-  | .arr [.nat 4, a, b] => do pure (.cons (← unreify a) (← unreify b))
-  | .arr [.nat 5, s, z, sc, n, c] => do
-      pure (.dcase (← unreify s) (← unreify z) (← unreify sc) (← unreify n) (← unreify c))
-  | .arr [.nat 6, c, x] => do pure (.prim (← unreify c) (← unreify x))
-  | _ => none
-
-theorem unreify_reify : ∀ t : Term, unreify (reify t) = some t := by
-  intro t
-  induction t <;> simp_all [reify, unreify]
-
 deriving instance BEq for Reflect.Code
 
 /-- The program a block of code was compiled from, when it is exactly the

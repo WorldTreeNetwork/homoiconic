@@ -1,6 +1,7 @@
 import Surface.Run
 import Surface.Bytes
 import Surface.Keep
+import Surface.Chan
 
 namespace Surface.Host
 
@@ -31,6 +32,17 @@ unsafe def reflectConverse (program length answers answersLength out capacity : 
     (budget : UInt64) : USize :=
   let text := Surface.converseText (copyBytes program length)
     (copyBytes answers answersLength) budget.toNat
+  storeBytes out capacity text.toUTF8
+
+/-- C ABI: program pointer and length, schedule pointer and length, output
+    pointer and capacity, step budget for each machine run, and the most events
+    to choose when the schedule is empty. Returns the number of bytes the
+    rendering needs, as `reflect_run` does. -/
+@[export reflect_channels]
+unsafe def reflectChannels (program length schedule scheduleLength out capacity : USize)
+    (budget limit : UInt64) : USize :=
+  let text := Surface.channelsText (copyBytes program length)
+    (copyBytes schedule scheduleLength) budget.toNat limit.toNat
   storeBytes out capacity text.toUTF8
 
 /-- C ABI: as `reflect_run`, for a program given in its byte form. -/

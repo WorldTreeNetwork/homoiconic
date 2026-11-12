@@ -1,0 +1,6 @@
+; a process that was not given a name cannot use it, though it can write the
+; number. The second process is started on [] and asks to receive on 0.
+let guesser = quote (fn nothing -> ask [2, 0] (fn x -> x))
+ask [0] (fn ch ->
+  ask [3, guesser, []] (fn started ->
+    ask [1, ch, 7] (fn sent -> [])))

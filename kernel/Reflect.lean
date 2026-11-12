@@ -8,5 +8,7 @@ import Reflect.RunUntil
 import Reflect.RunUntilProof
 import Reflect.Request
 import Reflect.RequestProof
+import Reflect.Channel
+import Reflect.ChannelProof
 import Reflect.Store
 import Reflect.StoreProof
