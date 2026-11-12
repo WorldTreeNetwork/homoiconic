@@ -1,0 +1,6 @@
+exit 0 after 65 ms
+reflect: booted
+reflect: memory to 0x0000000020000000
+reflect: starting
+265252859812191058636308480000000
+reflect: exit 0
