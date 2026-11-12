@@ -132,3 +132,10 @@ Work loop: intend → steer → change → advise → act → fold.
 Tracker is beads (`bd`; DAG nodes are `--type node`). Living specs are
 `openspec/specs/`; in-flight work is `openspec/changes/`. Read
 [`openspec/AGENTS.md`](openspec/AGENTS.md) before changing behavior.
+
+## Remotes
+
+- GitHub: `git@github.com:WorldTreeNetwork/homoiconic.git` (private).
+- Forgejo (mimir): `ssh://git@mimir.worldtree.network/WorldTreeNetwork/homoiconic.git` (private). CLI: `fj -H mimir.worldtree.network`.
+- `origin` fetches from GitHub and pushes to both, so `git push` updates GitHub and Forgejo. The `forgejo` remote is the mimir URL alone.
+- Radicle: not set up. No Radicle node was found on this machine, on the mjolnir host, or in any mjolnir VM (checked 2026-11-11).
