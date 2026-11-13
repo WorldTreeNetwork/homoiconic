@@ -1,6 +1,6 @@
 # add-event-log
 
-> **ACTIVE BUILD, 2026-11-12.**
+> **FOLDED 2026-11-12** into `openspec/specs/event-log/spec.md` and `openspec/specs/zig-host/spec.md`. Archived.
 
 **Rigor:** instrument
 
@@ -57,4 +57,4 @@ From `host/check.sh`:
 
 ## Disposition
 
-ACTIVE BUILD, 2026-11-12.
+ACTIVE BUILD, 2026-11-12. Folded and archived, 2026-11-12.

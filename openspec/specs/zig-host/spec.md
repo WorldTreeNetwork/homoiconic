@@ -1,6 +1,6 @@
 # zig-host
 
-What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The `reflect_keep_*` exports run one turn of a program against a store of pieces (`openspec/specs/state-store/spec.md`), and the command `host/out/keep <store-dir> start <program-file> [step-budget]` or `host/out/keep <store-dir> answer <root> <answer-file> [step-budget]` keeps a waiting program in a directory, one file per piece, named by the kernel. The export `reflect_channels` runs a program as the first of several processes that talk over channels (`openspec/specs/channels/spec.md`), and the command `host/out/chan <program-file> [schedule-file | -] [step-budget] [event-limit]`, also built by `host/check.sh`, prints the schedule it went through, each process, and how the run stopped. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
+What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The `reflect_keep_*` exports run one turn of a program against a store of pieces (`openspec/specs/state-store/spec.md`), and the command `host/out/keep <store-dir> start <program-file> [step-budget]` or `host/out/keep <store-dir> answer <root> <answer-file> [step-budget]` keeps a waiting program in a directory, one file per piece, named by the kernel. The export `reflect_channels` runs a program as the first of several processes that talk over channels (`openspec/specs/channels/spec.md`), and the command `host/out/chan <program-file> [schedule-file | -] [step-budget] [event-limit]`, also built by `host/check.sh`, prints the schedule it went through, each process, and how the run stopped. The exports `reflect_vm_start` and `reflect_vm_from` run a program against a log of identified entries (`openspec/specs/event-log/spec.md`), from its beginning or from a kept state, and the command `host/out/vm <store-dir> start <program-file> <log-file> [step-budget]` or `host/out/vm <store-dir> from <root> <log-file> [step-budget]`, also built by `host/check.sh`, prints where the program stands and the root of its state. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
 
 ## Purpose
 
@@ -211,3 +211,31 @@ The host SHALL provide a command that takes a program file, an optional schedule
 - GIVEN `examples/spawns.hom`, which starts processes without end, and an event limit of 3
 - WHEN the command runs with no schedule
 - THEN three events happen, four processes are listed, and the last line is `an event is offered`
+
+### Requirement: A command runs a program against a log with its state in a directory
+
+The host SHALL provide a command that takes a store directory and either `start` with a program file and a log file, or `from` with a root and a log file, and an optional step budget. It SHALL pass the bytes to the Lean export `reflect_vm_start` or `reflect_vm_from`, and SHALL then serve the session exactly as the command that runs one turn does: read the file named by each piece the kernel asks for, write each piece the kernel hands back under the name the kernel gives before printing, and print the kernel's text and a newline. A log file SHALL be a program whose result is an array of `[identifier, answer]`. The text SHALL be where the program stands, then `entries: N given, K acted on`, then `state: ` and the root, then the store line. The host SHALL NOT read the log, decide what an entry does, or name the state. It SHALL exit 0 whenever the kernel answered, 3 with one line on standard error and nothing written when the directory lacks a piece that is needed, and 2 with a message on standard error for a wrong call, a file or directory it cannot read, or a file it cannot write.
+
+#### Scenario: Stop, restart, same state
+
+- GIVEN `examples/ask.hom` and an empty directory
+- WHEN it is started on `examples/ask-one.log`, and the state printed is then handed `examples/ask.log` in another call
+- THEN the first call prints `waiting on [2, 20]`, the second prints `42` and `entries: 2 given, 1 acted on`, and its state is the one a start on `examples/ask.log` prints
+
+#### Scenario: The store is lost
+
+- GIVEN the state a start on `examples/ask.log` printed
+- WHEN the directory is emptied and the start is run again
+- THEN it prints the same state
+
+#### Scenario: A root that is not a state
+
+- GIVEN the name of a stored piece that is not a VM state
+- WHEN it is given to `from`
+- THEN the command prints `store error: the root is not a kept state` and exits 0
+
+#### Scenario: A log that is not a log
+
+- GIVEN `examples/ask.answers` as the log file
+- WHEN the command runs
+- THEN it prints `log: entry 0 is not an identifier and an answer` and exits 0

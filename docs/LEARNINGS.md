@@ -66,3 +66,11 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - The request driver's cases could not be reused for one turn of a process. `Drive` is indexed by the list of answers and the list of requests asked, so its four cases were restated without those lists as `Settle` (`kernel/Reflect/Channel.lean`). The cases are the same; the restatement is the cost.
 - The simulation from requests, `Sim`, carried over to schedules with one added field: `PSim` is `Sim` plus `start`, which says the two ways of evaluating start a program alike. The machine agreement theorems for schedules then followed from the turn-level ones already proved for requests.
 - Review found no fault in the definitions and two in what the printed text claimed. The last line, then `nothing more can happen`, described the chooser, which never offers an answer from outside and does not run the machine, not what the semantics allows. And a printed schedule replays to the same last line only when the first run was not refused and did not run out of budget.
+
+## 2026-11-12 — event log
+
+- P14 did not need hashing. The plan had it depend on P5; with the identifier as data the log supplies, a repeated entry is recognised by equality and nothing about hashes is assumed. What a hash would add, that the identifier names this entry and no other, is the host's to supply.
+- A kept state has to be read in the form the cutter leaves it, not embedded by its root. `keep` puts the root reference into the next turn's environment, and a small root piece then stays a reference where a run from the start would hold it inline, so the two are cut differently. The VM session takes the function out of the state piece, and a restarted state then has the root a replay has. This is tested on examples, not proved.
+- `Settle` and `Turn`, written for processes, were the handler's cases as they stood. The log needed no new statement about evaluation; its proofs are about lists.
+- The derived `==` on data has no proof behind it, so list membership could not be decided through it. Equality of data is decided by a definition written with the log.
+- Review found the reader of a kept state too loose: it dropped list tails, so several pieces read as one state. It also found that the session and the proved fold count different steps, so one budget is not one bound.

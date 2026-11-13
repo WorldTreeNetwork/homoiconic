@@ -10,4 +10,4 @@
 - [x] `examples/ask.log`, `ask-one.log`, `ask-again.log`; the vm scenarios in `host/check.sh`.
 - [x] `sh host/check.sh` exits 0.
 - [x] Advise by a reader from another model family. Send-back, 2026-11-12, two required fixes: kept states are now checked for their exact shape (a function's environment is not walked, by decision), and the difference between the session's budget and the fold's is stated. Review in `reviews/`.
-- [ ] Fold.
+- [x] Fold. 2026-11-12: `openspec/specs/event-log/spec.md` is new; the ADDED delta is in `openspec/specs/zig-host/spec.md`.
