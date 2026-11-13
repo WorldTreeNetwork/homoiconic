@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>what this unlocks</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #14120e; overflow: hidden; }
+  body { cursor: default; }
+  #stage {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  #eq {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: max(22px, 4vw);
+    color: #f3efe6;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 700ms linear;
+  }
+  #eq .eqs { color: #c4a574; }
+  #floor {
+    width: 64px; height: 1px; background: #c4a574;
+    margin: 3.2vh 0 2.4vh;
+    opacity: 0;
+    transition: opacity 700ms linear;
+  }
+  #n {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 20px; line-height: 24px; height: 24px;
+    color: #f3efe6;
+    opacity: 0;
+    transition: opacity 700ms linear;
+  }
+  .sent {
+    font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+    color: #e7e1d6;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 700ms linear;
+  }
+  #s {
+    margin-top: 5vh; font-size: 20px; line-height: 1.5;
+    max-width: min(34em, 86vw); min-height: 3em;
+  }
+  #s0 {
+    position: fixed; left: 0; right: 0; top: 50%;
+    transform: translateY(-50%);
+    font-size: 17px;
+  }
+  #hint {
+    position: fixed; left: 16px; bottom: 14px;
+    font-family: "Iowan Old Style", Palatino, Georgia, serif;
+    font-size: 11px; color: #e7e1d6; opacity: 0.55;
+    transition: opacity 700ms linear;
+  }
+  #hint.gone { opacity: 0; }
+  #dots {
+    position: fixed; left: 0; right: 0; bottom: 18px;
+    display: flex; justify-content: center; gap: 12px;
+  }
+  #dots i {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: #c4a574; opacity: 0.25;
+    transition: opacity 700ms linear;
+  }
+  #dots i.on { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    #eq, #floor, #n, .sent, #hint, #dots i { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="eq">eval ⟦eval⟧ p&nbsp;&nbsp;<span class="eqs">=</span>&nbsp;&nbsp;eval p</div>
+  <div id="floor"></div>
+  <div id="n">71</div>
+  <div id="s" class="sent"></div>
+</div>
+<div id="s0" class="sent"></div>
+<div id="hint">space</div>
+<div id="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<script>
+(function () {
+  var T = [
+    "What this unlocks.",
+    "The proof is about the code that runs.",
+    "Eval is defined once.",
+    "If the two sides differ, the build fails.",
+    "This covers variables, functions, and calls.",
+    "Programs that use quote are outside this proof.",
+    "Zig prints the result. Lean computes it.",
+    "Widen the proof to add numbers, recursion, or effects."
+  ];
+  var $ = function (id) { return document.getElementById(id); };
+  var eq = $("eq"), fl = $("floor"), nn = $("n"), s = $("s"), s0 = $("s0"), hint = $("hint");
+  var dots = document.querySelectorAll("#dots i");
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+  var beat = 0, shown = -1, timer = null;
+
+  function chrome(b) {
+    eq.style.opacity = b >= 1 ? 1 : 0;
+    fl.style.opacity = b >= 5 ? 1 : 0;
+    nn.style.opacity = b >= 6 ? 1 : 0;
+    for (var i = 0; i < dots.length; i++) dots[i].className = (b - 1 === i) ? "on" : "";
+  }
+  function put(b) {
+    var el = b === 0 ? s0 : s;
+    var other = b === 0 ? s : s0;
+    other.textContent = ""; other.style.opacity = 0;
+    el.textContent = T[b]; el.style.opacity = 1;
+    shown = b;
+  }
+  function render() {
+    var b = beat;
+    clearTimeout(timer);
+    chrome(b);
+    if (reduce.matches || shown < 0) { put(b); return; }
+    s.style.opacity = 0; s0.style.opacity = 0;
+    timer = setTimeout(function () { put(b); }, 700);
+  }
+  function go(d) {
+    var n = beat + d;
+    if (n < 0 || n > 7) return;
+    beat = n;
+    if (d > 0) hint.className = "gone";
+    render();
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key === " " || e.key === "ArrowRight") { e.preventDefault(); go(1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
+  });
+  document.addEventListener("click", function (e) { go(e.shiftKey ? -1 : 1); });
+  render();
+})();
+</script>
+</body>
+</html>
