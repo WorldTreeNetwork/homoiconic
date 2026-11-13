@@ -1,0 +1,17 @@
+; a program that writes a program. `power n` builds the code of the function
+; that raises its argument to the n-th power with no loop left in it: for 3 it
+; is the code of `fn x -> mul x (mul x (mul x 1))`. The code is put together as
+; data: [1, body] is a function, [0, f, a] an application, a bare number the
+; variable that many binders out, and [2, d] the data d.
+def body n =
+  case n
+    0 -> quote 1
+    m + 1 -> [0, [0, quote mul, 0], body m]
+
+def power n = [1, body n]
+
+; the built code, applied to 2, is itself a program; `interpret` runs it and
+; answers [0, [1, result]]
+def run code x = interpret [0, code, [2, x]]
+
+[power 3, run (power 3) 2, run (power 10) 2, run (power 100) 2]

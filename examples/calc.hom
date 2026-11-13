@@ -1,0 +1,98 @@
+; a calculator: read an expression from text, work it out, and write the
+; answer as text. Numbers, + - * /, and parentheses, with the usual precedence.
+; A parser answers [value, rest of the text].
+def first p =
+  case p
+    [] -> 0
+    [a, ...more] -> a
+
+def rest p =
+  case p
+    [] -> []
+    [a, ...more] -> first more
+
+def isDigit c = case less c '0'
+  0 -> less c (add '9' 1)
+  _ -> 0
+
+def skip text =
+  case text
+    [] -> []
+    [c, ...more] ->
+      case equal c ' '
+        0 -> text
+        _ -> skip more
+
+; the digits at the front of the text, onto the number so far
+def number sofar text =
+  case text
+    [] -> [sofar, []]
+    [c, ...more] ->
+      case isDigit c
+        0 -> [sofar, text]
+        _ -> number (add (mul sofar 10) (sub c '0')) more
+
+; Definitions cannot name one another in a ring, so the parts below `expr`
+; are handed `expr` as an argument.
+def factor expr text =
+  case skip text
+    [] -> [0, []]
+    [c, ...more] ->
+      case equal c '('
+        0 -> number 0 [c, ...more]
+        _ ->
+          let inner = expr more
+          case skip (rest inner)
+            [] -> [first inner, []]
+            [close, ...after] -> [first inner, after]
+
+def products expr got =
+  let text = skip (rest got)
+  case text
+    [] -> got
+    [c, ...more] ->
+      case equal c '*'
+        0 ->
+          case equal c '/'
+            0 -> [first got, text]
+            _ ->
+              let next = factor expr more
+              products expr [div (first got) (first next), rest next]
+        _ ->
+          let next = factor expr more
+          products expr [mul (first got) (first next), rest next]
+
+def term expr text = products expr (factor expr text)
+
+def sums expr got =
+  let text = skip (rest got)
+  case text
+    [] -> got
+    [c, ...more] ->
+      case equal c '+'
+        0 ->
+          case equal c '-'
+            0 -> [first got, text]
+            _ ->
+              let next = term expr more
+              sums expr [sub (first got) (first next), rest next]
+        _ ->
+          let next = term expr more
+          sums expr [add (first got) (first next), rest next]
+
+def expr text = sums expr (term expr text)
+
+; a number as decimal text
+def digits n tail =
+  let here = [add '0' (mod n 10), ...tail]
+  case div n 10
+    0 -> here
+    more -> digits more here
+
+def append xs ys =
+  case xs
+    [] -> ys
+    [h, ...t] -> [h, ...append t ys]
+
+let question = "2 * (3 + 4) * 5 - 100 / (7 - 2)"
+append question (append " = " (digits (first (expr question)) []))

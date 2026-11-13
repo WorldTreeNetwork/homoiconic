@@ -4,12 +4,12 @@ extern fn initialize_circularKernel_Surface_Host(builtin: u8) *anyopaque;
 extern fn kernel_finish_initialization(result: *anyopaque) u8;
 extern fn reflect_run(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
 extern fn reflect_run_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
-extern fn reflect_interp(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, levels: u32, bytes: u8) usize;
+extern fn reflect_interp(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, levels: u32, flags: u8) usize;
 
 /// Steps the machine may take when no budget is given.
 const default_budget: u64 = 100_000_000;
 
-const usage = "usage: run [--bytes] [--interp[=levels]] <program-file> [step-budget]   (default budget: 100000000 machine steps)\n";
+const usage = "usage: run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget]   (default budget: 100000000 machine steps)\n";
 
 fn fail(comptime format: []const u8, args: anytype) noreturn {
     std.debug.print(format, args);
@@ -21,7 +21,9 @@ fn fail(comptime format: []const u8, args: anytype) noreturn {
 /// `reflect_run_bytes`; bytes that are not a program are the kernel's text too.
 /// With `--interp` the program runs through the metacircular interpreter, the
 /// closed term `interp` given the program as data (`reflect_interp`), and with
-/// `--interp=k` through `k` interpreters, each running the next. Zig does not
+/// `--interp=k` through `k` interpreters, each running the next. With `--text`
+/// the kernel writes a result that is an array of code points as the text it
+/// spells. Zig does not
 /// read the program, and it does not look at the answer:
 /// a syntax error, an error outcome and a value are all text the kernel wrote,
 /// and all of them exit 0. Exit 2 means this command could not ask the kernel
@@ -31,11 +33,14 @@ pub fn main(init: std.process.Init) void {
     const all = init.minimal.args.toSlice(arena) catch fail("run: out of memory\n", .{});
     var as_bytes = false;
     var levels: ?u32 = null;
+    var as_text = false;
     var first_arg: usize = 1;
     while (first_arg < all.len) : (first_arg += 1) {
         const a = all[first_arg];
         if (std.mem.eql(u8, a, "--bytes") and !as_bytes) {
             as_bytes = true;
+        } else if (std.mem.eql(u8, a, "--text") and !as_text) {
+            as_text = true;
         } else if (std.mem.eql(u8, a, "--interp") and levels == null) {
             levels = 1;
         } else if (std.mem.startsWith(u8, a, "--interp=") and levels == null) {
@@ -64,10 +69,10 @@ pub fn main(init: std.process.Init) void {
     // length, and the same program is run again with that much room.
     var first: [65536]u8 = undefined;
     var text: []u8 = &first;
-    var needed = ask(program, text, budget, as_bytes, levels);
+    var needed = ask(program, text, budget, as_bytes, as_text, levels);
     if (needed > text.len) {
         text = arena.alloc(u8, needed) catch fail("run: out of memory\n", .{});
-        needed = ask(program, text, budget, as_bytes, levels);
+        needed = ask(program, text, budget, as_bytes, as_text, levels);
         if (needed > text.len) fail("run: the kernel gave two different answers\n", .{});
     }
 
@@ -76,9 +81,11 @@ pub fn main(init: std.process.Init) void {
     out.writeStreamingAll(init.io, "\n") catch fail("run: cannot write the answer\n", .{});
 }
 
-fn ask(program: []const u8, text: []u8, budget: u64, as_bytes: bool, levels: ?u32) usize {
-    if (levels) |k|
-        return reflect_interp(program.ptr, program.len, text.ptr, text.len, budget, k, @intFromBool(as_bytes));
+fn ask(program: []const u8, text: []u8, budget: u64, as_bytes: bool, as_text: bool, levels: ?u32) usize {
+    if (levels != null or as_text) {
+        const flags: u8 = @as(u8, @intFromBool(as_bytes)) | (@as(u8, @intFromBool(as_text)) << 1);
+        return reflect_interp(program.ptr, program.len, text.ptr, text.len, budget, levels orelse 0, flags);
+    }
     const run = if (as_bytes) &reflect_run_bytes else &reflect_run;
     return run(program.ptr, program.len, text.ptr, text.len, budget);
 }

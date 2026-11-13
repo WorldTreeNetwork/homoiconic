@@ -41,6 +41,29 @@ def renderState (budget : Nat) : State → String
   | .running .. => s!"no result within {budget} steps"
   | .fault => "error: machine fault"
 
+/-- The text an array spells, when every item is the code point of a tab, a
+    line feed, or a character from the space up other than delete. Smaller
+    numbers are control characters, and an array of them is not taken for text. -/
+def textOf : List Data → Option (List Char)
+  | [] => some []
+  | .nat n :: rest =>
+    if h : n.isValidChar then
+      if n == 9 || n == 10 || (32 ≤ n && n != 127) then
+        (textOf rest).map (Char.ofNatAux n h :: ·)
+      else none
+    else none
+  | _ :: _ => none
+
+/-- As `renderMOutcome`, but an array of code points is written as the text it
+    spells. Every other outcome is written as `renderMOutcome` writes it, so the
+    empty array is the empty text. -/
+def renderMOutcomeText : MOutcome → String
+  | .value (.data (.arr xs)) =>
+    match textOf xs with
+    | some cs => String.ofList cs
+    | none => renderData (.arr xs)
+  | o => renderMOutcome o
+
 def renderSyntaxError (msg : String) : String := "syntax error: " ++ msg
 
 end Surface

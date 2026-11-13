@@ -1,0 +1,63 @@
+; primes by a line of processes. One process sends 2, 3, 4, ... down a channel.
+; Each filter takes the first number it receives as its prime, reports it,
+; starts the next filter, and passes on what its prime does not divide. A 0
+; ends the line. A quoted program cannot name itself, so a filter is started
+; on its own code: [code, in, report].
+let count = quote (fn start ->
+  def at n xs =
+    case xs
+      [] -> 0
+      [h, ...t] ->
+        case n
+          0 -> h
+          m + 1 -> at m t
+  def send out n last =
+    case less last n
+      0 -> ask [1, out, n] (fn sent -> send out (n + 1) last)
+      _ -> ask [1, out, 0] (fn sent -> [])
+  send (at 0 start) 2 (at 1 start))
+
+let filter = quote (fn start ->
+  def at n xs =
+    case xs
+      [] -> 0
+      [h, ...t] ->
+        case n
+          0 -> h
+          m + 1 -> at m t
+  let code = at 0 start
+  let in = at 1 start
+  let report = at 2 start
+  def pass prime out =
+    ask [2, in] (fn n ->
+      case n
+        0 -> ask [1, out, 0] (fn sent -> [prime])
+        _ ->
+          case mod n prime
+            0 -> pass prime out
+            _ -> ask [1, out, n] (fn sent -> pass prime out))
+  ask [2, in] (fn prime ->
+    case prime
+      0 -> ask [1, report, 0] (fn sent -> [])
+      _ ->
+        ask [1, report, prime] (fn sent ->
+          ask [0] (fn out ->
+            ask [3, code, [code, out, report]] (fn started ->
+              pass prime out)))))
+
+def reverse xs acc =
+  case xs
+    [] -> acc
+    [h, ...t] -> reverse t [h, ...acc]
+
+def collect report primes =
+  ask [2, report] (fn p ->
+    case p
+      0 -> reverse primes []
+      _ -> collect report [p, ...primes])
+
+ask [0] (fn numbers ->
+  ask [0] (fn report ->
+    ask [3, count, [numbers, 30]] (fn started ->
+      ask [3, filter, [filter, numbers, report]] (fn started ->
+        collect report []))))

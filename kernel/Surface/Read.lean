@@ -28,6 +28,8 @@ def wrongTerm : Term := .app (.lit (.nat 0)) (.lit (.nat 0))
 
 inductive Tk where
   | num (n : Nat)
+  /-- A string literal, as its code points. -/
+  | str (cs : List Nat)
   | name (s : String)
   | lparen | rparen | lbrack | rbrack
   | comma | dots | arrow | eq | plus | pipe | tilde
@@ -35,6 +37,7 @@ inductive Tk where
 
 def Tk.show : Tk → String
   | .num n => toString n
+  | .str _ => "a string"
   | .name s => s
   | .lparen => "("
   | .rparen => ")"
@@ -86,6 +89,27 @@ def restBlank (cs : List UInt8) : Bool :=
   | [] => true
   | c :: _ => c == 10 || c == 59
 
+/-- One character inside quotes: a byte, or `\n`, `\t`, `\\`, `\"`, `\'`. Answers
+    the byte it stands for, how many bytes of source it took, and the rest. -/
+def lexChar : List UInt8 → Option (UInt8 × Nat × List UInt8)
+  | 92 :: e :: rest =>
+    if e == 110 then some (10, 2, rest)
+    else if e == 116 then some (9, 2, rest)
+    else if e == 92 || e == 34 || e == 39 then some (e, 2, rest)
+    else none
+  | c :: rest => if c == 10 || c == 92 then none else some (c, 1, rest)
+  | [] => none
+
+/-- The inside of a string literal up to its closing quote: the bytes it
+    stands for, the source bytes taken (the closing quote among them), the rest. -/
+def lexString : Nat → List UInt8 → Array UInt8 → Nat → Option (Array UInt8 × Nat × List UInt8)
+  | 0, _, _, _ => none
+  | _ + 1, 34 :: rest, acc, len => some (acc, len + 1, rest)
+  | f + 1, cs, acc, len =>
+    match lexChar cs with
+    | some (b, k, rest) => lexString f rest (acc.push b) (len + k)
+    | none => none
+
 def lexGo : Nat → List UInt8 → Nat → Nat → Bool → Array Tok →
     Except String (Array Tok × Nat × Nat)
   | 0, _, line, col, _, _ => .error (msgAt line col "the input is too large to read")
@@ -112,6 +136,20 @@ def lexGo : Nat → List UInt8 → Nat → Nat → Bool → Array Tok →
       else if isIdStart c then
         let r := takeWhileB isIdChar (c :: cs)
         push (.name (String.ofList (r.1.map fun b => Char.ofNat b.toNat))) r.1.length r.2
+      else if c == 34 then
+        match lexString (cs.length + 1) cs #[] 1 with
+        | some (bytes, len, rest) =>
+          match String.fromUTF8? (ByteArray.mk bytes) with
+          | some text => push (.str (text.toList.map Char.toNat)) len rest
+          | none => .error (msgAt line col "a string that is not UTF-8")
+        | none => .error (msgAt line col
+            "a string that does not end on its line, or an escape other than \\n \\t \\\\ \\\" \\'")
+      else if c == 39 then
+        match lexChar cs with
+        | some (b, k, 39 :: rest) =>
+          if b < 128 then push (.num b.toNat) (k + 2) rest
+          else .error (msgAt line col "a character literal is one ASCII character")
+        | _ => .error (msgAt line col "a character literal is one ASCII character between `'`")
       else if c == 40 then push .lparen 1 cs
       else if c == 41 then push .rparen 1 cs
       else if c == 91 then push .lbrack 1 cs
@@ -245,6 +283,7 @@ def isKeyword (s : String) : Bool :=
 
 def startsAtom : Tk → Bool
   | .num _ => true
+  | .str _ => true
   | .name s => s != "let" && s != "def"
   | .lparen | .lbrack | .tilde => true
   | _ => false
@@ -394,6 +433,7 @@ mutual
         let pos : Pos := (t.line, t.col)
         match t.kind with
         | .num n => do advance; pure (.num n)
+        | .str cs => do advance; pure (cs.foldr (fun c e => .cons (.num c) e) .nil)
         | .name "fn" => do
           advance
           setGuard l

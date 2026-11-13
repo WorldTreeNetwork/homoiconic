@@ -104,7 +104,7 @@ cmp "$OUT/long.expected" "$OUT/long.txt"
 
 # A call the command cannot make: exit 2, nothing on standard output, and
 # exactly the one expected line on standard error, byte for byte.
-USAGE="usage: run [--bytes] [--interp[=levels]] <program-file> [step-budget]   (default budget: 100000000 machine steps)"
+USAGE="usage: run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget]   (default budget: 100000000 machine steps)"
 BUDGET="run: the step budget must be a whole number"
 NEWLINE="x
 y"
@@ -211,6 +211,36 @@ quine="$("$OUT/run" "$EXAMPLES/quine.hom")"
 printf 'interpret %s\n' "$quine" > "$OUT/quine-again.hom"
 expect "[0, [1, $quine]]" "$OUT/quine-again.hom"
 sameThroughInterp "$EXAMPLES/quine.hom" 2
+# Strings: a string literal is the array of its code points and a character
+# literal is its number. `--text` writes a result that is such an array as the
+# text it spells, and any other result as it is written without the flag.
+printf '"h\\\\i\\n"\n' > "$OUT/string.hom"
+expect "[104, 92, 105, 10]" "$OUT/string.hom"
+printf "['a', '\\\\n', '\\\\'']\n" > "$OUT/chars.hom"
+expect "[97, 10, 39]" "$OUT/chars.hom"
+printf '"h\303\251 \342\206\222"\n' > "$OUT/utf8.hom"
+expect "[104, 233, 32, 8594]" "$OUT/utf8.hom"
+expect "$(printf 'h\303\251 \342\206\222')" --text "$OUT/utf8.hom"
+expect "[1, 2, 3, 4]" --text "$EXAMPLES/append.hom"
+expect "<function>" --text "$OUT/identity.hom"
+printf '"no end\n' > "$OUT/open-string.hom"
+expect "syntax error: line 1, column 1: a string that does not end on its line, or an escape other than \\n \\t \\\\ \\\" \\'" "$OUT/open-string.hom"
+# Programs that use them. A calculator reads an expression from text; words
+# are sorted under three orders passed as functions; a program builds the code
+# of a power function as data and runs it. Each prints the same through the
+# interpreter.
+expect "2 * (3 + 4) * 5 - 100 / (7 - 2) = 50" --text "$EXAMPLES/calc.hom"
+expect "2 * (3 + 4) * 5 - 100 / (7 - 2) = 50" --text --interp "$EXAMPLES/calc.hom"
+expect "brown dog fox jumps lazy over quick the the
+dog fox the the lazy over brown jumps quick
+the the quick over lazy jumps fox dog brown" --text "$EXAMPLES/words.hom"
+sameThroughInterp "$EXAMPLES/calc.hom" 1
+sameThroughInterp "$EXAMPLES/words.hom" 1
+sameThroughInterp "$EXAMPLES/power.hom" 1
+case "$("$OUT/run" "$EXAMPLES/power.hom")" in
+    *", [0, [1, 8]], [0, [1, 1024]], [0, [1, 1267650600228229401496703205376]]]") ;;
+    *) echo "power.hom: the built code did not give 2^3, 2^10 and 2^100" >&2; exit 1 ;;
+esac
 sameThroughInterp "$EXAMPLES/forever.hom" 1 5000
 sameThroughInterp "$OUT/wide.hom" 1
 expect "[1, 2, 3, 4]" --interp "$EXAMPLES/append.hom"
@@ -410,6 +440,14 @@ sed -n 's/^schedule: //p' "$OUT/ping.txt" > "$OUT/ping.schedule"
 "$OUT/chan" "$EXAMPLES/ping.hom" "$OUT/ping.schedule" > "$OUT/ping-replay.txt"
 cmp "$OUT/ping.txt" "$OUT/ping-replay.txt"
 echo "chan: the recorded schedule replays to the same text"
+# A line of thirteen processes finds the primes to 30, and its schedule replays.
+"$OUT/chan" "$EXAMPLES/sieve.hom" - 100000000 100000 > "$OUT/sieve.txt"
+want "$(sed -n 's/^process 0: \(.*\); holds.*/\1/p' "$OUT/sieve.txt")" "[2, 3, 5, 7, 11, 13, 17, 19, 23, 29]"
+want "$(tail -1 "$OUT/sieve.txt")" "no event is offered"
+sed -n 's/^schedule: //p' "$OUT/sieve.txt" > "$OUT/sieve.schedule"
+"$OUT/chan" "$EXAMPLES/sieve.hom" "$OUT/sieve.schedule" > "$OUT/sieve-replay.txt"
+cmp "$OUT/sieve.txt" "$OUT/sieve-replay.txt"
+echo "chan: the sieve finds the primes to 30 and replays"
 # A prefix of the schedule stops part way, and the chooser has a next event.
 printf '[[0, 0, 0], [1, 0]]\n' > "$OUT/prefix.schedule"
 channels "schedule: [[0, 0, 0], [1, 0]]

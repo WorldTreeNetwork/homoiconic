@@ -1,0 +1,103 @@
+; sort the words of a sentence. The order is an argument: merge sort takes the
+; function that says which of two items comes first, so functions are passed
+; and returned here.
+def reverse xs acc =
+  case xs
+    [] -> acc
+    [h, ...t] -> reverse t [h, ...acc]
+
+def fold step acc xs =
+  case xs
+    [] -> acc
+    [h, ...t] -> fold step (step acc h) t
+
+; text into words, at spaces
+def words text word =
+  let done = fn rest ->
+    case word
+      [] -> rest
+      _ -> [reverse word [], ...rest]
+  case text
+    [] -> done []
+    [c, ...more] ->
+      case equal c ' '
+        0 -> words more [c, ...word]
+        _ -> done (words more [])
+
+; 1 when text a comes before text b
+def before a b =
+  case b
+    [] -> 0
+    [y, ...bs] ->
+      case a
+        [] -> 1
+        [x, ...as] ->
+          case equal x y
+            0 -> less x y
+            _ -> before as bs
+
+; every second item, starting at the first
+def halves xs =
+  case xs
+    [] -> [[], []]
+    [a, ...more] ->
+      case halves more
+        [] -> []
+        [left, ...others] ->
+          case others
+            [] -> []
+            [right, ...none] -> [[a, ...right], left]
+
+def merge first xs ys =
+  case xs
+    [] -> ys
+    [x, ...xt] ->
+      case ys
+        [] -> xs
+        [y, ...yt] ->
+          case first y x
+            0 -> [x, ...merge first xt ys]
+            _ -> [y, ...merge first xs yt]
+
+def sort first xs =
+  case xs
+    [] -> []
+    [a, ...more] ->
+      case more
+        [] -> xs
+        _ ->
+          case halves xs
+            [] -> []
+            [left, ...others] ->
+              case others
+                [] -> []
+                [right, ...none] -> merge first (sort first left) (sort first right)
+
+def length xs = fold (fn n x -> n + 1) 0 xs
+
+; an order made from another: shorter first, then the order given
+def shortest then a b =
+  case equal (length a) (length b)
+    0 -> less (length a) (length b)
+    _ -> then a b
+
+def join texts =
+  case texts
+    [] -> []
+    [t, ...more] ->
+      case more
+        [] -> t
+        _ -> fold (fn acc c -> [c, ...acc]) [' ', ...join more] (reverse t [])
+
+def append xs ys =
+  case xs
+    [] -> ys
+    [h, ...t] -> [h, ...append t ys]
+
+; An array holds data only, so the three orders cannot be put in one; each is
+; handed to `line` in turn.
+let sentence = words "the quick brown fox jumps over the lazy dog" []
+def line order = append (join (sort order sentence)) "\n"
+append (line before)
+  (append (line (shortest before))
+    (line (fn a b -> before b a)))

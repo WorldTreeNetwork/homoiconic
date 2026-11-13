@@ -53,14 +53,17 @@ unsafe def reflectRunBytes (program length out capacity : USize) (budget : UInt6
 
 /-- C ABI: as `reflect_run`, but the program runs through `levels`
     interpreters: the closed term `interp` on the program as data, on the
-    machine. `bytes` is 1 when the program is given in its byte form and 0 when
-    it is source. Level 0 is `reflect_run` or `reflect_run_bytes`. -/
+    machine. Level 0 runs the program itself. `flags` bit 0 is set when the
+    program is given in its byte form, not as source. Bit 1 is set to write a
+    result that is an array of code points as the text it spells. -/
 @[export reflect_interp]
 unsafe def reflectInterp (program length out capacity : USize) (budget : UInt64)
-    (levels : UInt32) (bytes : UInt8) : USize :=
+    (levels : UInt32) (flags : UInt8) : USize :=
   let input := copyBytes program length
-  let text := if bytes == 1 then Surface.interpBytes input levels.toNat budget.toNat
-    else Surface.interpText input levels.toNat budget.toNat
+  let asText := flags &&& 2 == 2
+  let text := if flags &&& 1 == 1 then
+      Surface.interpBytes input levels.toNat budget.toNat asText
+    else Surface.interpText input levels.toNat budget.toNat asText
   storeBytes out capacity text.toUTF8
 
 /-- C ABI: program source pointer and length, output pointer and capacity.

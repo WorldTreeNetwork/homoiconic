@@ -32,28 +32,29 @@ def unlift : Nat → MOutcome → Option MOutcome
 /-- Run `t` through `k` interpreters, `level k t`, on the machine for `budget`
     steps, and render what the program itself gave. `Reflect.tower` and the
     machine theorems say the text is the text of the direct run when both
-    finish. An answer that is not an outcome's data form cannot happen and
+    finish. With `asText` a result that is an array of code points is written
+    as the text it spells. An answer that is not an outcome's data form cannot happen and
     renders as an internal error. -/
-def renderInterpreted (k budget : Nat) (t : Term) : String :=
+def renderInterpreted (k budget : Nat) (asText : Bool) (t : Term) : String :=
   match runUntil budget (load (compile (level k t))) with
   | .halted o =>
     match unlift k o with
-    | some o => renderMOutcome o
+    | some o => if asText then renderMOutcomeText o else renderMOutcome o
     | none => "error: the interpreter answered something that is not an outcome"
   | s => renderState budget s
 
 /-- `runBytes` through `k` interpreters. The program's bytes are already its
     data form; `level` quotes it once more for each level above the first. -/
-def interpBytes (bytes : ByteArray) (k budget : Nat) : String :=
+def interpBytes (bytes : ByteArray) (k budget : Nat) (asText : Bool := false) : String :=
   match Wire.readProgram bytes with
   | .error msg => renderBytesError msg
-  | .ok t => renderInterpreted k budget t
+  | .ok t => renderInterpreted k budget asText t
 
 /-- `runText` through `k` interpreters. -/
-def interpText (src : ByteArray) (k budget : Nat) : String :=
+def interpText (src : ByteArray) (k budget : Nat) (asText : Bool := false) : String :=
   match read src with
   | .error msg => renderSyntaxError msg
-  | .ok t => renderInterpreted k budget t
+  | .ok t => renderInterpreted k budget asText t
 
 /-- Read a program's source and give its byte form. The first byte answered is
     0 and the byte form follows, or it is 1 and the syntax error follows. -/
