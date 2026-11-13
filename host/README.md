@@ -3,8 +3,9 @@
 From the repository root, run `sh host/check.sh` with Zig 0.16.0 and the
 Lean toolchain pinned in `kernel/lean-toolchain` installed. The script builds
 the package, checks `ReflectContract.lean`, `MachineContract.lean`,
-`RequestContract.lean`, `StoreContract.lean` and `Surface/Check.lean`, runs
-`ReflectRun.lean`, `WireCheck.lean`, `KeepCheck.lean` and `StoreCheck.lean`
+`RequestContract.lean`, `StoreContract.lean`, `ChannelContract.lean`,
+`LogContract.lean` and `Surface/Check.lean`, runs
+`ReflectRun.lean`, `WireCheck.lean`, `KeepCheck.lean`, `LogCheck.lean` and `StoreCheck.lean`
 and fails on a line that starts with `FAIL`, writes the
 programs to run, compiles Lean to C and C to objects, compiles the Zig check to
 an object, and links with `leanc`. Generated C, objects, the generated
@@ -186,6 +187,71 @@ is installed, agrees with every file name; that the first root answered again
 with 30 ends in `[2000, 52]` and adds fewer than ten files; that a turn run
 twice gives the same root and no new file; the exit 3 with a piece moved away;
 the refusal of a piece with a byte added; and the exit 2 cases.
+
+## Running a program against a log
+
+```
+void *reflect_vm_start(const uint8_t *program, size_t length,
+                       const uint8_t *log, size_t log_length, uint64_t budget);
+void *reflect_vm_from(const uint8_t *root, size_t root_length,
+                      const uint8_t *log, size_t log_length, uint64_t budget);
+```
+
+Both give a session, served as a `keep` session is (`session.zig`). The
+program is a VM: it handles a log, a list of entries, each an identifier and
+an answer (`kernel/README.md`, The log). A log file is a program whose result
+is an array of `[identifier, answer]`:
+
+```
+cat examples/ask.log
+; a log: each entry is an identifier and an answer
+[[1, 20], [2, 22]]
+```
+
+`check.sh` builds `out/vm`:
+
+```
+mkdir -p /tmp/vm
+host/out/vm /tmp/vm start examples/ask.hom examples/ask-one.log
+waiting on [2, 20]
+entries: 1 given, 1 acted on
+state: 0ea59a7a...
+store: fetched 0, wrote 1
+
+host/out/vm /tmp/vm from 0ea59a7a... examples/ask.log
+42
+entries: 2 given, 1 acted on
+state: 088eeb2e...
+store: fetched 1, wrote 1
+```
+
+`start` runs the program from its beginning and hands it the log. `from`
+hands the log to the state kept under a root. The first line is where the
+program stands: `waiting on` a payload, a result, or an error. Then how many
+entries the log held and how many the VM acted on, the root of the state, and
+the store line. An entry whose identifier the VM has acted on is passed over,
+so a kept state can be handed the whole log again: above, the second call is
+given both entries and acts on one. The state it reaches has the root that
+`start` on `examples/ask.log` prints, and that the same start prints after
+the directory is emptied. `examples/ask-again.log` delivers the two entries
+five times, once with another answer, and reaches that root too. The same
+answers in the other order reach another.
+
+The roots agreeing is what `check.sh` and `kernel/LogCheck.lean` test. It is
+proved that the states are equal (`log_restart`, `log_once`); that equal
+states are cut into the same pieces is tested.
+
+`vm.zig` reads the files and serves the session. It does not read the log,
+decide what an entry does, or name the state. It exits 0 whenever the kernel
+answered, 3 with nothing written when the directory lacks a piece that is
+needed, and 2, with a message on standard error, for a wrong call, a file or
+directory it cannot read, or a file it cannot write. The step budget is for
+each machine run (default 100000000); when a run does not end within it, the
+command prints `no result within N steps of a turn` and keeps nothing.
+
+The command is handed a log; it does not keep one or add to one. An
+identifier is whatever the log says, and of two entries with one identifier
+the first is acted on.
 
 ## Running a program against answers
 

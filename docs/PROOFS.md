@@ -143,6 +143,21 @@ configuration is every process, the names each holds, and the names made.
 | `network_machine`, `network_machine_exact` | The machine runs a schedule exactly as direct evaluation does |
 | `replay_true`, `auto_true` | The events the executable scheduler reports as done, and the configuration it reports, are a run of the program by direct evaluation, however the run stopped |
 
+### The log
+
+A VM is a program and the identifiers of the log entries it has acted on. A
+log is a list of entries, each an identifier and an answer.
+
+| Theorem | Says |
+|---|---|
+| `log_deterministic` | The state of a VM is fixed by its program and its log |
+| `log_prefix` | The state after a log is the state after any first part of it, carried on through the rest |
+| `log_again` | Handling an entry that is already in the log leaves the state as it is |
+| `log_redeliver`, `log_once` | An entry delivered again changes nothing; a log does what its first deliveries do, in their order |
+| `log_restart` | A state reached by a first part of the log, given the whole log, reaches what the whole log reaches from the start |
+| `log_interact` | A VM's run is a run of its program by the request driver, against the answers of the first deliveries |
+| `log_machine`, `log_machine_exact`, `vm_true` | The machine handles a log exactly as direct evaluation does, and a state the executable fold reports is the program's |
+
 ### Stored state
 
 A store holds pieces under references and may lack any of them. A piece
@@ -310,13 +325,20 @@ theorems; `advance` is tested against it.
   value held in two places is stored twice. Storing by hash removes the
   duplicates: the interpreter-twice state after 40 steps, cut at every value,
   is 168,796 saves and 774 distinct pieces.
-- **The network.** What a payload means, logs, several VMs and model calls
+- **The log.** An identifier is whatever the log says: it is not a hash of the
+  entry and nothing is signed. An entry does not say which request it
+  answers. Nothing says a state is the same under another order of
+  deliveries. That a state reached by two routes is saved under one root is
+  tested, not proved, and so is the session that handles a log against a
+  store. The interpreter on data is not covered for a log.
+- **The network.** What a payload means, several VMs and model calls
   are the roadmap in `openspec/changes/add-verifiable-network-vision/`.
 
 ## Next
 
 Programs can run side by side in one machine and talk over channels, under a
-recorded schedule. A waiting program can be kept on disk, under references made by Blake3. The
-event log and one VM follow (vision stage 5: P13 as a fold over the log, and
-P14). Signatures, garbage collection and a store shared between machines are
+recorded schedule. A waiting program can be kept on disk, under references made by Blake3. A
+program's state is the fold of a handler over a log, a repeated entry changes
+nothing, and a kept state handed its whole log reaches the state the log gives
+from the start (vision stage 5: P13 and P14). Signatures, garbage collection and a store shared between machines are
 not started.

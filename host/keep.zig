@@ -1,16 +1,10 @@
 const std = @import("std");
+const session = @import("session.zig");
 
 extern fn initialize_circularKernel_Surface_Host(builtin: u8) *anyopaque;
 extern fn kernel_finish_initialization(result: *anyopaque) u8;
-extern fn kernel_retain(value: *anyopaque) void;
 extern fn reflect_keep_start(program: [*]const u8, length: usize, budget: u64) *anyopaque;
 extern fn reflect_keep_answer(root: [*]const u8, root_length: usize, answer: [*]const u8, answer_length: usize, budget: u64) *anyopaque;
-extern fn reflect_keep_need(session: *anyopaque, out: [*]u8, capacity: usize) usize;
-extern fn reflect_keep_give(session: *anyopaque, piece: [*]const u8, length: usize) *anyopaque;
-extern fn reflect_keep_count(session: *anyopaque) usize;
-extern fn reflect_keep_name(session: *anyopaque, index: usize, out: [*]u8, capacity: usize) usize;
-extern fn reflect_keep_piece(session: *anyopaque, index: usize, out: [*]u8, capacity: usize) usize;
-extern fn reflect_keep_text(session: *anyopaque, out: [*]u8, capacity: usize) usize;
 
 const default_budget: u64 = 100_000_000;
 
@@ -56,54 +50,10 @@ pub fn main(init: std.process.Init) void {
     if (kernel_finish_initialization(initialize_circularKernel_Surface_Host(0)) == 0)
         fail("keep: the kernel did not start\n", .{});
 
-    var session = if (starting)
+    const first = if (starting)
         reflect_keep_start(source.ptr, source.len, budget)
     else
         reflect_keep_answer(args[3].ptr, args[3].len, source.ptr, source.len, budget);
 
-    // Supply pieces until the turn needs no more.
-    var name: [64]u8 = undefined;
-    while (true) {
-        kernel_retain(session);
-        const length = reflect_keep_need(session, &name, name.len);
-        if (length == 0) break;
-        if (length != name.len) fail("keep: the kernel named a piece badly\n", .{});
-        const piece = store.readFileAlloc(io, &name, arena, .unlimited) catch |err| {
-            if (err == error.FileNotFound) {
-                std.debug.print("keep: the store lacks piece {s}\n", .{name});
-                std.process.exit(3);
-            }
-            fail("keep: cannot read piece {s}: {s}\n", .{ name, @errorName(err) });
-        };
-        session = reflect_keep_give(session, piece.ptr, piece.len);
-    }
-
-    // Store the new pieces before saying where the root is.
-    kernel_retain(session);
-    const count = reflect_keep_count(session);
-    var index: usize = 0;
-    var none: [1]u8 = undefined;
-    while (index < count) : (index += 1) {
-        kernel_retain(session);
-        if (reflect_keep_name(session, index, &name, name.len) != name.len)
-            fail("keep: the kernel named a piece badly\n", .{});
-        kernel_retain(session);
-        const size = reflect_keep_piece(session, index, &none, 0);
-        const bytes = arena.alloc(u8, size) catch fail("keep: out of memory\n", .{});
-        kernel_retain(session);
-        if (reflect_keep_piece(session, index, bytes.ptr, bytes.len) != size)
-            fail("keep: the kernel gave two different answers\n", .{});
-        store.writeFile(io, .{ .sub_path = &name, .data = bytes }) catch |err|
-            fail("keep: cannot write piece {s}: {s}\n", .{ name, @errorName(err) });
-    }
-
-    kernel_retain(session);
-    const size = reflect_keep_text(session, &none, 0);
-    const text = arena.alloc(u8, size) catch fail("keep: out of memory\n", .{});
-    kernel_retain(session);
-    if (reflect_keep_text(session, text.ptr, text.len) != size)
-        fail("keep: the kernel gave two different answers\n", .{});
-    const out = std.Io.File.stdout();
-    out.writeStreamingAll(io, text) catch fail("keep: cannot write the answer\n", .{});
-    out.writeStreamingAll(io, "\n") catch fail("keep: cannot write the answer\n", .{});
+    session.carry("keep", io, arena, store, first);
 }

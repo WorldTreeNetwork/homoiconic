@@ -1,0 +1,2 @@
+; ask.log as it might arrive: entries delivered more than once
+[[1, 20], [1, 20], [2, 22], [1, 99], [2, 22]]

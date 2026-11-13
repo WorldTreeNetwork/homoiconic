@@ -188,6 +188,29 @@ number larger than the size stored on its own; a result behind 70
 references; and three turns, each a new session, giving what one run against
 both answers gives.
 
+## The log
+
+A VM is a program that makes requests, together with the identifiers of the
+log entries it has acted on (`Reflect/Log.lean`). A log is a list of entries,
+each an identifier and an answer. Handling an entry answers the request the VM
+is waiting on, runs the program to its next request or its end, and records
+the identifier. An entry whose identifier the VM has acted on changes nothing,
+and neither does any entry once the program has finished. The state of a VM is
+what handling its log from the program's first request leads to. An
+identifier is data; where it comes from is the host's.
+
+`LogContract.lean` states `log_deterministic` and `log_prefix` (the state is
+fixed by the program and the log, and a state part way is a prefix),
+`log_again`, `log_redeliver` and `log_once` (an entry already in the log
+changes nothing), `log_restart` (a state reached by a first part of the log,
+given the whole log, reaches what the whole log reaches), `log_interact` (the
+run is the request driver's on the answers of the first deliveries),
+`log_machine`, `log_machine_exact` and `vm_true`. `vmRun` is
+`List.foldl handleRun` over the log, on the machine, with a step budget for
+each machine run; it reports no state when a run does not halt. `Log.lean`
+also decides equality of data by a definition of its own, because nothing is
+proved about the derived `==`.
+
 ## Keep
 
 `Surface/Keep.lean` runs one turn of a program whose state is kept in a store
@@ -202,7 +225,17 @@ handed back. `advance`, which joins the machine runs, repeats the logic of
 `lazy_turn_complete` and `lazy_turn_sound`; `advance` itself is tested, not
 proved.
 
-The C exports are `reflect_keep_start`, `reflect_keep_answer`,
+A session can also be a VM handling a log. `vmStart` begins from source and a
+log; `vmFrom` begins from the root of a kept state and a log. The session goes
+from one entry to the next as `Reflect.vmRun` does, and at the end saves the
+state as the piece `[seen, status]`: the identifiers acted on, and `[0,
+function]`, `[1, data]`, `[2, i]` or `[3]` for a waiting program, a result, an
+unbound variable or `wrong`. `LogCheck.lean` compares it with `vmRun`: the
+root the session saves is the root of the fold's state saved the same way,
+and a kept state restarted on the whole log has the root the whole log gives
+from the start. That is tested, not proved.
+
+The C exports are `reflect_vm_start`, `reflect_vm_from`, `reflect_keep_start`, `reflect_keep_answer`,
 `reflect_keep_need`, `reflect_keep_give`, `reflect_keep_count`,
 `reflect_keep_name`, `reflect_keep_piece` and `reflect_keep_text`, in
 `Surface/Host.lean`. The session is a Lean value the host holds and cannot

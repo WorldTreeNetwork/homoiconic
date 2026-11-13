@@ -13,6 +13,7 @@ lake env lean MachineContract.lean
 lake env lean RequestContract.lean
 lake env lean StoreContract.lean
 lake env lean ChannelContract.lean
+lake env lean LogContract.lean
 lake env lean Surface/Check.lean
 # The scenarios print one line each; a line that starts with FAIL fails the check.
 lake env lean ReflectRun.lean > "$OUT/scenarios.txt"
@@ -33,6 +34,12 @@ if grep -q "^FAIL" "$OUT/keep.txt" || ! grep -q "^ok" "$OUT/keep.txt" || grep -q
     exit 1
 fi
 
+lake env lean LogCheck.lean > "$OUT/log.txt"
+if grep -q "^FAIL" "$OUT/log.txt" || ! grep -q "^ok" "$OUT/log.txt" || grep -q "error" "$OUT/log.txt"; then
+    cat "$OUT/log.txt" >&2
+    exit 1
+fi
+
 lake env lean StoreCheck.lean > "$OUT/store.txt"
 if grep -q "^FAIL" "$OUT/store.txt" || ! grep -q "^ok" "$OUT/store.txt"; then
     cat "$OUT/store.txt" >&2
@@ -45,7 +52,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Store \
+for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Store \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece \
               Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Keep Surface/Chan Surface/Host; do
     name="$(echo "$module" | tr / -)"
@@ -56,7 +63,7 @@ for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machi
 done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
 lake env leanc -c -o "$OUT/runtime.o" "$HOST/runtime.c"
-for program in check run ask bytes keep chan; do
+for program in check run ask bytes keep chan vm; do
     zig build-obj "$HOST/$program.zig" -femit-bin="$OUT/zig-$program.o" \
         --cache-dir "$OUT/zig-cache" --global-cache-dir "$OUT/zig-global-cache"
     # shellcheck disable=SC2086
@@ -439,3 +446,115 @@ refuseChan "chan: the schedule file is empty" "$EXAMPLES/ping.hom" "$OUT/empty.s
 refuseChan "chan: the step budget must be a whole number" "$EXAMPLES/ping.hom" - many
 refuseChan "chan: the event limit must be a whole number" "$EXAMPLES/ping.hom" - 5000 many
 echo "chan command checks passed"
+
+# The vm command: a program handling a log, with its state kept in a directory.
+VMSTORE="$OUT/vm-store"
+rm -rf "$VMSTORE"
+mkdir -p "$VMSTORE"
+# Run the command; its lines are in $STANDS (first line), $ENTRIES and $STATE.
+vm() {
+    "$OUT/vm" "$VMSTORE" "$@" > "$OUT/vm.txt"
+    STANDS="$(sed -n 1p "$OUT/vm.txt")"
+    ENTRIES="$(sed -n 's/^entries: //p' "$OUT/vm.txt")"
+    STATE="$(sed -n 's/^state: //p' "$OUT/vm.txt")"
+    echo "vm $(echo "$1 $(basename "$2" | cut -c1-12) $(basename "$3")") => $STANDS ($ENTRIES; state $(echo "$STATE" | cut -c1-12))"
+}
+wantVm() {
+    if [ "$1" != "$2" ]; then
+        echo "vm: expected '$2', got '$1'" >&2
+        exit 1
+    fi
+}
+# From the start with the whole log.
+vm start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log"
+wantVm "$STANDS" "42"
+wantVm "$ENTRIES" "2 given, 2 acted on"
+WHOLE="$STATE"
+wantVm "${#WHOLE}" "64"
+# The result is what the answers alone give.
+wantVm "$STANDS" "$("$OUT/ask" "$EXAMPLES/ask.hom" "$EXAMPLES/ask.answers" | tail -1)"
+# Stop after the first entry, then hand the whole log to the kept state in a
+# new process: it acts on the entry it has not seen and reaches the same state.
+vm start "$EXAMPLES/ask.hom" "$EXAMPLES/ask-one.log"
+wantVm "$STANDS" "waiting on [2, 20]"
+wantVm "$ENTRIES" "1 given, 1 acted on"
+PART="$STATE"
+vm from "$PART" "$EXAMPLES/ask.log"
+wantVm "$STANDS" "42"
+wantVm "$ENTRIES" "2 given, 1 acted on"
+wantVm "$STATE" "$WHOLE"
+# Lose every kept state and run the log again: the state has the same name.
+rm -rf "$VMSTORE"
+mkdir -p "$VMSTORE"
+vm start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log"
+wantVm "$STATE" "$WHOLE"
+# Entries delivered again change nothing, whatever answer they carry.
+vm start "$EXAMPLES/ask.hom" "$EXAMPLES/ask-again.log"
+wantVm "$ENTRIES" "5 given, 2 acted on"
+wantVm "$STATE" "$WHOLE"
+# A finished VM given the log again is the same state, and nothing is written.
+vm from "$WHOLE" "$EXAMPLES/ask-again.log"
+wantVm "$STANDS" "42"
+wantVm "$ENTRIES" "5 given, 0 acted on"
+wantVm "$STATE" "$WHOLE"
+wantVm "$(sed -n 's/^store: fetched [0-9]*, wrote //p' "$OUT/vm.txt")" "0"
+# Another order of the same answers is another state.
+printf '[[2, 22], [1, 20]]\n' > "$OUT/other.log"
+vm start "$EXAMPLES/ask.hom" "$OUT/other.log"
+if [ "$STATE" = "$WHOLE" ]; then
+    echo "vm: another order gave the same state" >&2
+    exit 1
+fi
+# A program with a long list: the state after one entry is kept in many
+# pieces, and restarted on the whole log it reaches the same state.
+printf '[[[7], 20]]\n' > "$OUT/keep-one.log"
+printf '[[[7], 20], [8, 22]]\n' > "$OUT/keep.log"
+vm start "$EXAMPLES/keep.hom" "$OUT/keep.log"
+wantVm "$STANDS" "[2000, 42]"
+BIG="$STATE"
+vm start "$EXAMPLES/keep.hom" "$OUT/keep-one.log"
+wantVm "$STANDS" "waiting on [2, 20]"
+vm from "$STATE" "$OUT/keep.log"
+wantVm "$STATE" "$BIG"
+# With no entry, a VM waits on its first request; a program that asks nothing
+# is finished at once.
+printf '[]\n' > "$OUT/empty.log"
+vm start "$EXAMPLES/ask.hom" "$OUT/empty.log"
+wantVm "$STANDS" "waiting on [1]"
+vm start "$EXAMPLES/append.hom" "$EXAMPLES/ask.log"
+wantVm "$STANDS" "[1, 2, 3, 4]"
+wantVm "$ENTRIES" "2 given, 0 acted on"
+# The kernel's text for a bad log, a bad root, and a turn that does not end.
+wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.answers")" "log: entry 0 is not an identifier and an answer"
+wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/factorial.hom")" "log: not an array"
+wantVm "$("$OUT/vm" "$VMSTORE" from nothex "$EXAMPLES/ask.log")" "store error: a root is 64 hex digits"
+wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/forever.hom" "$EXAMPLES/ask.log" 5000 | sed -n 1p)" "no result within 5000 steps of a turn"
+# A root that names a piece which is not a state.
+PIECE="$(ls "$STORE" | sed -n 1p)"
+cp "$STORE/$PIECE" "$VMSTORE/$PIECE"
+wantVm "$("$OUT/vm" "$VMSTORE" from "$PIECE" "$EXAMPLES/ask.log" | sed -n 1p)" "store error: the root is not a kept state"
+# A state that is not in the store: exit 3 and nothing printed.
+status=0
+"$OUT/vm" "$VMSTORE" from "$(printf '%064d' 0)" "$EXAMPLES/ask.log" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+if [ "$status" != 3 ] || [ -s "$OUT/refuse.out" ]; then
+    echo "vm with the state missing: expected exit 3 and no output; got exit $status" >&2
+    exit 1
+fi
+refuseVm() {
+    status=0
+    "$OUT/vm" "$@" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+    if [ "$status" != 2 ] || [ -s "$OUT/refuse.out" ] || ! [ -s "$OUT/refuse.err" ]; then
+        echo "vm $*: expected exit 2, no output and a message; got exit $status" >&2
+        exit 1
+    fi
+    echo "vm refused: $(sed -n 1p "$OUT/refuse.err")"
+}
+refuseVm
+refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom"
+refuseVm "$VMSTORE" resume "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log"
+refuseVm "$VMSTORE" start "$EXAMPLES/missing.hom" "$EXAMPLES/ask.log"
+refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/missing.log"
+refuseVm "$OUT/no-such-store" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log"
+refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log" many
+refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log" 1 extra
+echo "vm command checks passed"

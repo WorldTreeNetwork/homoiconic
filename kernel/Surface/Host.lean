@@ -76,6 +76,19 @@ unsafe def keepAnswer (root rootLength answer answerLength : USize) (budget : UI
   Keep.answer ((String.fromUTF8? (copyBytes root rootLength)).getD "")
     (copyBytes answer answerLength) budget.toNat
 
+/-- C ABI: a VM from the start: the program at `program` handles the log at
+    `log`, a program whose result is an array of `[identifier, answer]`. -/
+@[export reflect_vm_start]
+unsafe def vmStart (program length log logLength : USize) (budget : UInt64) : Keep.Session :=
+  Keep.vmStart (copyBytes program length) (copyBytes log logLength) budget.toNat
+
+/-- C ABI: a VM from the state kept under the root named by the text at
+    `root`: it handles the log at `log` from there. -/
+@[export reflect_vm_from]
+unsafe def vmFrom (root rootLength log logLength : USize) (budget : UInt64) : Keep.Session :=
+  Keep.vmFrom ((String.fromUTF8? (copyBytes root rootLength)).getD "")
+    (copyBytes log logLength) budget.toNat
+
 /-- C ABI: the name of the piece the session needs, as 64 hex digits; no bytes
     when it needs none. Returns the number of bytes. -/
 @[export reflect_keep_need]
