@@ -7,5 +7,5 @@
 - [x] `kernel/Surface/Keep.lean`: a session can be a node (`nodeStart`, `nodeFrom`). Exports `reflect_node_start`, `reflect_node_from`.
 - [x] `host/node.zig`; `kernel/NodeCheck.lean`; `examples/ping.log`, `ping-part.log`, `ping-again.log`; the node scenarios in `host/check.sh`.
 - [x] `sh host/check.sh` exits 0.
-- [ ] Advise by a reader from another model family.
+- [x] Advise by a reader from another model family. Send-back, 2026-11-12, one required correction to a stated limit, made. Review in `reviews/`.
 - [ ] Fold.
