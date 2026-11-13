@@ -198,6 +198,12 @@ done
 # through the interpreter.
 expect "[72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 10]" "$EXAMPLES/brainfuck.hom"
 sameThroughInterp "$EXAMPLES/brainfuck.hom" 1
+# A quine: its output is its own data form. Run as code, the output gives
+# itself back, and the interpreter gives the same output.
+quine="$("$OUT/run" "$EXAMPLES/quine.hom")"
+printf 'interpret %s\n' "$quine" > "$OUT/quine-again.hom"
+expect "[0, [1, $quine]]" "$OUT/quine-again.hom"
+sameThroughInterp "$EXAMPLES/quine.hom" 2
 sameThroughInterp "$EXAMPLES/forever.hom" 1 5000
 sameThroughInterp "$OUT/wide.hom" 1
 expect "[1, 2, 3, 4]" --interp "$EXAMPLES/append.hom"

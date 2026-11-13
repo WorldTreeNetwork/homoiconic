@@ -1,0 +1,4 @@
+; a quine: the result is this program's own data form, the value its byte form
+; holds. An application is [0, f, a] and a literal is [2, d], so a function that
+; builds "itself applied to its own code" from its own code gives the program.
+(fn x -> [0, x, [2, x]]) (quote (fn x -> [0, x, [2, x]]))
