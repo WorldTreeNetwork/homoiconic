@@ -158,6 +158,20 @@ log is a list of entries, each an identifier and an answer.
 | `log_interact` | A VM's run is a run of its program by the request driver, against the answers of the first deliveries |
 | `log_machine`, `log_machine_exact`, `vm_true` | The machine handles a log exactly as direct evaluation does, and a state the executable fold reports is the program's |
 
+### Nodes
+
+A node is several processes and the identifiers of the ops it has acted on. An
+op is an event with an identifier.
+
+| Theorem | Says |
+|---|---|
+| `node_deterministic`, `node_prefix` | The node a program reaches is fixed by the program and the log, and the node after a log is the node after any first part carried on through the rest |
+| `node_again`, `node_redeliver` | An op already in the log changes nothing |
+| `node_restart` | A node reached by a first part of the log, given the whole log, reaches what the whole log reaches from the start |
+| `node_network` | A node's processes are where the schedule of the log's first deliveries leads the program, so the channel theorems hold of them |
+| `node_machine`, `node_machine_exact`, `node_true` | The machine applies a log exactly as direct evaluation does, and what the executable node reports is true however it stopped |
+| `plan_step`, `step_plan` | An event happens exactly when the runs of its plan end somewhere and the plan gives the next configuration from there |
+
 ### Stored state
 
 A store holds pieces under references and may lack any of them. A piece
@@ -347,6 +361,11 @@ theorems; `advance` is tested against it.
   deliveries. That a state reached by two routes is saved under one root is
   tested, not proved, and so is the session that handles a log against a
   store. The interpreter on data is not covered for a log.
+- **Nodes.** The session that applies a log to kept processes is tested, not
+  proved; `plan`, which it uses to decide what an event needs and gives, is
+  proved to be `Step`. An op that cannot happen stops the log; nothing says
+  it should be skipped or tried again. A kept node is taken at its word for
+  what each process holds and is waiting on.
 - **The network.** What a payload means, several VMs and model calls
   are the roadmap in `openspec/changes/add-verifiable-network-vision/`.
 

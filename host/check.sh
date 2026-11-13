@@ -14,6 +14,7 @@ lake env lean RequestContract.lean
 lake env lean StoreContract.lean
 lake env lean ChannelContract.lean
 lake env lean LogContract.lean
+lake env lean NodeContract.lean
 lake env lean Surface/Check.lean
 # The scenarios print one line each; a line that starts with FAIL fails the check.
 lake env lean ReflectRun.lean > "$OUT/scenarios.txt"
@@ -40,6 +41,12 @@ if grep -q "^FAIL" "$OUT/log.txt" || ! grep -q "^ok" "$OUT/log.txt" || grep -q "
     exit 1
 fi
 
+lake env lean NodeCheck.lean > "$OUT/node.txt"
+if grep -q "^FAIL" "$OUT/node.txt" || ! grep -q "^ok" "$OUT/node.txt" || grep -q "error:" "$OUT/node.txt"; then
+    cat "$OUT/node.txt" >&2
+    exit 1
+fi
+
 lake env lean StoreCheck.lean > "$OUT/store.txt"
 if grep -q "^FAIL" "$OUT/store.txt" || ! grep -q "^ok" "$OUT/store.txt"; then
     cat "$OUT/store.txt" >&2
@@ -52,9 +59,9 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Store \
+for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece \
-              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Keep Surface/Chan Surface/Host; do
+              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
         -c "$OUT/$name.c" "$module.lean"
@@ -63,7 +70,7 @@ for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machi
 done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
 lake env leanc -c -o "$OUT/runtime.o" "$HOST/runtime.c"
-for program in check run ask bytes keep chan vm; do
+for program in check run ask bytes keep chan vm node; do
     zig build-obj "$HOST/$program.zig" -femit-bin="$OUT/zig-$program.o" \
         --cache-dir "$OUT/zig-cache" --global-cache-dir "$OUT/zig-global-cache"
     # shellcheck disable=SC2086
@@ -606,3 +613,100 @@ refuseVm "$OUT/no-such-store" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log"
 refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log" many
 refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log" 1 extra
 echo "vm command checks passed"
+
+# The node command: several processes applying a log, kept in a directory.
+NODESTORE="$OUT/node-store"
+rm -rf "$NODESTORE"
+mkdir -p "$NODESTORE"
+# Run the command; its text is in $OUT/node.out and its root in $STATE.
+node() {
+    "$OUT/node" "$NODESTORE" "$@" > "$OUT/node.out"
+    STATE="$(sed -n 's/^state: //p' "$OUT/node.out")"
+    echo "node $1 $(basename "$2" | cut -c1-12) $(basename "$3") => $(sed '$d' "$OUT/node.out" | sed 's/^state: \(.\{12\}\).*/state: \1/' | tr '\n' '|')"
+}
+wantNode() {
+    if [ "$1" != "$2" ]; then
+        echo "node: expected '$2', got '$1'" >&2
+        exit 1
+    fi
+}
+# The whole log from the start: the processes end where chan's run ends.
+node start "$EXAMPLES/ping.hom" "$EXAMPLES/ping.log"
+wantNode "$(sed -n 1,3p "$OUT/node.out")" "process 0: 42; holds [1, 0]
+process 1: [41]; holds [1, 0]
+entries: 6 given, 6 acted on"
+wantNode "$(sed -n 1,2p "$OUT/node.out")" "$("$OUT/chan" "$EXAMPLES/ping.hom" | sed -n 2,3p)"
+WHOLE="$STATE"
+wantNode "${#WHOLE}" "64"
+# Stop after three ops with both processes waiting, then give the whole log to
+# the kept node in a new process: it applies the three ops it has not seen.
+node start "$EXAMPLES/ping.hom" "$EXAMPLES/ping-part.log"
+wantNode "$(sed -n 1,3p "$OUT/node.out")" "process 0: waiting on [1, 0, 1]; holds [1, 0]
+process 1: waiting on [2, 0]; holds [0]
+entries: 3 given, 3 acted on"
+node from "$STATE" "$EXAMPLES/ping.log"
+wantNode "$(sed -n 3p "$OUT/node.out")" "entries: 6 given, 3 acted on"
+wantNode "$STATE" "$WHOLE"
+# Lose every kept node and apply the log again: the node has the same name.
+rm -rf "$NODESTORE"
+mkdir -p "$NODESTORE"
+node start "$EXAMPLES/ping.hom" "$EXAMPLES/ping.log"
+wantNode "$STATE" "$WHOLE"
+# Ops delivered again change nothing.
+node start "$EXAMPLES/ping.hom" "$EXAMPLES/ping-again.log"
+wantNode "$(sed -n 3p "$OUT/node.out")" "entries: 10 given, 6 acted on"
+wantNode "$STATE" "$WHOLE"
+# The finished node given the log again: nothing is applied or written.
+node from "$WHOLE" "$EXAMPLES/ping-again.log"
+wantNode "$(sed -n 3p "$OUT/node.out")" "entries: 10 given, 0 acted on"
+wantNode "$STATE" "$WHOLE"
+wantNode "$(sed -n 's/^store: fetched [0-9]*, wrote //p' "$OUT/node.out")" "0"
+# The other schedule of the race, as a log: process 2 gets the message.
+printf '[[10, [0, 0, 5]], [11, [1, 0]], [12, [1, 0]], [13, [2, 0, 2]]]\n' > "$OUT/race.log"
+node start "$EXAMPLES/race.hom" "$OUT/race.log"
+wantNode "$(sed -n 1,3p "$OUT/node.out")" "$("$OUT/chan" "$EXAMPLES/race.hom" "$EXAMPLES/race.schedule" | sed -n 2,4p)"
+# An op whose event cannot happen: the node is kept as it stood before it, and
+# the ops after it are not applied.
+printf '[[1, [0, 0, 0]], [2, [1, 0]], [3, [2, 0, 1]], [4, [0, 0, 1]]]\n' > "$OUT/guess.log"
+node start "$EXAMPLES/guess.hom" "$OUT/guess.log"
+wantNode "$(sed -n 3,4p "$OUT/node.out")" "entries: 4 given, 2 acted on
+refused: [3, [2, 0, 1]] cannot happen"
+REFUSED="$STATE"
+printf '[[1, [0, 0, 0]], [2, [1, 0]]]\n' > "$OUT/guess-two.log"
+node start "$EXAMPLES/guess.hom" "$OUT/guess-two.log"
+wantNode "$STATE" "$REFUSED"
+# The kernel's text for a bad log, a bad root, a root that is another kind of
+# state, and a run that does not end.
+wantNode "$("$OUT/node" "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/ask.log")" "log: entry 0 is not an identifier and an event"
+wantNode "$("$OUT/node" "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/factorial.hom")" "log: not an array"
+wantNode "$("$OUT/node" "$NODESTORE" from nothex "$EXAMPLES/ping.log")" "store error: a root is 64 hex digits"
+wantNode "$("$OUT/node" "$NODESTORE" start "$EXAMPLES/forever.hom" "$EXAMPLES/ping.log" 5000 | sed -n 1p)" "no result within 5000 steps of a turn"
+"$OUT/vm" "$NODESTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log" > "$OUT/vm.txt"
+VMSTATE="$(sed -n 's/^state: //p' "$OUT/vm.txt")"
+wantNode "$("$OUT/node" "$NODESTORE" from "$VMSTATE" "$EXAMPLES/ping.log" | sed -n 1p)" "store error: the root is not a kept node"
+wantNode "$("$OUT/vm" "$NODESTORE" from "$WHOLE" "$EXAMPLES/ask.log" | sed -n 1p)" "store error: the root is not a kept state"
+# A node that is not in the store: exit 3, nothing printed, the piece named.
+status=0
+"$OUT/node" "$NODESTORE" from "$(printf '%064d' 0)" "$EXAMPLES/ping.log" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+printf 'node: the store lacks piece %064d\n' 0 > "$OUT/refuse.expected"
+if [ "$status" != 3 ] || [ -s "$OUT/refuse.out" ] || ! cmp -s "$OUT/refuse.expected" "$OUT/refuse.err"; then
+    echo "node with the root missing: expected exit 3 and no output; got exit $status" >&2
+    exit 1
+fi
+refuseNode() {
+    status=0
+    "$OUT/node" "$@" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
+    if [ "$status" != 2 ] || [ -s "$OUT/refuse.out" ] || ! [ -s "$OUT/refuse.err" ]; then
+        echo "node $*: expected exit 2, no output and a message; got exit $status" >&2
+        exit 1
+    fi
+    echo "node refused: $(sed -n 1p "$OUT/refuse.err")"
+}
+refuseNode
+refuseNode "$NODESTORE" start "$EXAMPLES/ping.hom"
+refuseNode "$NODESTORE" resume "$EXAMPLES/ping.hom" "$EXAMPLES/ping.log"
+refuseNode "$NODESTORE" start "$EXAMPLES/missing.hom" "$EXAMPLES/ping.log"
+refuseNode "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/missing.log"
+refuseNode "$OUT/no-such-store" start "$EXAMPLES/ping.hom" "$EXAMPLES/ping.log"
+refuseNode "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/ping.log" many
+echo "node command checks passed"

@@ -2,6 +2,8 @@ import Surface.Run
 import Wire.Piece
 import Reflect.Store
 import Reflect.Log
+import Reflect.Node
+import Surface.Chan
 import Std.Data.HashMap
 
 /-! One turn of a program whose state is kept in a store between turns.
@@ -18,6 +20,12 @@ import Std.Data.HashMap
     the piece `[seen, status]`, where `status` is `[0, function]` for a waiting
     program, `[1, data]` for a result, `[2, i]` for the error of an unbound
     variable and `[3]` for the error `wrong`.
+
+    A session can also be a node applying a log of ops (`Reflect.Node`):
+    several processes, each event run as the jobs of its plan
+    (`Reflect.plan`), and the node saved at the end as the piece
+    `[seen, names, processes]`. A process is `[held, status]`, and a waiting
+    status there also holds the payload: `[0, function, payload]`.
 
     Each machine run here is covered by `Reflect.lazy_turn_complete` and
     `Reflect.lazy_turn_sound`. The session that joins the runs, the hashing
@@ -50,6 +58,15 @@ def unhex (s : String) : Option Ref :=
     | _, _ => none
   if s.length == 64 then go s.toList ByteArray.empty else none
 
+/-- How a process of a node has finished. -/
+inductive Final where
+  | value (d : Data)
+  | unbound (i : Nat)
+  | wrong
+
+/-- A node's processes: a function is held as a piece. -/
+abbrev LConfig := Config (P Ref) Final
+
 /-- Where a turn is. -/
 inductive Phase where
   /-- The turn's own run. -/
@@ -64,6 +81,12 @@ inductive Phase where
   | result (p : P Ref)
   /-- A kept VM state, being read. -/
   | opening (root : P Ref)
+  /-- A kept node, being read. -/
+  | openingNode (root : P Ref)
+  /-- A node's machine run has ended where `st` says. -/
+  | landed (st : Status (P Ref) Final)
+  /-- A node between machine runs. -/
+  | step
   | done
 
 /-- The part of a session that makes it a VM handling a log. -/
@@ -75,6 +98,24 @@ structure VmPart where
   /-- How many entries were given, and how many of them were acted on. -/
   given : Nat
   acted : Nat := 0
+
+/-- An event a node is part way through: the runs still to do, where the runs
+    done have ended, and the configuration once all have. -/
+structure Doing where
+  /-- `none` for the first run of all, which begins the program. -/
+  op : Option Op
+  jobs : List (Job (P Ref))
+  got : List (Status (P Ref) Final) := []
+  done : List (Status (P Ref) Final) → Option LConfig
+
+/-- The part of a session that makes it a node applying a log. -/
+structure NodePart where
+  todo : List Op
+  seen : List Data := []
+  given : Nat
+  acted : Nat := 0
+  cfg : LConfig := ⟨[], []⟩
+  doing : Option Doing := none
 
 structure Session where
   /-- Pieces supplied so far, by reference. -/
@@ -91,6 +132,8 @@ structure Session where
   text : String := ""
   /-- Set when the session is a VM handling a log. -/
   vm : Option VmPart := none
+  /-- Set when the session is a node applying a log. -/
+  node : Option NodePart := none
 
 def Session.store (s : Session) : Store Ref := fun r => s.pieces[r]?
 
@@ -126,6 +169,43 @@ def Session.keepState (s : Session) (part : VmPart) (line : String) (status : P 
       let fresh := s.fresh pieces
       { s with phase := .done, written := fresh,
                text := s!"{line}\nentries: {part.given} given, {part.acted} acted on\nstate: {hex root}\nstore: fetched {s.fetched}, wrote {fresh.size}" }
+
+def plist (ps : List (P Ref)) : P Ref := ps.foldr .cons .nil
+
+def statusPiece : Status (P Ref) Final → P Ref
+  | .waiting k d => plist [.nat 0, k, d.toP]
+  | .finished (.value d) => plist [.nat 1, d.toP]
+  | .finished (.unbound i) => plist [.nat 2, .nat i]
+  | .finished .wrong => plist [.nat 3]
+
+def renderNodeProcs : Nat → List (Proc (P Ref) Final) → String
+  | _, [] => ""
+  | i, q :: qs =>
+    s!"process {i}: " ++
+      (match q.status with
+       | .waiting _ p => "waiting on " ++ renderData p
+       | .finished (.value d) => renderData d
+       | .finished (.unbound k) => renderMOutcome (.unbound k)
+       | .finished .wrong => renderMOutcome .wrong) ++
+      "; holds " ++ renderData (.arr (q.held.map .nat)) ++ "\n" ++ renderNodeProcs (i + 1) qs
+
+/-- The log is applied, or an op of it cannot happen: save the node as it
+    stands and say where each process is. -/
+def Session.keepNode (s : Session) (part : NodePart) (refused : Option Op) : Session :=
+  let procs := plist (part.cfg.procs.map fun q =>
+    plist [Data.toP (.arr (q.held.map .nat)), statusPiece q.status])
+  let state := plist [Data.toP (.arr part.seen), Data.toP (.arr (part.cfg.names.map .nat)), procs]
+  match save pieceSize state with
+  | none => s.finish "error: the node has no byte form"
+  | some (root, pieces) =>
+      let fresh := s.fresh pieces
+      let stop := match refused with
+        | some o => "refused: " ++ renderData (.arr [o.id, eventData o.event]) ++ " cannot happen\n"
+        | none => ""
+      { s with phase := .done, written := fresh,
+               text := renderNodeProcs 0 part.cfg.procs ++
+                 s!"entries: {part.given} given, {part.acted} acted on\n" ++ stop ++
+                 s!"state: {hex root}\nstore: fetched {s.fetched}, wrote {fresh.size}" }
 
 /-- The program ended, with what `line` says. A VM is finished from here on:
     no entry left changes it. -/
@@ -232,6 +312,74 @@ def openState (σ : Store Ref) (root : P Ref) : Except Ref (Option (List Data ×
   | .nat 3, .nil => pure (some (seen, .wrong))
   | _, _ => pure none
 
+/-- The parts of a list piece, behind any references. `none` when the piece is
+    not a list. -/
+partial def parts (σ : Store Ref) (p : P Ref) : Except Ref (Option (List (P Ref))) := do
+  match ← chase σ p with
+  | (_, .nil) => pure (some [])
+  | (_, .cons h t) =>
+      match ← parts σ t with
+      | some xs => pure (some (h :: xs))
+      | none => pure none
+  | _ => pure none
+
+def natsOf : Data → Option (List Nat)
+  | .arr ds => ds.mapM fun
+      | .nat n => some n
+      | _ => none
+  | _ => none
+
+def openStatus (σ : Store Ref) (p : P Ref) : Except Ref (Option (Status (P Ref) Final)) := do
+  let some ps ← parts σ p | pure none
+  match ps with
+  | [tag, a, b] =>
+      match ← chase σ tag, ← chase σ a with
+      | (_, .nat 0), (held, .closure _ _) =>
+          match ← full σ b with
+          | some d => pure (some (.waiting held d))
+          | none => pure none
+      | _, _ => pure none
+  | [tag, a] =>
+      match ← chase σ tag with
+      | (_, .nat 1) =>
+          match ← full σ a with
+          | some d => pure (some (.finished (.value d)))
+          | none => pure none
+      | (_, .nat 2) =>
+          match ← chase σ a with
+          | (_, .nat i) => pure (some (.finished (.unbound i)))
+          | _ => pure none
+      | _ => pure none
+  | [tag] =>
+      match ← chase σ tag with
+      | (_, .nat 3) => pure (some (.finished .wrong))
+      | _ => pure none
+  | _ => pure none
+
+def openProcs (σ : Store Ref) : List (P Ref) → Except Ref (Option (List (Proc (P Ref) Final)))
+  | [] => pure (some [])
+  | q :: qs => do
+      let some [heldP, statusP] ← parts σ q | pure none
+      let some heldData ← full σ heldP | pure none
+      let some held := natsOf heldData | pure none
+      let some status ← openStatus σ statusP | pure none
+      let some rest ← openProcs σ qs | pure none
+      pure (some (⟨status, held⟩ :: rest))
+
+/-- Read a kept node: the identifiers acted on, and the processes. The piece
+    must be exactly `[seen, names, processes]`, each process `[held, status]`,
+    with names numbers, a payload and a result data, and a waiting program a
+    function. As for a VM state, a function's environment is not walked. What
+    the piece says a process is waiting on and holds is taken as it is. -/
+def openNode (σ : Store Ref) (root : P Ref) : Except Ref (Option (List Data × LConfig)) := do
+  let some [seenP, namesP, procsP] ← parts σ root | pure none
+  let some (.arr seen) ← full σ seenP | pure none
+  let some namesData ← full σ namesP | pure none
+  let some names := natsOf namesData | pure none
+  let some qs ← parts σ procsP | pure none
+  let some procs ← openProcs σ qs | pure none
+  pure (some (seen, ⟨procs, names⟩))
+
 /-- Carry the turn on until it is over or needs a piece. For one turn, each
     phase is entered at most once in a call and the phases come in one order;
     a VM goes through them once for each entry it acts on. `fuel` above that
@@ -241,7 +389,13 @@ def openState (σ : Store Ref) (root : P Ref) : Except Ref (Option (List Data ×
     which are more than the plain machine's (looking up a variable takes
     steps of its own), so a budget that is enough for `vmRun` may not be
     enough here. When both give a state, `LogCheck.lean` checks on examples
-    that it is the same one. -/
+    that it is the same one.
+
+    A node goes through the phases once for each machine run of each event.
+    Which runs an event needs, whether it can happen, and the configuration
+    after it are `Reflect.plan`'s, the function `plan_step` and `step_plan`
+    are about. Running the jobs on the lazy machine and joining them is this
+    function's, compared with `Reflect.nodeRun` in `NodeCheck.lean`. -/
 def advance : Nat → Session → Session
   | 0, s => s.finish "error: the turn did not settle"
   | fuel + 1, s =>
@@ -250,7 +404,13 @@ def advance : Nat → Session → Session
           match steps s.store s.left st with
           | (.paused r st', left) => { s with phase := .run st', left, need := some r }
           | (.at (.halted (.value v)), _) => advance fuel { s with phase := .classify v }
-          | (.at st', _) => s.stopped st'
+          | (.at st', _) =>
+              match s.node, st' with
+              | some _, .halted (.unbound i) =>
+                  advance fuel { s with phase := .landed (.finished (.unbound i)) }
+              | some _, .halted .wrong =>
+                  advance fuel { s with phase := .landed (.finished .wrong) }
+              | _, _ => s.stopped st'
       | .classify v =>
           match chase s.store v with
           | .error r => { s with need := some r }
@@ -265,14 +425,21 @@ def advance : Nat → Session → Session
           match steps s.store s.left st with
           | (.paused r st', left) => { s with phase := .payload k st', left, need := some r }
           | (.at (.halted (.value p)), _) => advance fuel { s with phase := .ask k p }
-          | (.at st', _) => s.stopped st'
+          | (.at st', _) =>
+              match s.node, st' with
+              | some _, .halted (.unbound i) =>
+                  advance fuel { s with phase := .landed (.finished (.unbound i)) }
+              | some _, .halted .wrong =>
+                  advance fuel { s with phase := .landed (.finished .wrong) }
+              | _, _ => s.stopped st'
       | .ask k p =>
           match full s.store p with
           | .error r => { s with need := some r }
           | .ok (some d) =>
-              match s.vm with
-              | none => s.wait d k
-              | some part =>
+              match s.node, s.vm with
+              | some _, _ => advance fuel { s with phase := .landed (.waiting k d) }
+              | none, none => s.wait d k
+              | none, some part =>
                   -- `Reflect.handleRun`: an entry whose identifier was acted on
                   -- is passed over, and the next one answers the request.
                   match part.todo.dropWhile (fun e => decide (e.id ∈ part.seen)) with
@@ -285,11 +452,17 @@ def advance : Nat → Session → Session
                       let part := { part with todo := rest, seen := e.id :: part.seen,
                                               acted := part.acted + 1 }
                       advance fuel { s with left := s.budget, vm := some part, phase := next }
-          | .ok none => s.ended (renderMOutcome .wrong) (.cons (.nat 3) .nil)
+          | .ok none =>
+              match s.node with
+              | some _ => advance fuel { s with phase := .landed (.finished .wrong) }
+              | none => s.ended (renderMOutcome .wrong) (.cons (.nat 3) .nil)
       | .result p =>
           match full s.store p with
           | .error r => { s with need := some r }
-          | .ok (some d) => s.ended (renderData d) (.cons (.nat 1) (.cons d.toP .nil))
+          | .ok (some d) =>
+              match s.node with
+              | some _ => advance fuel { s with phase := .landed (.finished (.value d)) }
+              | none => s.ended (renderData d) (.cons (.nat 1) (.cons d.toP .nil))
           | .ok none => s.finish "error: machine fault"
       | .opening root =>
           match openState s.store root with
@@ -305,12 +478,67 @@ def advance : Nat → Session → Session
               | .value d => advance fuel { s with phase := .result d }
               | .unbound i => s.stopped (.halted (.unbound i))
               | .wrong => s.stopped (.halted .wrong)
+      | .openingNode root =>
+          match openNode s.store root, s.node with
+          | .error r, _ => { s with need := some r }
+          | .ok (some (seen, cfg)), some part =>
+              advance fuel { s with node := some { part with seen := seen, cfg := cfg },
+                                    phase := .step }
+          | _, _ => s.finish "store error: the root is not a kept node"
+      | .landed st =>
+          match s.node with
+          | some part =>
+              match part.doing with
+              | some d =>
+                  let part := { part with doing := some { d with got := d.got ++ [st] } }
+                  advance fuel { s with node := some part, phase := .step }
+              | none => s.finish "error: the turn did not settle"
+          | none => s.finish "error: the turn did not settle"
+      | .step =>
+          match s.node with
+          | none => s.finish "error: the turn did not settle"
+          | some part =>
+              match part.doing with
+              | some d =>
+                  match d.jobs with
+                  | job :: jobs =>
+                      let first : PState Ref := match job with
+                        | .turn k a => .running (compile (resumeTerm a)) (.cons k .nil) [] []
+                        | .start t => (load (compile t)).toP
+                      let part := { part with doing := some { d with jobs := jobs } }
+                      advance fuel { s with left := s.budget, node := some part,
+                                            phase := .run first }
+                  | [] =>
+                      match d.done d.got with
+                      | none => s.finish "error: the event did not settle"
+                      | some cfg =>
+                          let part := match d.op with
+                            | some o => { part with cfg := cfg, doing := none,
+                                                    seen := o.id :: part.seen,
+                                                    acted := part.acted + 1 }
+                            | none => { part with cfg := cfg, doing := none }
+                          advance fuel { s with node := some part, phase := .step }
+              | none =>
+                  -- `Reflect.nodeRun`: an op whose identifier was acted on is
+                  -- passed over; the next one happens, or cannot.
+                  match part.todo.dropWhile (fun o => decide (o.id ∈ part.seen)) with
+                  | [] => s.keepNode { part with todo := [] } none
+                  | o :: rest =>
+                      match plan part.cfg o.event with
+                      | none => s.keepNode { part with todo := [] } (some o)
+                      | some (jobs, done) =>
+                          let part := { part with todo := rest,
+                                                  doing := some { op := some o, jobs, done } }
+                          advance fuel { s with node := some part, phase := .step }
       | .done => s
 
 /-- Enough for what is left of the session. -/
 def Session.fuel (s : Session) : Nat :=
   8 + 4 * (match s.vm with
     | some part => part.todo.length
+    | none => 0)
+    + (match s.node with
+    | some part => 40 + 20 * part.todo.length
     | none => 0)
 
 /-- Begin a program from its source. -/
@@ -394,6 +622,58 @@ def vmFrom (root : String) (log : ByteArray) (budget : Nat) : Session :=
       | .ok es =>
           let s : Session := { phase := .opening (.ref r), budget, left := budget,
                                vm := some { todo := es, given := es.length } }
+          advance s.fuel s
+
+/-- The ops of a log given as data, or the place of the first that is not an
+    identifier and an event. -/
+def dataOps : Nat → List Data → Except Nat (List Op)
+  | _, [] => .ok []
+  | k, .arr [id, ev] :: ds =>
+      match dataEvent ev with
+      | some e => (dataOps (k + 1) ds).map (⟨id, e⟩ :: ·)
+      | none => .error k
+  | k, _ :: _ => .error k
+
+/-- Read a node's log: a program whose result is an array of
+    `[identifier, event]`. -/
+def readOps (src : ByteArray) (budget : Nat) : Except String (List Op) :=
+  match Surface.read src with
+  | .error msg => .error ("log: " ++ renderSyntaxError msg)
+  | .ok t =>
+      match runUntil budget (load (compile t)) with
+      | .halted (.value (.data (.arr ds))) =>
+          match dataOps 0 ds with
+          | .error k => .error s!"log: entry {k} is not an identifier and an event"
+          | .ok os => .ok os
+      | _ => .error "log: not an array"
+
+/-- A node from the start: the program is the first process, and the log is
+    applied. -/
+def nodeStart (program log : ByteArray) (budget : Nat) : Session :=
+  match Surface.read program with
+  | .error msg => failed (renderSyntaxError msg)
+  | .ok t =>
+      match readOps log budget with
+      | .error msg => failed msg
+      | .ok os =>
+          let first : Doing := { op := none, jobs := [.start t], done := fun
+            | [st] => some ⟨[⟨st, []⟩], []⟩
+            | _ => none }
+          let s : Session := { phase := .step, budget, left := budget,
+                               node := some { todo := os, given := os.length,
+                                              doing := some first } }
+          advance s.fuel s
+
+/-- A node from the one kept under `root`: the log is applied from there. -/
+def nodeFrom (root : String) (log : ByteArray) (budget : Nat) : Session :=
+  match unhex root with
+  | none => failed "store error: a root is 64 hex digits"
+  | some r =>
+      match readOps log budget with
+      | .error msg => failed msg
+      | .ok os =>
+          let s : Session := { phase := .openingNode (.ref r), budget, left := budget,
+                               node := some { todo := os, given := os.length } }
           advance s.fuel s
 
 end Surface.Keep

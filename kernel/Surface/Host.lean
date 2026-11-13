@@ -101,6 +101,20 @@ unsafe def vmFrom (root rootLength log logLength : USize) (budget : UInt64) : Ke
   Keep.vmFrom ((String.fromUTF8? (copyBytes root rootLength)).getD "")
     (copyBytes log logLength) budget.toNat
 
+/-- C ABI: a node from the start: the program at `program` is the first
+    process, and the log at `log`, a program whose result is an array of
+    `[identifier, event]`, is applied. -/
+@[export reflect_node_start]
+unsafe def nodeStart (program length log logLength : USize) (budget : UInt64) : Keep.Session :=
+  Keep.nodeStart (copyBytes program length) (copyBytes log logLength) budget.toNat
+
+/-- C ABI: a node from the one kept under the root named by the text at
+    `root`: the log at `log` is applied from there. -/
+@[export reflect_node_from]
+unsafe def nodeFrom (root rootLength log logLength : USize) (budget : UInt64) : Keep.Session :=
+  Keep.nodeFrom ((String.fromUTF8? (copyBytes root rootLength)).getD "")
+    (copyBytes log logLength) budget.toNat
+
 /-- C ABI: the name of the piece the session needs, as 64 hex digits; no bytes
     when it needs none. Returns the number of bytes. -/
 @[export reflect_keep_need]

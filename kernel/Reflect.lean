@@ -12,5 +12,7 @@ import Reflect.Channel
 import Reflect.ChannelProof
 import Reflect.Log
 import Reflect.LogProof
+import Reflect.Node
+import Reflect.NodeProof
 import Reflect.Store
 import Reflect.StoreProof

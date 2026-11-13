@@ -211,6 +211,24 @@ each machine run; it reports no state when a run does not halt. `Log.lean`
 also decides equality of data by a definition of its own, because nothing is
 proved about the derived `==`.
 
+## Nodes
+
+A node is several processes whose schedule is a log (`Reflect/Node.lean`). An
+op is an event with an identifier, and a node is a configuration of processes
+together with the identifiers of the ops it has acted on. Applying an op the
+node has acted on changes nothing; otherwise the event happens as `Step` says
+and the identifier is recorded. An op whose event cannot happen has no next
+node. `plan` splits an event into the machine runs it needs and the
+configuration once they have ended.
+
+`NodeContract.lean` states `node_deterministic`, `node_prefix`, `node_again`,
+`node_redeliver`, `node_restart`, `node_network` (a node's processes are where
+the schedule of first deliveries leads, so the channel theorems hold of them),
+`node_machine`, `node_machine_exact`, `node_true`, and `plan_step` with
+`step_plan` (an event is exactly its plan's runs and the configuration the
+plan then gives). `nodeRun` applies ops on the machine and stops at the first
+whose event cannot happen or does not halt.
+
 ## Keep
 
 `Surface/Keep.lean` runs one turn of a program whose state is kept in a store
@@ -235,7 +253,16 @@ root the session saves is the root of the fold's state saved the same way,
 and a kept state restarted on the whole log has the root the whole log gives
 from the start. That is tested, not proved.
 
-The C exports are `reflect_vm_start`, `reflect_vm_from`, `reflect_keep_start`, `reflect_keep_answer`,
+A session can also be a node. `nodeStart` runs a program as the first process
+and applies a log of ops; `nodeFrom` applies one to a kept node. Whether an
+event can happen, what it needs run and the configuration after it come from
+`Reflect.plan`; the session runs each job on the lazy machine and joins them.
+The node is saved as `[seen, names, processes]`, each process `[held,
+status]`, a waiting status holding the function and its payload.
+`NodeCheck.lean` compares the session with `nodeRun` at every prefix of three
+schedules. That is tested, not proved.
+
+The C exports are `reflect_node_start`, `reflect_node_from`, `reflect_vm_start`, `reflect_vm_from`, `reflect_keep_start`, `reflect_keep_answer`,
 `reflect_keep_need`, `reflect_keep_give`, `reflect_keep_count`,
 `reflect_keep_name`, `reflect_keep_piece` and `reflect_keep_text`, in
 `Surface/Host.lean`. The session is a Lean value the host holds and cannot

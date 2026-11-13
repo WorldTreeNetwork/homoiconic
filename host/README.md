@@ -4,8 +4,8 @@ From the repository root, run `sh host/check.sh` with Zig 0.16.0 and the
 Lean toolchain pinned in `kernel/lean-toolchain` installed. The script builds
 the package, checks `ReflectContract.lean`, `MachineContract.lean`,
 `RequestContract.lean`, `StoreContract.lean`, `ChannelContract.lean`,
-`LogContract.lean` and `Surface/Check.lean`, runs
-`ReflectRun.lean`, `WireCheck.lean`, `KeepCheck.lean`, `LogCheck.lean` and `StoreCheck.lean`
+`LogContract.lean`, `NodeContract.lean` and `Surface/Check.lean`, runs
+`ReflectRun.lean`, `WireCheck.lean`, `KeepCheck.lean`, `LogCheck.lean`, `NodeCheck.lean` and `StoreCheck.lean`
 and fails on a line that starts with `FAIL`, writes the
 programs to run, compiles Lean to C and C to objects, compiles the Zig check to
 an object, and links with `leanc`. Generated C, objects, the generated
@@ -258,6 +258,63 @@ It does not walk a function's environment.
 The command is handed a log; it does not keep one or add to one. An
 identifier is whatever the log says, and of two entries with one identifier
 the first is acted on.
+
+## Processes driven by a log
+
+```
+void *reflect_node_start(const uint8_t *program, size_t length,
+                         const uint8_t *log, size_t log_length, uint64_t budget);
+void *reflect_node_from(const uint8_t *root, size_t root_length,
+                        const uint8_t *log, size_t log_length, uint64_t budget);
+```
+
+Both give a session, served as a `keep` session is. The program is the first
+process of a node (`kernel/README.md`, Nodes), and the log is a list of ops:
+each an identifier and an event, the event written as a schedule file writes
+it.
+
+```
+cat examples/ping.log
+; a node's log for ping.hom: each op is an identifier and an event
+[[1, [0, 0, 0]], [2, [1, 0]], [3, [0, 0, 1]], [4, [2, 0, 1]], [5, [2, 0, 1]], [6, [2, 1, 0]]]
+```
+
+`check.sh` builds `out/node`:
+
+```
+mkdir -p /tmp/node
+host/out/node /tmp/node start examples/ping.hom examples/ping-part.log
+process 0: waiting on [1, 0, 1]; holds [1, 0]
+process 1: waiting on [2, 0]; holds [0]
+entries: 3 given, 3 acted on
+state: d45db38c...
+store: fetched 0, wrote 1
+
+host/out/node /tmp/node from d45db38c... examples/ping.log
+process 0: 42; holds [1, 0]
+process 1: [41]; holds [1, 0]
+entries: 6 given, 3 acted on
+state: 5b3e3af4...
+store: fetched 1, wrote 1
+```
+
+`start` runs the program as the first process and applies the log. `from`
+applies the log to the node kept under a root. An op whose identifier the
+node has acted on is passed over, so a kept node can be handed the whole log
+again. The root reached is the one `start` on `examples/ping.log` prints, with
+or without anything in the directory, and the one `examples/ping-again.log`
+reaches with its ten deliveries of the six ops. The process lines are the
+ones `chan` prints for the same events.
+
+An op whose event cannot happen stops the log. The command prints `refused:
+<op> cannot happen` before the state line, keeps the node as it stood before
+that op, and applies none after it.
+
+The command does not choose events or make identifiers; `chan` chooses a
+schedule, and a log is that schedule with an identifier on each event.
+`node.zig` reads the files and serves the session, and exits as `vm` does.
+What is proved and what is tested is in `kernel/README.md`: the roots
+agreeing is tested, by `check.sh` and `kernel/NodeCheck.lean`.
 
 ## Running a program against answers
 
