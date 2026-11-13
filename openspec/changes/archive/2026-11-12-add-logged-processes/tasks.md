@@ -8,4 +8,4 @@
 - [x] `host/node.zig`; `kernel/NodeCheck.lean`; `examples/ping.log`, `ping-part.log`, `ping-again.log`; the node scenarios in `host/check.sh`.
 - [x] `sh host/check.sh` exits 0.
 - [x] Advise by a reader from another model family. Send-back, 2026-11-12, one required correction to a stated limit, made. Review in `reviews/`.
-- [ ] Fold.
+- [x] Fold. 2026-11-12: `openspec/specs/logged-processes/spec.md` is new; the ADDED delta is in `openspec/specs/zig-host/spec.md`.

@@ -205,6 +205,8 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 
 > **2026-11-12, `add-channels`:** P17 is met for one machine as `network_deterministic`: a program and a schedule lead to at most one configuration, for every table. The schedule holds the new names and the answers from outside, so it is the whole record. This is uniqueness only: it does not say a schedule can happen or that a run makes progress. The machine runs a schedule as direct evaluation does (`network_machine`, `network_machine_exact`). The interpreter on data is not covered for schedules, P13 and P16 are not touched, and nothing here is about more than one machine. The statements are in `openspec/specs/channels/spec.md`.
 
+> **2026-11-12, `add-logged-processes`:** inside one machine, the schedule is now a log. An op is a scheduler event with an identifier, and a node is a set of processes plus the identifiers it has acted on; P13, P14 and P17 hold of it together (`node_deterministic`, `node_again`, `node_restart`), and its processes are where the schedule of first deliveries leads (`node_network`), so P12 for channel names holds of a node. A node is kept under one root and restarted from it. An op that cannot happen stops the log. Still one machine: nothing is about two nodes, identifiers are supplied by the log, and nothing chooses events. The statements are in `openspec/specs/logged-processes/spec.md`.
+
 | | Statement | Why | Needs |
 |---|---|---|---|
 | **P15** | `run n (parse (print s)) = run n s`, and: a request answered by sending a closure to another VM, running it, and returning the bytes gives the outcome of running it locally. **Mostly free** from P4, P2, P6. | Location does not change meaning. | P4, P2, P6 |

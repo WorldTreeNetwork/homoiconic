@@ -80,3 +80,10 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - `Settle` and `Turn`, written for processes, were the handler's cases as they stood. The log needed no new statement about evaluation; its proofs are about lists.
 - The derived `==` on data has no proof behind it, so list membership could not be decided through it. Equality of data is decided by a definition written with the log.
 - Review found the reader of a kept state too loose: it dropped list tails, so several pieces read as one state. It also found that the session and the proved fold count different steps, so one budget is not one bound.
+
+## 2026-11-12 — logged processes
+
+- Splitting an event into a plan of machine runs and a function from where they end to the next configuration let one definition serve two machines. `plan` is polymorphic in how a function is held, proved to be `Step` for any way of evaluating, and used unchanged by the session, where a function is a stored piece. What is left unproved in the session is running the jobs and joining them, not deciding what an event does.
+- The dedup proofs for a node are the log's without the finished case, and shorter. They were written again rather than shared: the one-program VM ignores entries after its program ends, and a node refuses an op for a finished process, so the two handlers are not instances of one.
+- An op that cannot happen was given no next state rather than being skipped. With that, every op in a log was applied, so "already in the log" and "already acted on" are the same thing and the restart theorem needs no side condition.
+- Review found no fault in code or proofs, and one limit that understated what is read when a kept node is opened.
