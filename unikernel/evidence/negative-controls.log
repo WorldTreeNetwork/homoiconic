@@ -1,0 +1,9 @@
+probe: a system call lost state, check 0x0000000000000006
+reflect: exit 1
+ok   removing vector restore fails preservation
+probe: a system call lost state, check 0x0000000000000005
+reflect: exit 1
+ok   removing red-zone protection fails preservation
+ok   stale provenance rejects reuse and removes the old image
+ok   modified object rejects reuse
+ok   final factorial image restored and booted

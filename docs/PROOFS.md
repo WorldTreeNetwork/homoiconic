@@ -248,11 +248,27 @@ theorems; `advance` is tested against it.
   before it was folded. Reviews have sent work back eight times.
   `add-state-store` was accepted on first reading. `add-wire-bytes` and
   `add-kept-state` were each sent back once, with two required fixes; all
-  were made before the fold.
+  were made before the fold. `add-unikernel-image` was sent back once, with
+  six required fixes, all made before it was accepted.
 
 ## What the proofs do not cover
 
 - **Reader, renderer, Zig host.** Tested, not proved.
+- **The machine image.** `unikernel/out/reflect.elf` runs the same compiled
+  Lean objects as the Linux process, and nothing under them is proved. Its
+  trusted base is the boot code (`unikernel/boot.S`), the Zig layer
+  (`unikernel/kernel.zig`, `unikernel/main.zig`, about 500 lines), Zig's musl
+  1.2.5, the Lean compiler, the C compiler, the Lean runtime with a copied
+  archive whose `initialize_libuv` is replaced by an empty one, and Cloud
+  Hypervisor 54.0. A guest operating system is not in it. These are tested by
+  `unikernel/check.sh`: byte-for-byte comparison of the serial stream with the
+  Linux process, probes of the stack guard, system-call register and vector
+  preservation, missing XSAVE or `RDRAND`, random failure, and negative
+  controls that remove vector restore or red-zone protection. The guard
+  covers contiguous stack growth only; a frame that jumps the whole 2 MiB
+  guard is outside it. The Linux comparison shares the runtime adaptation, so
+  it cannot find a defect they share. The clock is a stand-in from the tick
+  counter; nothing a program computes depends on it.
 - **That a channel name cannot be guessed.** A name is a number. What is proved
   is that a process cannot use a name it does not hold, where holding is kept
   by the scheduler. Nothing is proved about a particular program of processes:
@@ -340,5 +356,7 @@ Programs can run side by side in one machine and talk over channels, under a
 recorded schedule. A waiting program can be kept on disk, under references made by Blake3. A
 program's state is the fold of a handler over a log, a repeated entry changes
 nothing, and a kept state handed its whole log reaches the state the log gives
-from the start (vision stage 5: P13 and P14). Signatures, garbage collection and a store shared between machines are
+from the start (vision stage 5: P13 and P14). One program
+now runs in a Cloud Hypervisor image with no operating system; the image has
+no network device yet (`add-unikernel-net`). Signatures, garbage collection and a store shared between machines are
 not started.

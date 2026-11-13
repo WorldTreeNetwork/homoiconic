@@ -1,0 +1,22 @@
+with cloud-hypervisor v54.0
+ok   factorial
+ok   forever
+ok   not-syntax
+ok   a zero byte in the source
+ok   an answer of 128911 bytes
+ok   the clock stopped
+ok   the event loop's start is the empty one
+ok   the program calls reflect_run and nothing else that evaluates or reads
+ok   the Lean objects are the ones Lake's C compiled to
+ok   an unanswered system call is reported
+ok   a source nested too deep ends in a report of a full stack
+ok   a write into the page under the stack faults, and the memory under it is untouched
+ok   a system call gives back registers, flags, the red zone and the vector state
+ok   random bytes are served
+ok   a processor without XSAVE is refused
+ok   a processor without a random instruction is refused
+ok   a random instruction that fails at the start stops the image
+ok   a random instruction that fails under the program stops the image
+ok   a random instruction that fails under a request stops the image
+ok   a command that runs past the limit is stopped
+unikernel checks passed

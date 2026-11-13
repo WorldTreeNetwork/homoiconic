@@ -1,0 +1,2 @@
+syntax error: line 2, column 3: expected an expression, found `)`
+reflect: exit 0

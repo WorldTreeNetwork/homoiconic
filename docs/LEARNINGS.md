@@ -67,6 +67,12 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - The simulation from requests, `Sim`, carried over to schedules with one added field: `PSim` is `Sim` plus `start`, which says the two ways of evaluating start a program alike. The machine agreement theorems for schedules then followed from the turn-level ones already proved for requests.
 - Review found no fault in the definitions and two in what the printed text claimed. The last line, then `nothing more can happen`, described the chooser, which never offers an answer from outside and does not run the machine, not what the semantics allows. And a printed schedule replays to the same last line only when the first run was not refused and did not run out of budget.
 
+## 2026-11-12 — unikernel image
+
+- The Lean runtime needed no rewrite to run with no operating system: musl, linked as Zig ships it, reaches a Zig layer through the `syscall` instruction as it would reach Linux. The one runtime edit is weakening `initialize_libuv` in a copied archive so an empty function wins, because the stock initializer starts the event-loop thread.
+- With one privilege level, `syscall` lands on the caller's stack, so the layer must step over the 128-byte red zone and save vector state itself. The negative controls show both matter: removing either makes the preservation probe fail.
+- Review sent the contract back once with six fixes, chiefly that the Linux comparison must be built from the same clean, provenance-checked objects rather than the partial artifacts of the failing Linux `host/check.sh` link.
+
 ## 2026-11-12 — event log
 
 - P14 did not need hashing. The plan had it depend on P5; with the identifier as data the log supplies, a repeated entry is recognised by equality and nothing about hashes is assumed. What a hash would add, that the identifier names this entry and no other, is the host's to supply.
