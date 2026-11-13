@@ -191,24 +191,41 @@ inductive Stands where
   | unbound (i : Nat)
   | wrong
 
+/-- Is the piece, behind any references, the empty list? -/
+def isNil (σ : Store Ref) (p : P Ref) : Except Ref Bool := do
+  match ← chase σ p with
+  | (_, .nil) => pure true
+  | _ => pure false
+
 /-- Read a kept VM state: the identifiers acted on, and where the program
     stands. `error r` when the store lacks `r`, `none` when the piece is not a
-    state. -/
+    state. The piece must be exactly `[seen, status]` with `seen` a list of
+    data and `status` one of the four forms, a result being data and a waiting
+    program a function. A function's environment is not walked: that would
+    fetch what a turn may never look at. A function made by something other
+    than saving may hold a part the machine cannot use, and a turn that
+    reaches it ends in a machine fault and keeps nothing. -/
 def openState (σ : Store Ref) (root : P Ref) : Except Ref (Option (List Data × Stands)) := do
   let (_, top) ← chase σ root
   let .cons seenP rest := top | pure none
   let some (.arr seen) ← full σ seenP | pure none
-  let (_, .cons statusP _) ← chase σ rest | pure none
+  let (_, .cons statusP last) ← chase σ rest | pure none
+  if !(← isNil σ last) then return none
   let (_, .cons tagP body) ← chase σ statusP | pure none
   let (_, tag) ← chase σ tagP
   let (_, body) ← chase σ body
   match tag, body with
-  | .nat 0, .cons k _ =>
+  | .nat 0, .cons k last =>
+      if !(← isNil σ last) then return none
       match ← chase σ k with
       | (held, .closure _ _) => pure (some (seen, .waiting held))
       | _ => pure none
-  | .nat 1, .cons d _ => pure (some (seen, .value d))
-  | .nat 2, .cons i _ =>
+  | .nat 1, .cons d last =>
+      if !(← isNil σ last) then return none
+      let some _ ← full σ d | pure none
+      pure (some (seen, .value d))
+  | .nat 2, .cons i last =>
+      if !(← isNil σ last) then return none
       match ← chase σ i with
       | (_, .nat n) => pure (some (seen, .unbound n))
       | _ => pure none
@@ -219,8 +236,12 @@ def openState (σ : Store Ref) (root : P Ref) : Except Ref (Option (List Data ×
     phase is entered at most once in a call and the phases come in one order;
     a VM goes through them once for each entry it acts on. `fuel` above that
     number is never used up; if it were, the turn says so and is over.
-    This is `Reflect.driveRun` for one turn, on the lazy machine, and
-    `Reflect.vmRun` for a log. -/
+    This follows `Reflect.driveRun` for one turn and `Reflect.vmRun` for a
+    log, on the lazy machine. The budget counts the lazy machine's steps,
+    which are more than the plain machine's (looking up a variable takes
+    steps of its own), so a budget that is enough for `vmRun` may not be
+    enough here. When both give a state, `LogCheck.lean` checks on examples
+    that it is the same one. -/
 def advance : Nat → Session → Session
   | 0, s => s.finish "error: the turn did not settle"
   | fuel + 1, s =>

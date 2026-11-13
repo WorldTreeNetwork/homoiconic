@@ -51,6 +51,47 @@ def foldState (src : String) (log : List Entry) : String :=
           | some (root, _) => "state: " ++ hex root
           | none => "no state"
 
+/-- A piece saved as the session saves a state, in a store of its own. -/
+def keptPiece (state : P Ref) : String × Pieces :=
+  match save pieceSize state with
+  | some (root, pieces) => (hex root, pieces.foldl (fun m rb => m.insert rb.1 rb.2) {})
+  | none => ("", {})
+
+def list (ps : List (P Ref)) : P Ref := ps.foldr .cons .nil
+
+-- Pieces that hash to their names and are not states are refused.
+#eval do
+  let result : P Ref := list [.nat 1, .nat 42]
+  let function : P Ref := .closure (compile (.lit (.nat 42))) .nil
+  let bad : List (String × P Ref) :=
+    [ ("a third part", list [.nil, result, .nat 99]),
+      ("a status with a third part", list [.nil, list [.nat 1, .nat 42, .nat 99]]),
+      ("a list that does not end", .cons .nil (.cons result (.nat 5))),
+      ("a result that holds a function", list [.nil, list [.nat 1, function]]),
+      ("a waiting program that is not a function", list [.nil, list [.nat 0, .nat 3]]),
+      ("an identifier list that is a number", list [.nat 4, result]),
+      ("an unknown status", list [.nil, list [.nat 9]]) ]
+  for (what, piece) in bad do
+    let (root, m) := keptPiece piece
+    let (text, _) := finish m 1000 (vmFrom root "[]".toUTF8 1000000)
+    IO.println (line (text.startsWith "store error: the root is not a kept state")
+      s!"refused: {what}")
+  let (root, m) := keptPiece (list [.nil, result])
+  let (text, _) := finish m 1000 (vmFrom root "[]".toUTF8 1000000)
+  IO.println (line (text.startsWith "42\n") "a state of that shape is accepted")
+
+-- The session's budget counts lazy steps, which are more than the plain
+-- machine's: there is a budget the fold finishes in and the session does not.
+#eval do
+  let src ← IO.FS.readFile "../examples/ask.hom"
+  let log : List Entry := [⟨.nat 1, .nat 20⟩, ⟨.nat 2, .nat 22⟩]
+  let fold := match Surface.read src.toUTF8 with
+    | .ok t => (vmRun 41 t log).isSome
+    | .error _ => false
+  let (text, _) := finish {} 1000 (vmStart src.toUTF8 (logText log) 41)
+  IO.println (line (fold && text.startsWith "no result within 41 steps")
+    "at 41 steps a turn the fold gives a state and the session gives none")
+
 def e1 : Entry := ⟨.arr [.nat 7], .nat 20⟩
 def e2 : Entry := ⟨.nat 8, .nat 22⟩
 def e3 : Entry := ⟨.nat 9, .nat 1⟩

@@ -498,7 +498,8 @@ wantVm "$STANDS" "42"
 wantVm "$ENTRIES" "5 given, 0 acted on"
 wantVm "$STATE" "$WHOLE"
 wantVm "$(sed -n 's/^store: fetched [0-9]*, wrote //p' "$OUT/vm.txt")" "0"
-# Another order of the same answers is another state.
+# The same entries in the other order are another state: the identifiers are
+# recorded in the order they were acted on.
 printf '[[2, 22], [1, 20]]\n' > "$OUT/other.log"
 vm start "$EXAMPLES/ask.hom" "$OUT/other.log"
 if [ "$STATE" = "$WHOLE" ]; then
@@ -536,7 +537,8 @@ wantVm "$("$OUT/vm" "$VMSTORE" from "$PIECE" "$EXAMPLES/ask.log" | sed -n 1p)" "
 # A state that is not in the store: exit 3 and nothing printed.
 status=0
 "$OUT/vm" "$VMSTORE" from "$(printf '%064d' 0)" "$EXAMPLES/ask.log" > "$OUT/refuse.out" 2> "$OUT/refuse.err" || status=$?
-if [ "$status" != 3 ] || [ -s "$OUT/refuse.out" ]; then
+printf 'vm: the store lacks piece %064d\n' 0 > "$OUT/refuse.expected"
+if [ "$status" != 3 ] || [ -s "$OUT/refuse.out" ] || ! cmp -s "$OUT/refuse.expected" "$OUT/refuse.err"; then
     echo "vm with the state missing: expected exit 3 and no output; got exit $status" >&2
     exit 1
 fi

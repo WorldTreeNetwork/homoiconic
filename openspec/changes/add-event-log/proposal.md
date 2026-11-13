@@ -38,7 +38,7 @@ From `host/check.sh`:
 - With the store deleted, the log alone gives the same root.
 - `examples/ask-again.log`, the same two entries delivered five times, one of them with another answer, gives the same root: 5 given, 2 acted on.
 - The same two answers in the other order give another root.
-- `kernel/LogCheck.lean`: the root the session saves is the root of the proved fold's state saved the same way, at every length of log, for `ask.hom` and `keep.hom`.
+- `kernel/LogCheck.lean`: the root the session saves is the root of the proved fold's state saved the same way, for logs of no, one, two and three entries, for `ask.hom` and `keep.hom`.
 
 ## Limits
 
@@ -49,6 +49,8 @@ From `host/check.sh`:
 - **That a restarted state has the same root is tested, not proved.** `log_restart` says the states are equal. That equal states reached by different routes are cut into the same pieces is checked on examples.
 - **The session is tested, not proved.** Each machine run in it is a turn the store theorems cover; the joining of turns over a log repeats `vmRun` and is compared with it in `LogCheck.lean`.
 - **A turn that does not end within the budget keeps nothing.** No state is reported for that call.
+- **The session's budget is not the fold's.** The session counts steps of the lazy machine, which takes more of them than the plain machine `vmRun` runs on. With the same number, the fold can give a state where the session gives none: `ask.hom` at 41 steps a turn does. The comparison in `LogCheck.lean` is of the states both give.
+- **A kept state is checked for its shape, not all the way down.** `from` refuses a root whose piece is not exactly `[seen, status]` with a known status, a result that is data, or a waiting program that is a function. It does not walk a function's environment, which would fetch what the turn may never read. A function made by something other than saving can hold a part the machine cannot use; a turn that reaches it ends in a machine fault and keeps nothing.
 - **The command is handed a log; it does not keep one.** Appending to a log, ordering it and deciding who may add to it are not here. The state does not name its program or its log.
 - **One program.** A VM is not a set of processes; under `vm` the channel payloads are requests to the outside (`homoiconic-q59.26`).
 - **The interpreter on data is not covered** for a log.

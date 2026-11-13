@@ -247,7 +247,13 @@ answered, 3 with nothing written when the directory lacks a piece that is
 needed, and 2, with a message on standard error, for a wrong call, a file or
 directory it cannot read, or a file it cannot write. The step budget is for
 each machine run (default 100000000); when a run does not end within it, the
-command prints `no result within N steps of a turn` and keeps nothing.
+command prints `no result within N steps of a turn` and keeps nothing. The
+steps are the lazy machine's, which takes more of them than the plain machine
+the proved fold runs on, so the two do not run out at the same number.
+
+`from` refuses a root whose piece is not a state: it must be `[seen, status]`
+exactly, with a result that is data or a waiting program that is a function.
+It does not walk a function's environment.
 
 The command is handed a log; it does not keep one or add to one. An
 identifier is whatever the log says, and of two entries with one identifier

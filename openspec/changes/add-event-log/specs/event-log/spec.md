@@ -88,7 +88,13 @@ For every operation table and every program, the state the machine reaches by a 
 
 ### Requirement: A VM's state is kept under a root
 
-`Surface.Keep` SHALL run a VM over a log against a store it is handed piece by piece: from a program's source (`vmStart`), or from the root of a kept state (`vmFrom`). When the log is handled it SHALL save the state as the piece `[seen, status]`, where `seen` is the identifiers acted on, newest first, and `status` is `[0, function]` for a waiting program, `[1, data]` for a result, `[2, i]` for the error of an unbound variable and `[3]` for the error `wrong`, cut and named as a waiting program is. It SHALL report where the program stands, how many entries were given and how many acted on, and the root. A root that does not name such a piece SHALL be refused as text. A turn that does not end within its budget SHALL save nothing. The session SHALL be compared with `vmRun` by `kernel/LogCheck.lean`: for each log tried, the root the session saves SHALL be the root of the fold's state saved the same way, and a kept state restarted on the whole log SHALL have the root the whole log gives from the start. This is tested, not proved.
+`Surface.Keep` SHALL run a VM over a log against a store it is handed piece by piece: from a program's source (`vmStart`), or from the root of a kept state (`vmFrom`). When the log is handled it SHALL save the state as the piece `[seen, status]`, where `seen` is the identifiers acted on, newest first, and `status` is `[0, function]` for a waiting program, `[1, data]` for a result, `[2, i]` for the error of an unbound variable and `[3]` for the error `wrong`, cut and named as a waiting program is. It SHALL report where the program stands, how many entries were given and how many acted on, and the root. A root that does not name exactly such a piece SHALL be refused as text: a list of another length, a status of another form, a result that is not data, or a waiting program that is not a function. A function's environment SHALL NOT be walked to check it. The session's budget SHALL count steps of the lazy machine, so a budget that is enough for `vmRun` need not be enough for the session. A turn that does not end within its budget SHALL save nothing. The session SHALL be compared with `vmRun` by `kernel/LogCheck.lean`: for each log tried, the root the session saves SHALL be the root of the fold's state saved the same way, and a kept state restarted on the whole log SHALL have the root the whole log gives from the start. This is tested, not proved.
+
+#### Scenario: A piece that is not a state
+
+- GIVEN stored pieces that hash to their names and are `[[], [1, 42], 99]`, `[[], [1, 42, 99]]`, and a state whose result holds a function
+- WHEN each is given as a root
+- THEN each is answered `store error: the root is not a kept state`
 
 #### Scenario: The session and the fold agree
 
