@@ -51,6 +51,18 @@ unsafe def reflectRunBytes (program length out capacity : USize) (budget : UInt6
   let text := Surface.runBytes (copyBytes program length) budget.toNat
   storeBytes out capacity text.toUTF8
 
+/-- C ABI: as `reflect_run`, but the program runs through `levels`
+    interpreters: the closed term `interp` on the program as data, on the
+    machine. `bytes` is 1 when the program is given in its byte form and 0 when
+    it is source. Level 0 is `reflect_run` or `reflect_run_bytes`. -/
+@[export reflect_interp]
+unsafe def reflectInterp (program length out capacity : USize) (budget : UInt64)
+    (levels : UInt32) (bytes : UInt8) : USize :=
+  let input := copyBytes program length
+  let text := if bytes == 1 then Surface.interpBytes input levels.toNat budget.toNat
+    else Surface.interpText input levels.toNat budget.toNat
+  storeBytes out capacity text.toUTF8
+
 /-- C ABI: program source pointer and length, output pointer and capacity.
     Answers one status byte, then the program's byte form (status 0) or the
     syntax error (status 1). Returns the number of bytes needed. -/

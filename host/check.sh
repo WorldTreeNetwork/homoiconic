@@ -97,7 +97,7 @@ cmp "$OUT/long.expected" "$OUT/long.txt"
 
 # A call the command cannot make: exit 2, nothing on standard output, and
 # exactly the one expected line on standard error, byte for byte.
-USAGE="usage: run [--bytes] <program-file> [step-budget]   (default budget: 100000000 machine steps)"
+USAGE="usage: run [--bytes] [--interp[=levels]] <program-file> [step-budget]   (default budget: 100000000 machine steps)"
 BUDGET="run: the step budget must be a whole number"
 NEWLINE="x
 y"
@@ -164,6 +164,42 @@ expect "bytes error: the value is not a program" --bytes "$OUT/empty-array.bytes
 expect "bytes error: a kind of value that is not a number or an array" --bytes "$EXAMPLES/append.hom"
 refuse "$USAGE" --bytes
 refuse "run: cannot read the program file: FileNotFound" --bytes "$EXAMPLES/missing.hom"
+
+# The metacircular interpreter: the program's byte form, as data, is handed to
+# the closed term `interp` on the machine, and the outcome it answers is read
+# back. It prints what the program prints run directly (`Reflect.reflective`).
+# `--interp=2` runs the interpreter interpreting the interpreter.
+sameThroughInterp() {
+    file="$1"; levels="$2"; shift_budget="${3:-}"
+    "$OUT/bytes" "$file" > "$OUT/program.bytes"
+    # shellcheck disable=SC2086
+    direct="$("$OUT/run" "$file" $shift_budget)"
+    for mode in "--interp=$levels" "--bytes --interp=$levels"; do
+        input="$file"
+        case "$mode" in --bytes*) input="$OUT/program.bytes" ;; esac
+        # shellcheck disable=SC2086
+        got="$("$OUT/run" $mode "$input" $shift_budget)"
+        if [ "$direct" != "$got" ]; then
+            echo "run $mode $file: expected '$direct', got '$got'" >&2
+            exit 1
+        fi
+    done
+    echo "run --interp=$levels $(basename "$file") => $(printf '%s' "$got" | cut -c1-60)"
+}
+printf 'case fn x -> x\n  0 -> 1\n  m + 1 -> m\n' > "$OUT/wrong.hom"
+for levels in 0 1 2; do
+    sameThroughInterp "$EXAMPLES/append.hom" "$levels"
+    sameThroughInterp "$EXAMPLES/code.hom" "$levels"
+    sameThroughInterp "$EXAMPLES/factorial.hom" "$levels"
+    sameThroughInterp "$OUT/identity.hom" "$levels"
+    sameThroughInterp "$OUT/wrong.hom" "$levels"
+done
+sameThroughInterp "$EXAMPLES/forever.hom" 1 5000
+sameThroughInterp "$OUT/wide.hom" 1
+expect "[1, 2, 3, 4]" --interp "$EXAMPLES/append.hom"
+expect "bytes error: the value is not a program" --bytes --interp "$OUT/empty-array.bytes"
+refuse "run: the interpreter levels must be a whole number" --interp=x "$EXAMPLES/append.hom"
+refuse "$USAGE" --interp
 # A syntax error leaves standard output empty: exit 1 and the kernel's text.
 printf 'fn x ->\n' > "$OUT/broken.hom"
 status=0
