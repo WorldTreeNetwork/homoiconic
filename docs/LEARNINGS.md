@@ -87,3 +87,9 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - The dedup proofs for a node are the log's without the finished case, and shorter. They were written again rather than shared: the one-program VM ignores entries after its program ends, and a node refuses an op for a finished process, so the two handlers are not instances of one.
 - An op that cannot happen was given no next state rather than being skipped. With that, every op in a log was applied, so "already in the log" and "already acted on" are the same thing and the restart theorem needs no side condition.
 - Review found no fault in code or proofs, and one limit that understated what is read when a kept node is opened.
+
+## 2026-11-13 — interpreted runs and text
+
+- A data kind that `case` goes wrong on would break the interpreter theorem. `interp` must answer a wrong outcome as the data `[2]`, and it cannot tell that a value is of a kind it may not take apart, so it would not answer `[2]` where the program goes wrong. A text kind of its own must therefore be visible to `case` as the list of its code points (`homoiconic-q59.35`).
+- In `examples/sieve.hom` every filter process ends up holding channel 0. Held names are found by matching numbers anywhere in a process's start data, quoted code included, so any 0 in the code a process is started with counts as holding channel 0 (`homoiconic-q59.36`).
+- `--text` first treated any array of valid code points as text and printed `[1, 2, 3, 4]` as control characters. The rule is now printable characters, tab and line feed; any other number leaves the result printed as numbers.

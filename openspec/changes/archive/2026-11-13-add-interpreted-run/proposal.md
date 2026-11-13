@@ -1,6 +1,6 @@
 # Run a program through the metacircular interpreter
 
-> Disposition: ACTIVE BUILD, 2026-11-12. Bead `homoiconic-q59.31`.
+> **FOLDED 2026-11-13** into `openspec/specs/zig-host/spec.md`. Archived. Bead `homoiconic-q59.31`.
 
 ## Why
 

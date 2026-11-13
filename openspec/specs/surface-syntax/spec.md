@@ -1,6 +1,6 @@
 # surface-syntax
 
-What is built: a Lean library, `Surface`, in the kernel package beside `Reflect`. `Surface.read` takes program text to a `Reflect` term, resolving names to de Bruijn indices and refusing unbound names, tabs in indentation, and malformed blocks. `Surface.render` prints outcomes as plain text. Both are tested against the examples in `kernel/Surface/Expect.lean` and are not proved. The export `reflect_run` runs what the reader produced on the machine in `openspec/specs/bytecode-machine/spec.md`; the host call is `openspec/specs/zig-host/spec.md`. The reader resolves `ask` as a built-in name for the request term of `openspec/specs/requests/spec.md`, and `Surface.converseText` runs a program against an answers text for the export `reflect_converse`. The syntax, its examples, and the programs these scenarios name are in `openspec/changes/archive/2026-11-10-move-host-to-reflect/design.md`.
+What is built: a Lean library, `Surface`, in the kernel package beside `Reflect`. `Surface.read` takes program text to a `Reflect` term, resolving names to de Bruijn indices and refusing unbound names, tabs in indentation, and malformed blocks. `Surface.render` prints outcomes as plain text. Both are tested against the examples in `kernel/Surface/Expect.lean` and are not proved. The export `reflect_run` runs what the reader produced on the machine in `openspec/specs/bytecode-machine/spec.md`; the host call is `openspec/specs/zig-host/spec.md`. The reader resolves `ask` as a built-in name for the request term of `openspec/specs/requests/spec.md`, and `Surface.converseText` runs a program against an answers text for the export `reflect_converse`. The reader takes `"..."` as the array of the text's code points and `'c'` as the number of one ASCII character; `Data` has no text kind, so a string is that array. `Surface.renderMOutcomeText` writes a result that is an array of printable code points as the text it spells, for `host/out/run --text`. The syntax, its examples, and the programs these scenarios name are in `openspec/changes/archive/2026-11-10-move-host-to-reflect/design.md`.
 
 ## Purpose
 
@@ -103,3 +103,19 @@ The reader and the renderer SHALL be tested against examples. They SHALL NOT be 
 - GIVEN a result printed by the host
 - WHEN someone asks what is proved about it
 - THEN the answer is that the machine's outcome for the term read is the term's outcome, and that the reading and the printing are tested
+
+### Requirement: Text is written in quotes
+
+The reader SHALL read `"..."` as the array of the code points of the text between the quotes, and `'c'` as the number of one ASCII character. Inside either, `\n`, `\t`, `\\`, `\"` and `\'` SHALL stand for a line feed, a tab, a backslash, a double quote and a single quote, and any other backslash SHALL be refused. A string SHALL be UTF-8 and SHALL end on the line it begins on. A string is an array: the reader SHALL NOT produce a value that a program can tell from the array of the same numbers.
+
+#### Scenario: A string is its code points
+
+- GIVEN the text `"h\\i\n"`
+- WHEN it is read and run
+- THEN the outcome is the data `[104, 92, 105, 10]`
+
+#### Scenario: A string that does not end is refused
+
+- GIVEN a line that opens a string and does not close it
+- WHEN it is read
+- THEN the reader reports a syntax error at the opening quote, and nothing is run

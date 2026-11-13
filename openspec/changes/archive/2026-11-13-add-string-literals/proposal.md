@@ -1,6 +1,6 @@
 # Write strings in programs and print results as text
 
-> Disposition: ACTIVE BUILD, 2026-11-12. Bead `homoiconic-q59.33`.
+> **FOLDED 2026-11-13** into `openspec/specs/surface-syntax/spec.md` and `openspec/specs/zig-host/spec.md`. Archived. Bead `homoiconic-q59.34`: the text below and `tasks.md` cite `q59.33`, which in the tracker is a NodeCheck task, and cite `q59.34` for a text kind of its own, which is `homoiconic-q59.35`.
 
 ## Why
 

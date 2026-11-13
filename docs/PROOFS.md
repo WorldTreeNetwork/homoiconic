@@ -268,6 +268,12 @@ theorems; `advance` is tested against it.
 ## What the proofs do not cover
 
 - **Reader, renderer, Zig host.** Tested, not proved.
+- **Running through the interpreter, and text.** `reflect_interp` runs the
+  closed term `interp` on the machine, so what runs is covered by the
+  interpreter and machine theorems. Reading the answer back through the
+  levels of an outcome's data form (`unreifyOutcome`, `unlift`) and writing an
+  array of code points as text (`textOf`, `renderMOutcomeText`) are tested by
+  `host/check.sh`, not proved. String literals add nothing to `Data`.
 - **The machine image.** `unikernel/out/reflect.elf` runs the same compiled
   Lean objects as the Linux process, and nothing under them is proved. Its
   trusted base is the boot code (`unikernel/boot.S`), the Zig layer

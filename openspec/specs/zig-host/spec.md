@@ -1,6 +1,6 @@
 # zig-host
 
-What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The `reflect_keep_*` exports run one turn of a program against a store of pieces (`openspec/specs/state-store/spec.md`), and the command `host/out/keep <store-dir> start <program-file> [step-budget]` or `host/out/keep <store-dir> answer <root> <answer-file> [step-budget]` keeps a waiting program in a directory, one file per piece, named by the kernel. The export `reflect_channels` runs a program as the first of several processes that talk over channels (`openspec/specs/channels/spec.md`), and the command `host/out/chan <program-file> [schedule-file | -] [step-budget] [event-limit]`, also built by `host/check.sh`, prints the schedule it went through, each process, and how the run stopped. The exports `reflect_vm_start` and `reflect_vm_from` run a program against a log of identified entries (`openspec/specs/event-log/spec.md`), from its beginning or from a kept state, and the command `host/out/vm <store-dir> start <program-file> <log-file> [step-budget]` or `host/out/vm <store-dir> from <root> <log-file> [step-budget]`, also built by `host/check.sh`, prints where the program stands and the root of its state. The exports `reflect_node_start` and `reflect_node_from` apply a log of identified events to several processes (`openspec/specs/logged-processes/spec.md`), from a program or from a kept node, and the command `host/out/node <store-dir> start <program-file> <log-file> [step-budget]` or `host/out/node <store-dir> from <root> <log-file> [step-budget]`, also built by `host/check.sh`, prints each process and the root of the node. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
+What is built: a Zig host that passes one program's text, an output buffer, and a step budget to the Lean export `reflect_run`. That export reads the surface syntax (`openspec/specs/surface-syntax/spec.md`), runs the proved machine (`openspec/specs/bytecode-machine/spec.md`) for at most the budget, and writes back a plain text rendering of the outcome. The host runs with the operation table `arith` (`openspec/specs/code-as-data/spec.md`). The host links the Lean object, calls the runtime initializer, and contains no evaluator and no reader. The command `host/out/run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget]`, built by `host/check.sh`, runs a program file through `reflect_run` and prints the answer. A second export, `reflect_converse`, runs a program against a list of answers (`openspec/specs/requests/spec.md`), and the command `host/out/ask <program-file> <answers-file> [step-budget]`, also built by `host/check.sh`, prints the requests it makes and how it ends. A third, `reflect_run_bytes`, runs a program given in its byte form (`openspec/specs/wire-bytes/spec.md`); `host/out/run --bytes` calls it. The export `reflect_interp` runs a program, from source or from its byte form, through a number of levels of the closed interpreter term `interp` (`openspec/specs/code-as-data/spec.md`) on the machine, reads the answer back, and can write a result that is an array of printable code points as the text it spells; `host/out/run --interp[=levels]` and `host/out/run --text` call it. A fourth, `reflect_source_bytes`, evaluates nothing: it reads a program's source and gives its byte form, and the command `host/out/bytes <program-file>` writes that to standard output. The `reflect_keep_*` exports run one turn of a program against a store of pieces (`openspec/specs/state-store/spec.md`), and the command `host/out/keep <store-dir> start <program-file> [step-budget]` or `host/out/keep <store-dir> answer <root> <answer-file> [step-budget]` keeps a waiting program in a directory, one file per piece, named by the kernel. The export `reflect_channels` runs a program as the first of several processes that talk over channels (`openspec/specs/channels/spec.md`), and the command `host/out/chan <program-file> [schedule-file | -] [step-budget] [event-limit]`, also built by `host/check.sh`, prints the schedule it went through, each process, and how the run stopped. The exports `reflect_vm_start` and `reflect_vm_from` run a program against a log of identified entries (`openspec/specs/event-log/spec.md`), from its beginning or from a kept state, and the command `host/out/vm <store-dir> start <program-file> <log-file> [step-budget]` or `host/out/vm <store-dir> from <root> <log-file> [step-budget]`, also built by `host/check.sh`, prints where the program stands and the root of its state. The exports `reflect_node_start` and `reflect_node_from` apply a log of identified events to several processes (`openspec/specs/logged-processes/spec.md`), from a program or from a kept node, and the command `host/out/node <store-dir> start <program-file> <log-file> [step-budget]` or `host/out/node <store-dir> from <root> <log-file> [step-budget]`, also built by `host/check.sh`, prints each process and the root of the node. The interpreter theorems are in `openspec/specs/code-as-data/spec.md` and the machine's in `openspec/specs/bytecode-machine/spec.md`. The append program is `examples/append.hom`; the identity and self-application programs these scenarios name are in `kernel/Surface/Expect.lean`.
 
 ## Purpose
 
@@ -10,7 +10,7 @@ Name the host call into the kernel. This spec does not restate the surface synta
 
 ### Requirement: The host returns the kernel's result
 
-The Zig host SHALL pass one program's bytes, an output buffer, and a step budget to the Lean export `reflect_run`. That export SHALL read the surface syntax, compile the term, and run the machine for at most the budget. It SHALL write the plain text rendering of the outcome and SHALL return the number of bytes that rendering needs. The Zig sources SHALL pass and print bytes. They SHALL NOT read the syntax and SHALL NOT case-split on terms to produce an outcome. `reflect_run` SHALL NOT answer with a numeric result code. The exports that evaluate SHALL be `reflect_run`, `reflect_converse`, `reflect_run_bytes`, `reflect_keep_start`, `reflect_keep_answer`, `reflect_keep_give` and `reflect_channels`, and each SHALL be a Lean definition.
+The Zig host SHALL pass one program's bytes, an output buffer, and a step budget to the Lean export `reflect_run`. That export SHALL read the surface syntax, compile the term, and run the machine for at most the budget. It SHALL write the plain text rendering of the outcome and SHALL return the number of bytes that rendering needs. The Zig sources SHALL pass and print bytes. They SHALL NOT read the syntax and SHALL NOT case-split on terms to produce an outcome. `reflect_run` SHALL NOT answer with a numeric result code. The exports that evaluate SHALL be `reflect_run`, `reflect_converse`, `reflect_run_bytes`, `reflect_interp`, `reflect_keep_start`, `reflect_keep_answer`, `reflect_keep_give`, `reflect_channels`, `reflect_vm_start`, `reflect_vm_from`, `reflect_node_start` and `reflect_node_from`, and each SHALL be a Lean definition.
 
 #### Scenario: Identity
 
@@ -261,3 +261,40 @@ The host SHALL provide a command that takes a store directory and either `start`
 - GIVEN the root of a state the `vm` command kept
 - WHEN it is given to `from`
 - THEN the command prints `store error: the root is not a kept node` and exits 0
+
+### Requirement: A command runs a program through the interpreter
+
+The run command SHALL accept `--interp` and `--interp=k`, for a whole number `k`, before the file path, in any order with `--bytes` and `--text`. `--interp` SHALL mean `--interp=1`. With it, the program, from source or from its byte form, SHALL be passed to the export `reflect_interp` in place of `reflect_run` or `reflect_run_bytes`, with the number of levels and a `flags` byte whose bit 0 SHALL be set when the program is its byte form. `reflect_interp`, a Lean definition, SHALL run `level k` of the program on the machine for at most the budget: the closed interpreter term given the program as data, `k` times over; level 0 is the program itself. The export SHALL read the answer back through `k` levels of the outcome's data form and SHALL render it as `reflect_run` renders an outcome. `reflect_interp` SHALL be one of the exports that evaluate. Zig SHALL NOT read the program or the answer.
+
+#### Scenario: The interpreter prints what the program prints
+
+- GIVEN `examples/append.hom`, `examples/code.hom`, `examples/factorial.hom`, the identity function and a program whose outcome is wrong
+- WHEN the command is run on each directly, and with `--interp=0`, `--interp=1` and `--interp=2`, from source and with `--bytes` on its byte form
+- THEN every run prints the same text
+
+#### Scenario: The budget counts the outermost machine
+
+- GIVEN `examples/forever.hom`
+- WHEN the command is run on it with `--interp` and a budget of 5000
+- THEN it prints `no result within 5000 steps`
+
+#### Scenario: Bad levels are refused
+
+- WHEN the command is run with `--interp=x`
+- THEN it prints `run: the interpreter levels must be a whole number` on standard error, nothing on standard output, and exits 2
+
+### Requirement: A command prints a result as text
+
+The run command SHALL accept `--text` before the file path, in any order with `--bytes` and `--interp`. With it, the command SHALL call `reflect_interp`, at level 0 unless `--interp` gives the levels, with bit 1 of `flags` set. A result that is an array in which every item is the code point of a tab, a line feed, or a character from the space up other than delete SHALL be written as the text those code points spell, by the kernel, and every other outcome SHALL be written as it is without the flag. Zig SHALL NOT read the answer.
+
+#### Scenario: A calculator answers in text
+
+- GIVEN `examples/calc.hom`
+- WHEN the command is run on it with `--text`, and with `--text --interp`
+- THEN both print `2 * (3 + 4) * 5 - 100 / (7 - 2) = 50`
+
+#### Scenario: A result that is not text is unchanged
+
+- GIVEN `examples/append.hom`, whose result is `[1, 2, 3, 4]`
+- WHEN the command is run on it with `--text`
+- THEN it prints `[1, 2, 3, 4]`
