@@ -1,0 +1,12 @@
+Access preflight recorded 2026-11-13T01:51:33Z.
+
+ssh -o BatchMode=yes -o ConnectTimeout=5 morphie 'uname -sm; test -r /dev/kvm && test -w /dev/kvm; command -v cloud-hypervisor'
+ssh: connect to host 192.168.0.164 port 22: Operation timed out
+exit status: 255
+
+ssh -o BatchMode=yes -o ConnectTimeout=5 framework 'uname -sm; test -r /dev/kvm && test -w /dev/kvm; command -v cloud-hypervisor'
+ssh: connect to host 192.168.0.106 port 22: Operation timed out
+exit status: 255
+
+Neither remote command executed. No current hardware, KVM or virtio evidence was obtained.
+A Framework T3 environment-link request was already submitted; its result remains pending.
