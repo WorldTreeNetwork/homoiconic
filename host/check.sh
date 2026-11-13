@@ -194,6 +194,10 @@ for levels in 0 1 2; do
     sameThroughInterp "$OUT/identity.hom" "$levels"
     sameThroughInterp "$OUT/wrong.hom" "$levels"
 done
+# A third language: Brainfuck written in this one, running Hello World, run
+# through the interpreter.
+expect "[72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 10]" "$EXAMPLES/brainfuck.hom"
+sameThroughInterp "$EXAMPLES/brainfuck.hom" 1
 sameThroughInterp "$EXAMPLES/forever.hom" 1 5000
 sameThroughInterp "$OUT/wide.hom" 1
 expect "[1, 2, 3, 4]" --interp "$EXAMPLES/append.hom"
