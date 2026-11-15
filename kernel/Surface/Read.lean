@@ -963,17 +963,25 @@ mutual
       -- name it; the written arms see that slot under a name no program can write.
       let hidden := "\x00scrutinee"
       let base := if caught then sc.push hidden else sc
+      let arms ← trArms base arrs
+      let deepest := arms.foldl (fun k a => max k a.k) 0
+      -- The catch-all body is read only when some branch falls to it, as it was
+      -- before array arms had lengths: a catch-all that the written arms leave
+      -- nothing for is not looked at, and may name what is not bound. Whether
+      -- the array branch falls to it is found by building that branch twice,
+      -- with two different terms in the place of the catch-all.
+      let probe (t : Term) : Data := reify (arrayNode arms (fun _ => t) (deepest + 2) 1)
+      let falls := z.isMissing || sn.isMissing || (arms.find? (·.takes 0)).isNone ||
+        probe (.lit (.nat 0)) != probe (.lit (.nat 1))
       -- What an arm that is not written reads as, under `d` binders.
-      let anyT ← if caught then (do let t ← tr (sc.push a) any; pure t.toTerm)
+      let anyT ← if caught && falls then (do let t ← tr (sc.push a) any; pure t.toTerm)
         else pure wrongTerm
       let fill (d : Nat) : Term := if caught then shift d anyT else wrongTerm
       let z' ← if z.isMissing then pure (.term (fill 0)) else tr base z
       let sn' ← if sn.isMissing then pure (.term (fill 1)) else tr (base.push m) sn
-      let arms ← trArms base arrs
       let n' : TT := match arms.find? (·.takes 0) with
         | some w => w.body
         | none => .term (fill 0)
-      let deepest := arms.foldl (fun k a => max k a.k) 0
       let c' : TT := .term (arrayNode arms fill (deepest + 2) 1)
       if caught then pure (.app (.lam (.dcase (.var 0) z' sn' n' c')) s')
       else pure (.dcase s' z' sn' n' c')

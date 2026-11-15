@@ -258,6 +258,18 @@ printf 'case [1, 2, 3]\n  [a, b, c] -> [c, b, a]\n' > "$OUT/three.hom"
 expect "[3, 2, 1]" "$OUT/three.hom"
 printf 'case [1, 2]\n  [a, b, c] -> [c, b, a]\n  other -> [9, ...other]\n' > "$OUT/other-length.hom"
 expect "[9, 1, 2]" "$OUT/other-length.hom"
+# A catch-all that the written arms leave nothing for is not read, as before
+# array arms had lengths: it may name what is not bound, and the program is the
+# term it was, the one the same case reads as with its scrutinee bound by a let.
+printf 'case 0\n  0 -> 7\n  m + 1 -> 8\n  [] -> 9\n  [h, ...t] -> 10\n  _ -> ghost\n' > "$OUT/unread-arm.hom"
+expect "7" "$OUT/unread-arm.hom"
+expect "7" --interp "$OUT/unread-arm.hom"
+printf 'let s = 0\ncase s\n  0 -> 7\n  m + 1 -> 8\n  [] -> 9\n  [h, ...t] -> 10\n' > "$OUT/unread-arm-let.hom"
+"$OUT/bytes" "$OUT/unread-arm.hom" > "$OUT/unread-arm.bytes"
+"$OUT/bytes" "$OUT/unread-arm-let.hom" > "$OUT/unread-arm-let.bytes"
+cmp "$OUT/unread-arm.bytes" "$OUT/unread-arm-let.bytes"
+printf 'case 0\n  0 -> 7\n  m + 1 -> 8\n  [a, b] -> 10\n  _ -> ghost\n' > "$OUT/live-arm.hom"
+expect "syntax error: line 5, column 8: unbound name \`ghost\`" "$OUT/live-arm.hom"
 printf 'case [1, 2]\n  [a, b, c] -> [c, b, a]\n' > "$OUT/no-arm.hom"
 expect "error: wrong" "$OUT/no-arm.hom"
 printf 'case [1, 2, 3, 4]\n  [a, b, ...rest] -> [b, a, rest]\n' > "$OUT/at-least.hom"

@@ -9,5 +9,6 @@
 - [x] `host/check.sh`: a ring, a later definition, a bound name, a fixed length, another length with and without a catch-all arm, a least length, three refusals; each through the interpreter.
 - [x] Functions kept in arrays split to `homoiconic-q59.39` for the owner's decision.
 - [x] `sh host/check.sh` exits 0 (2026-11-14, macOS arm64).
-- [ ] Advise.
+- [x] Advise by a reader from another model family (gpt-6.1-sol), 2026-11-14, on `8f26fd2`. Send-back, one required fix: a catch-all arm that nothing falls to was being read, so an old program with an unbound name there was refused. It is not read now. Review in `reviews/`.
+- [x] `sh host/check.sh` exits 0 after the fix (2026-11-14).
 - [ ] Fold.
