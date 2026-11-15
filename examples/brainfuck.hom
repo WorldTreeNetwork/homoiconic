@@ -17,38 +17,35 @@ def reverse xs acc =
     [] -> acc
     [h, ...rest] -> reverse rest [h, ...acc]
 
-def second xs = head (tail xs)
-def third xs = head (tail (tail xs))
-
 ; a tape is [left, cell, right], left nearest-first. A run answers [tape, out].
 def exec code tape out =
-  let l = head tape
-  let c = second tape
-  let r = third tape
-  case code
-    [] -> [tape, out]
-    [ins, ...rest] ->
-      case ins
-        0 -> exec rest [[c, ...l], head r, tail r] out
-        n + 1 ->
-          case n
-            0 -> exec rest [tail l, head l, [c, ...r]] out
-            k + 1 ->
-              case k
-                0 -> exec rest [l, c + 1, r] out
-                j + 1 ->
-                  case j
-                    0 -> exec rest [l, sub c 1, r] out
-                    _ -> exec rest tape [c, ...out]
-        [] -> exec rest tape out
-        [first, ...more] ->
-          case c
-            0 -> exec rest tape out
-            m + 1 ->
-              let after = exec ins tape out
-              exec code (head after) (second after)
+  case tape
+    [l, c, r] ->
+      case code
+        [] -> [tape, out]
+        [ins, ...rest] ->
+          case ins
+            0 -> exec rest [[c, ...l], head r, tail r] out
+            n + 1 ->
+              case n
+                0 -> exec rest [tail l, head l, [c, ...r]] out
+                k + 1 ->
+                  case k
+                    0 -> exec rest [l, c + 1, r] out
+                    j + 1 ->
+                      case j
+                        0 -> exec rest [l, sub c 1, r] out
+                        _ -> exec rest tape [c, ...out]
+            [] -> exec rest tape out
+            [first, ...more] ->
+              case c
+                0 -> exec rest tape out
+                m + 1 ->
+                  case exec ins tape out
+                    [after, printed] -> exec code after printed
 
 let hello =
   [2, 2, 2, 2, 2, 2, 2, 2, [0, 2, 2, 2, 2, [0, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 0, 2, 1, 1, 1, 1, 3], 0, 2, 0, 2, 0, 3, 0, 0, 2, [1], 1, 3], 0, 0, 4, 0, 3, 3, 3, 4, 2, 2, 2, 2, 2, 2, 2, 4, 4, 2, 2, 2, 4, 0, 0, 4, 1, 3, 4, 1, 4, 2, 2, 2, 4, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 4, 0, 0, 2, 4, 0, 2, 2, 4]
 
-reverse (second (exec hello [[], 0, []] [])) []
+case exec hello [[], 0, []] []
+  [tape, out] -> reverse out []

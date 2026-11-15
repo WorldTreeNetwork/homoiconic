@@ -242,6 +242,38 @@ case "$("$OUT/run" "$EXAMPLES/power.hom")" in
     *) echo "power.hom: the built code did not give 2^3, 2^10 and 2^100" >&2; exit 1 ;;
 esac
 sameThroughInterp "$EXAMPLES/forever.hom" 1 5000
+# Definitions that name one another, and array patterns that name a length.
+# Two definitions in a ring; a later definition used with no ring; a name that
+# is bound where it is used staying what it was; an arm for exactly three
+# items; another length going to the catch-all arm, and to `wrong` with none;
+# an arm for two items or more. The calculator above is a ring of five. Each
+# prints the same through the interpreter.
+printf 'def even n =\n  case n\n    0 -> 1\n    m + 1 -> odd m\n\ndef odd n =\n  case n\n    0 -> 0\n    m + 1 -> even m\n\n[even 10, odd 10, even 7, odd 7]\n' > "$OUT/ring.hom"
+expect "[1, 0, 0, 1]" "$OUT/ring.hom"
+printf 'def a = [1, ...b]\ndef b = [2]\na\n' > "$OUT/later.hom"
+expect "[1, 2]" "$OUT/later.hom"
+printf 'def f x = add x 1\ndef add a b = 99\n[f 1, add 1 1]\n' > "$OUT/bound.hom"
+expect "[2, 99]" "$OUT/bound.hom"
+printf 'case [1, 2, 3]\n  [a, b, c] -> [c, b, a]\n' > "$OUT/three.hom"
+expect "[3, 2, 1]" "$OUT/three.hom"
+printf 'case [1, 2]\n  [a, b, c] -> [c, b, a]\n  other -> [9, ...other]\n' > "$OUT/other-length.hom"
+expect "[9, 1, 2]" "$OUT/other-length.hom"
+printf 'case [1, 2]\n  [a, b, c] -> [c, b, a]\n' > "$OUT/no-arm.hom"
+expect "error: wrong" "$OUT/no-arm.hom"
+printf 'case [1, 2, 3, 4]\n  [a, b, ...rest] -> [b, a, rest]\n' > "$OUT/at-least.hom"
+expect "[2, 1, [3, 4]]" "$OUT/at-least.hom"
+for program in ring later bound three other-length no-arm at-least; do
+    sameThroughInterp "$OUT/$program.hom" 1
+done
+sameThroughInterp "$OUT/ring.hom" 2
+# What the reader refuses: a pattern inside a pattern, an arm that an arm above
+# it leaves nothing for, and a later definition on the far side of a `let`.
+printf 'case [1, 2]\n  [a, [b]] -> a\n' > "$OUT/nested-pattern.hom"
+expect 'syntax error: line 2, column 7: an item of an array pattern is a name or `_`: `[a, b]` or `[a, b, ...rest]`' "$OUT/nested-pattern.hom"
+printf 'case [1, 2]\n  [a, ...rest] -> a\n  [a, b] -> b\n' > "$OUT/dead-arm.hom"
+expect 'syntax error: line 3, column 3: this arm is never taken: an arm above it takes every array this one would' "$OUT/dead-arm.hom"
+printf 'def f x = g x\nlet y = 1\ndef g x = 8\nf 1\n' > "$OUT/split-run.hom"
+expect 'syntax error: line 1, column 11: unbound name `g`' "$OUT/split-run.hom"
 sameThroughInterp "$OUT/wide.hom" 1
 expect "[1, 2, 3, 4]" --interp "$EXAMPLES/append.hom"
 expect "bytes error: the value is not a program" --bytes --interp "$OUT/empty-array.bytes"

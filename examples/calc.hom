@@ -32,9 +32,9 @@ def number sofar text =
         0 -> [sofar, text]
         _ -> number (add (mul sofar 10) (sub c '0')) more
 
-; Definitions cannot name one another in a ring, so the parts below `expr`
-; are handed `expr` as an argument.
-def factor expr text =
+; A factor in parentheses is an expression, and `expr` is defined below: the
+; five definitions from here to `expr` name one another.
+def factor text =
   case skip text
     [] -> [0, []]
     [c, ...more] ->
@@ -46,7 +46,7 @@ def factor expr text =
             [] -> [first inner, []]
             [close, ...after] -> [first inner, after]
 
-def products expr got =
+def products got =
   let text = skip (rest got)
   case text
     [] -> got
@@ -56,15 +56,15 @@ def products expr got =
           case equal c '/'
             0 -> [first got, text]
             _ ->
-              let next = factor expr more
-              products expr [div (first got) (first next), rest next]
+              let next = factor more
+              products [div (first got) (first next), rest next]
         _ ->
-          let next = factor expr more
-          products expr [mul (first got) (first next), rest next]
+          let next = factor more
+          products [mul (first got) (first next), rest next]
 
-def term expr text = products expr (factor expr text)
+def term text = products (factor text)
 
-def sums expr got =
+def sums got =
   let text = skip (rest got)
   case text
     [] -> got
@@ -74,13 +74,13 @@ def sums expr got =
           case equal c '-'
             0 -> [first got, text]
             _ ->
-              let next = term expr more
-              sums expr [sub (first got) (first next), rest next]
+              let next = term more
+              sums [sub (first got) (first next), rest next]
         _ ->
-          let next = term expr more
-          sums expr [add (first got) (first next), rest next]
+          let next = term more
+          sums [add (first got) (first next), rest next]
 
-def expr text = sums expr (term expr text)
+def expr text = sums (term text)
 
 ; a number as decimal text
 def digits n tail =

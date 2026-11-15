@@ -42,11 +42,7 @@ def halves xs =
     [] -> [[], []]
     [a, ...more] ->
       case halves more
-        [] -> []
-        [left, ...others] ->
-          case others
-            [] -> []
-            [right, ...none] -> [[a, ...right], left]
+        [left, right] -> [[a, ...right], left]
 
 def merge first xs ys =
   case xs
@@ -62,16 +58,10 @@ def merge first xs ys =
 def sort first xs =
   case xs
     [] -> []
-    [a, ...more] ->
-      case more
-        [] -> xs
-        _ ->
-          case halves xs
-            [] -> []
-            [left, ...others] ->
-              case others
-                [] -> []
-                [right, ...none] -> merge first (sort first left) (sort first right)
+    [a] -> xs
+    _ ->
+      case halves xs
+        [left, right] -> merge first (sort first left) (sort first right)
 
 def length xs = fold (fn n x -> n + 1) 0 xs
 
@@ -84,10 +74,8 @@ def shortest then a b =
 def join texts =
   case texts
     [] -> []
-    [t, ...more] ->
-      case more
-        [] -> t
-        _ -> fold (fn acc c -> [c, ...acc]) [' ', ...join more] (reverse t [])
+    [t] -> t
+    [t, ...more] -> fold (fn acc c -> [c, ...acc]) [' ', ...join more] (reverse t [])
 
 def append xs ys =
   case xs

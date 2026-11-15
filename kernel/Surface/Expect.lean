@@ -12,6 +12,15 @@ Translation, as fixed by these examples:
 - `def f x = b` followed by `r` is `app (lam r) (lam b)` when `b` does not
   mention `f`, and `app (lam r) (app recur (lam (lam b)))` when it does,
   with `f` the outermost binder.
+- A run is the `def`s of a block with no `let` between them. A name bound
+  nowhere else that a later `def` of the run defines is that definition. The
+  definitions are bound so that each follows the ones it mentions; a run in
+  which none mentions a later one keeps its order and reads as above. `r`
+  definitions that mention one another in a ring are one function of a
+  number, `app recur (lam (lam select))`, with the ring's function the outer
+  binder and the number the inner: `select` takes member 0 at `0` and counts
+  down to the others, and inside it member `q` is `app self (lit q)`. After
+  it each member is bound in order, member `q` to `app ring (lit q)`.
 - A number is `lit (nat n)`. `[]` is `lit (arr [])`. `[a, b, ...t]` is
   `cons a (cons b t)`; without `...t` the chain ends in `lit (arr [])`.
   Arrays are never folded into one literal.
@@ -20,6 +29,11 @@ Translation, as fixed by these examples:
 - `case e` with arms is `dcase e zero succ empty cons`. The successor arm
   binds its name at index 0. The non-empty arm binds the head at 1 and the
   tail at 0. A missing arm is `wrongT`.
+- `[a, b]` takes an array of exactly two items and `[a, b, ...rest]` one of
+  two or more. The array arms are tried in the order written. The non-empty
+  arm reads one item at a time, each a `dcase` on the tail in the arm before
+  it, until the length settles which arm is taken; a length no arm takes is
+  `wrongT`, or the catch-all's body.
 - A catch-all arm `x -> b` (or `_ -> b`) binds the scrutinee:
   `app (lam (dcase (var 0) ...)) e`, and `b` fills every arm not given.
 - `quote e` with no splice is `lit (reify e)`. With splices, every largest
@@ -83,6 +97,37 @@ def addText : String :=
     m + 1 -> add m b + 1
 
 add 2 3"
+
+def evenOddText : String :=
+"def even n =
+  case n
+    0 -> 1
+    m + 1 -> odd m
+def odd n =
+  case n
+    0 -> 0
+    m + 1 -> even m
+"
+
+/-- Three definitions in a ring, with one outside it between them. -/
+def ringText : String :=
+"def a x = b x
+def twice x = [x, x]
+def b x = c x
+def c x =
+  case x
+    0 -> twice 7
+    m + 1 -> a m
+[a 5, b 4, c 3]"
+
+def lengthsText : String :=
+"def f xs =
+  case xs
+    [] -> 0
+    [a] -> [1, a]
+    [a, b] -> [2, b, a]
+    [_, _, c, ...rest] -> [3, c, rest]
+[f [], f [5], f [5, 6], f [5, 6, 7], f [5, 6, 7, 8]]"
 
 def spliceText : String :=
 "; code with a hole in it
@@ -153,6 +198,31 @@ def reads : List (String × Term) := [
   ("case [1]\n  [h,\n...t] -> h", .dcase (.cons (num 1) nil) wrongT wrongT wrongT (.var 1)),
   ("case [1]\n  [h, ...t\n] -> h", .dcase (.cons (num 1) nil) wrongT wrongT wrongT (.var 1)),
   ("case []\n  [\n] -> 7", .dcase nil wrongT wrongT (num 7) wrongT),
+  -- Array patterns of a fixed length, and of a least length.
+  ("case [1, 2]\n  [a, b] -> a",
+    .dcase (arr2 (num 1) (num 2)) wrongT wrongT wrongT
+      (.dcase (.var 0) wrongT wrongT wrongT
+        (.dcase (.var 0) wrongT wrongT (.var 3) wrongT))),
+  ("case [1, 2]\n  [a, b, ...r] -> [a, b, r]",
+    .dcase (arr2 (num 1) (num 2)) wrongT wrongT wrongT
+      (.dcase (.var 0) wrongT wrongT wrongT
+        (.cons (.var 3) (.cons (.var 1) (.cons (.var 0) nil))))),
+  -- A length no arm takes is the catch-all's.
+  ("fn x ->\n  case x\n    [a] -> a\n    y -> y",
+    .lam (.app (.lam (.dcase (.var 0) (.var 0) (.var 1) (.var 0)
+        (.dcase (.var 0) wrongT wrongT (.var 1) (.var 4)))) (.var 0))),
+  -- Two definitions that name one another are one function of a number.
+  (evenOddText ++ "even 3",
+    .app (.lam (.app (.lam (.app (.lam (.app (.var 1) (num 3)))
+          (.app (.var 1) (num 1))))
+        (.app (.var 0) (num 0))))
+      (.app recur (.lam (.lam (.dcase (.var 0)
+        (.lam (.dcase (.var 0) (num 1) (.app (.app (.var 3) (num 1)) (.var 0)) wrongT wrongT))
+        (.lam (.dcase (.var 0) (num 0) (.app (.app (.var 4) (num 0)) (.var 0)) wrongT wrongT))
+        wrongT wrongT))))),
+  -- A later definition that is used, with no ring, is bound first.
+  ("def a = [1, ...b]\ndef b = [2]\na",
+    .app (.lam (.app (.lam (.var 0)) (.cons (num 1) (.var 0)))) (.cons (num 2) nil)),
   ("quote (fn x -> x)", .lit (reify (.lam (.var 0)))),
   ("quote (interpret 1)", .lit (reify (.app interp (num 1)))),
   (spliceText,
@@ -190,7 +260,18 @@ def refused : List (String × String) := [
   ("case []\n  []\n-> 7", "indented"),
   ("case 3\n  m + 1 -> ghost\n  ghost -> 2", "ghost"),
   ("case []\n  [] -> ghost\n  ghost -> 2", "ghost"),
-  ("case [1]\n  [h, ...t] -> ghost\n  ghost -> 2", "ghost")
+  ("case [1]\n  [h, ...t] -> ghost\n  ghost -> 2", "ghost"),
+  ("case [1]\n  [a, 0] -> a", "an item of an array pattern"),
+  ("case [1]\n  [a, [b]] -> a", "an item of an array pattern"),
+  ("case [1]\n  [...r] -> r", "at least one item"),
+  ("case [1]\n  [a, ...r, b] -> r", "last part"),
+  ("case [1]\n  [a, b -> a", "expected `,` or `]`"),
+  ("case [1]\n  [a, b] -> a\n  [c, d] -> c", "duplicate arm"),
+  ("case [1]\n  [a, ...r] -> a\n  [a, b] -> b", "never taken"),
+  ("case [1]\n  [a, b]\n-> a", "indented"),
+  -- A `let` ends a run, and a quotation does not see a later definition.
+  ("def f x = g x\nlet y = 1\ndef g x = 8\nf 1", "unbound name `g`"),
+  ("def f x = quote (g 1)\ndef g x = x\nf 1", "quotation")
 ]
 
 /-- Program text, step budget, and the text the host must print. -/
@@ -234,7 +315,32 @@ def prints : List (String × Nat × String) := [
   ("let x = 99\ncase []\n  [] ->\n    let y = x\n    y\n  x -> 0", 1000, "99"),
   ("[1, 2, [3, 4]]", 1000, "[1, 2, [3, 4]]"),
   ("case [1]\n  [h,\n...t] -> h", 1000, "1"),
-  ("case []\n  [\n] -> 7", 1000, "7")
+  ("case []\n  [\n] -> 7", 1000, "7"),
+  (evenOddText ++ "[even 10, odd 10, even 7, odd 7]", 100000, "[1, 0, 0, 1]"),
+  (ringText, 100000, "[[7, 7], [7, 7], [7, 7]]"),
+  ("def a = [1, ...b]\ndef b = [2]\na", 1000, "[1, 2]"),
+  -- A name that is bound where it is used is not a later definition.
+  ("def f x = add x 1\ndef add a b = 99\n[f 1, add 1 1]", 1000, "[2, 99]"),
+  ("let g = fn x -> 7\ndef f x = g x\ndef g x = 8\n[f 1, g 1]", 1000, "[7, 8]"),
+  -- Of two later definitions of one name, the nearer.
+  ("def f x = g x\ndef g x = 1\ndef g x = 2\n[f 0, g 0]", 1000, "[1, 2]"),
+  -- A run inside a definition of a run.
+  ("def f x = h x\ndef h x =\n  def p y = q y\n  def q y = [y, x, r 1]\n  p 3\ndef r x = [x]\nf 9",
+    10000, "[3, 9, [1]]"),
+  ("def f x = quote (~(g x))\ndef g x = quote 5\nf 1", 10000, "[2, 5]"),
+  ("def a = b\ndef b = a\na", 10000, "no result within 10000 steps"),
+  ("case [1, 2, 3]\n  [a, b, c] -> [c, b, a]", 1000, "[3, 2, 1]"),
+  ("case [1, 2]\n  [a, b, c] -> [c, b, a]", 1000, "error: wrong"),
+  ("case [1, 2]\n  [a, b, c] -> [c, b, a]\n  _ -> 9", 1000, "9"),
+  ("case [1]\n  [a, b, ...rest] -> rest\n  other -> [other]", 1000, "[[1]]"),
+  ("case [1, 2, 3, 4]\n  [a, b, ...rest] -> [b, a, rest]", 1000, "[2, 1, [3, 4]]"),
+  ("case 5\n  [a, b] -> a\n  n -> [n]", 1000, "[5]"),
+  (lengthsText, 10000, "[0, [1, 5], [2, 6, 5], [3, 7, []], [3, 7, [8]]]"),
+  -- An arm of a fixed length above one of a least length takes its length.
+  ("def f xs =\n  case xs\n    [a, b] -> 2\n    [x, ...r] -> [x, r]\n    y -> [y]\n[f [], f [5], f [5, 6], f [5, 6, 7], f 3]",
+    10000, "[[[]], [5, []], 2, [5, [6, 7]], [3]]"),
+  -- A name written twice is the later one, as in `fn x x -> x`.
+  ("case [1, 2]\n  [a, a] -> a", 1000, "2")
 ]
 
 def askTwiceText : String :=

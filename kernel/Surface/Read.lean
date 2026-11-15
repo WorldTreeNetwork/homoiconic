@@ -5,8 +5,9 @@ import Reflect.Arith
 /-!
 The reader: program text to a `Reflect.Term`, or an error message with line and
 column. Hand-written and total; recursion is bounded by fuel proportional to
-the number of tokens, never by `partial`. The reader is tested against
-`Surface.reads` and `Surface.refused`; it is not proved.
+the number of tokens, or goes down the syntax tree, never by `partial`. The
+reader is tested against `Surface.reads` and `Surface.refused`; it is not
+proved.
 
 Pipeline: bytes → tokens (`lex`) → syntax tree with names (`parse`) → terms
 with de Bruijn indices (`tr`). Layout is handled in the parser: a token that
@@ -191,10 +192,14 @@ inductive Expr where
   | succ : Expr → Expr
   | letE : String → Expr → Expr → Expr
   | defE : String → List String → Expr → Expr → Expr
-  /-- Scrutinee; zero arm; successor name and arm; empty arm; head name, tail
-      name and non-empty arm; catch-all name and arm. An absent arm is `missing`. -/
-  | caseE : Expr → Expr → String → Expr → Expr → String → String → Expr → String →
-      Expr → Expr
+  /-- Scrutinee; zero arm; successor name and arm; the array arms, a chain of
+      `arm` in the order written; catch-all name and arm. An absent arm is
+      `missing`. -/
+  | caseE : Expr → Expr → String → Expr → Expr → String → Expr → Expr
+  /-- One array arm of a `case` and the array arms after it: the names of the
+      items, the name of the rest when the pattern ends in `...rest`, the body.
+      The chain ends in `missing`. -/
+  | arm : List String → Option String → Expr → Expr → Expr
   | quote : Pos → Expr → Expr
   | splice : Pos → Expr → Expr
   | missing : Expr
@@ -203,14 +208,17 @@ def Expr.isMissing : Expr → Bool
   | .missing => true
   | _ => false
 
+/-- `arr items rest` is `[a, b]` when `rest` is absent, exactly that many
+    items, and `[a, b, ...rest]` when it is present, at least that many. -/
 inductive Pat where
-  | zero | succ (m : String) | nil | cons (h t : String) | any (x : String)
+  | zero | succ (m : String) | arr (items : List String) (rest : Option String)
+  | any (x : String)
 
 structure Arms where
   z : Option Expr := none
   sc : Option (String × Expr) := none
-  n : Option Expr := none
-  c : Option (String × String × Expr) := none
+  /-- The array arms, in the order written. -/
+  arrs : Array (List String × Option String × Expr) := #[]
   a : Option (String × Expr) := none
 
 /-! ### Parser -/
@@ -307,6 +315,32 @@ def parseNames : Nat → Tk → List String → P (List String)
         parseNames f stop (x :: acc)
     | none => failHere s!"expected `{stop.show}`"
 
+/-- After `[` in a pattern: names or `_` with commas between, then `]` or
+    `, ...rest]`. -/
+def parseArrayPattern : Nat → List String → P Pat
+  | 0, _ => failHere "the input is too large to read"
+  | f + 1, acc => do
+    match ← peekRaw with
+    | some ⟨.name _, _, _, _⟩ => do
+      let x ← parseBinder
+      match ← peekRaw with
+      | some ⟨.rbrack, _, _, _⟩ => do advance; pure (.arr (x :: acc).reverse none)
+      | some ⟨.comma, _, _, _⟩ => do
+        advance
+        match ← peekRaw with
+        | some ⟨.dots, _, _, _⟩ => do
+          advance
+          let tl ← parseBinder
+          match ← peekRaw with
+          | some ⟨.rbrack, _, _, _⟩ => do advance; pure (.arr (x :: acc).reverse (some tl))
+          | u => failAt u "`...rest` is the last part of an array pattern; expected `]`"
+        | _ => parseArrayPattern f (x :: acc)
+      | u => failAt u "expected `,` or `]` in an array pattern"
+    | some t@⟨.dots, _, _, _⟩ =>
+      failAt (some t) "`...rest` comes after at least one item, as in `[head, ...tail]`"
+    | u =>
+      failAt u "an item of an array pattern is a name or `_`: `[a, b]` or `[a, b, ...rest]`"
+
 def parsePattern : P Pat := do
   match ← peekRaw with
   | some t =>
@@ -328,16 +362,11 @@ def parsePattern : P Pat := do
       let g := (← get).guard
       setGuard .none
       match ← peekRaw with
-      | some ⟨.rbrack, _, _, _⟩ => do advance; setGuard g; pure .nil
-      | some ⟨.name _, _, _, _⟩ =>
-        let h ← parseBinder
-        expectTok .comma
-        expectTok .dots
-        let tl ← parseBinder
-        expectTok .rbrack
+      | some ⟨.rbrack, _, _, _⟩ => do advance; setGuard g; pure (.arr [] none)
+      | _ => do
+        let p ← parseArrayPattern ((← get).toks.size + 1) []
         setGuard g
-        pure (.cons h tl)
-      | u => failAt u "patterns are one level deep: `[]` or `[head, ...tail]`"
+        pure p
     | k => failAt (some t) s!"expected a pattern, found `{k.show}`"
   | none => failHere "expected a pattern"
 
@@ -351,14 +380,18 @@ def addArm (t : Tok) (p : Pat) (body : Expr) (acc : Arms) : P Arms :=
     match acc.sc with
     | none => pure { acc with sc := some (m, body) }
     | some _ => failAt (some t) "duplicate arm for `m + 1`"
-  | .nil =>
-    match acc.n with
-    | none => pure { acc with n := some body }
-    | some _ => failAt (some t) "duplicate arm for `[]`"
-  | .cons h tl =>
-    match acc.c with
-    | none => pure { acc with c := some (h, tl, body) }
-    | some _ => failAt (some t) "duplicate arm for `[head, ...tail]`"
+  | .arr items rest =>
+    let k := items.length
+    if acc.arrs.any (fun (is, r, _) => is.length == k && r.isSome == rest.isSome) then
+      failAt (some t) (
+        if k == 0 then "duplicate arm for `[]`"
+        else if k == 1 && rest.isSome then "duplicate arm for `[head, ...tail]`"
+        else if rest.isSome then s!"duplicate arm for an array of {k} items or more"
+        else s!"duplicate arm for an array of exactly {k} items")
+    else if acc.arrs.any (fun (is, r, _) => r.isSome && is.length ≤ k) then
+      failAt (some t)
+        "this arm is never taken: an arm above it takes every array this one would"
+    else pure { acc with arrs := acc.arrs.push (items, rest, body) }
   | .any x =>
     match acc.a with
     | none => pure { acc with a := some (x, body) }
@@ -574,10 +607,9 @@ mutual
             let arms ← parseArms f l t.col {}
             let z := arms.z.getD .missing
             let sc := arms.sc.getD ("_", .missing)
-            let n := arms.n.getD .missing
-            let c := arms.c.getD ("_", "_", .missing)
+            let arrs := arms.arrs.foldr (fun (is, r, b) next => Expr.arm is r b next) .missing
             let a := arms.a.getD ("_", .missing)
-            pure (.caseE s z sc.1 sc.2 n c.1 c.2.1 c.2.2 a.1 a.2)
+            pure (.caseE s z sc.1 sc.2 arrs a.1 a.2)
 
   def parseArms : Nat → Lim → Nat → Arms → P Arms
     | 0, _, _, _ => failHere "the input is too large to read"
@@ -667,27 +699,207 @@ def TT.build (t : TT) : Term :=
   | .term _ => .lit (reify t.toTerm)
   | .hole h => h
 
-def TT.lams : Nat → TT → TT
-  | 0, t => t
-  | k + 1, t => .lam (TT.lams k t)
+/-- Rewrite the free variables of a term. `f d j` is what free variable `j`
+    becomes where `d` binders of the term itself enclose it. -/
+def mapFree (f : Nat → Nat → Term) : Nat → Term → Term
+  | d, .var i => if i < d then .var i else f d (i - d)
+  | d, .lam b => .lam (mapFree f (d + 1) b)
+  | d, .app g a => .app (mapFree f d g) (mapFree f d a)
+  | _, .lit x => .lit x
+  | d, .succ t => .succ (mapFree f d t)
+  | d, .cons a b => .cons (mapFree f d a) (mapFree f d b)
+  | d, .dcase s z sc n c =>
+    .dcase (mapFree f d s) (mapFree f d z) (mapFree f (d + 1) sc) (mapFree f d n)
+      (mapFree f (d + 2) c)
+  | d, .prim c x => .prim (mapFree f d c) (mapFree f d x)
 
-/-- Does the term mention de Bruijn index `k` (counted under binders)? -/
-def uses (k : Nat) : Term → Bool
-  | .var i => i == k
-  | .lam b => uses (k + 1) b
-  | .app f a => uses k f || uses k a
-  | .lit _ => false
-  | .succ t => uses k t
-  | .cons a b => uses k a || uses k b
-  | .dcase s z sc n c =>
-    uses k s || uses k z || uses (k + 1) sc || uses k n || uses (k + 2) c
-  | .prim c x => uses k c || uses k x
+/-- The term under `k` more binders. -/
+def shift (k : Nat) (t : Term) : Term :=
+  if k == 0 then t else mapFree (fun d j => .var (d + j + k)) 0 t
+
+/-- The free variables of a term, each as often as it occurs. -/
+def frees : Nat → Term → List Nat → List Nat
+  | d, .var i, acc => if i < d then acc else (i - d) :: acc
+  | d, .lam b, acc => frees (d + 1) b acc
+  | d, .app g a, acc => frees d g (frees d a acc)
+  | _, .lit _, acc => acc
+  | d, .succ t, acc => frees d t acc
+  | d, .cons a b, acc => frees d a (frees d b acc)
+  | d, .dcase s z sc n c, acc =>
+    frees d s (frees d z (frees (d + 1) sc (frees d n (frees (d + 2) c acc))))
+  | d, .prim c x, acc => frees d c (frees d x acc)
+
+def lamsT : Nat → Term → Term
+  | 0, t => t
+  | k + 1, t => .lam (lamsT k t)
+
+/-! ### Array arms
+
+The array arms of a `case` are tried in the order written, and which is taken
+depends only on how many items the array has. `arrayNode` reads the array one
+item at a time until that is settled. Where it has read `d` items, `2 * d`
+binders enclose the code: item `i` (from 1) is variable `2 * (d - i) + 1` and
+the array after item `i` is variable `2 * (d - i)`. -/
+
+/-- An array arm: how many items it names, whether it ends in `...rest`, and
+    its body, read where the rest (if any) is the nearest name, then the items
+    from the last to the first. -/
+structure ArmT where
+  k : Nat
+  rest : Bool
+  body : TT
+
+def ArmT.takes (a : ArmT) (len : Nat) : Bool :=
+  if a.rest then a.k ≤ len else a.k == len
+
+/-- An arm's body where `d` items have been read. -/
+def armLeaf (a : ArmT) (d : Nat) : Term :=
+  let k := a.k
+  mapFree (fun depth j =>
+    if a.rest then
+      if j == 0 then .var (depth + 2 * (d - k))
+      else if j ≤ k then .var (depth + 2 * (d - (k + 1 - j)) + 1)
+      else .var (depth + (j - (k + 1)) + 2 * d)
+    else
+      if j < k then .var (depth + 2 * (d - (k - j)) + 1)
+      else .var (depth + (j - k) + 2 * d)) 0 a.body.toTerm
+
+/-- The code where `d` items have been read and the array after them is
+    variable 0. `none d` is what to do, under `d` binders, when no arm takes
+    the array. -/
+def arrayNode (arms : List ArmT) (none : Nat → Term) : Nat → Nat → Term
+  | 0, d => none (2 * d)
+  | fuel + 1, d =>
+    match arms.find? (fun a => a.rest || a.k ≥ d) with
+    | .none => none (2 * d)
+    | some a =>
+      if a.rest && a.k ≤ d then armLeaf a d
+      else
+        .dcase (.var 0) wrongTerm wrongTerm
+          (match arms.find? (·.takes d) with
+           | some w => armLeaf w d
+           | .none => none (2 * d))
+          (arrayNode arms none fuel (d + 1))
+
+/-! ### Runs of definitions
+
+A run is the `def`s of a block with no `let` between them. Each body is read
+once, in a fixed layout, and `assemble` then puts the definitions in an order
+in which each comes after the ones it uses, binding those that use one another
+in a ring as one recursive function.
+
+The layout of the free variables of definition `i` of `k`, where `n` names are
+in scope around the run: `0` is the definition itself, `1` to `i` the earlier
+ones, nearest first, the next `n` the names in scope, then the later
+definitions in order, then whatever lies beyond the scope. The rest of the
+block has the layout of the last definition, `0` being that definition. -/
+
+inductive Ref where
+  | member (m : Nat)
+  | outer (v : Nat)
+
+def decode (n k i j : Nat) : Ref :=
+  if j ≤ i then .member (i - j)
+  else if j < i + 1 + n then .outer (j - i - 1)
+  else if j < n + k then .member (j - n)
+  else .outer (j - k)
+
+/-- Free variable `j` of definition `i`, where `st` lists the binders emitted
+    so far for this run, nearest first (`none` is a ring's function), and
+    `extra` more binders lie between them and the body. Inside the ring `ring`,
+    member `q` is `self q`, and `self` is the outermost of the extra binders. -/
+def place (n k i : Nat) (st : List (Option Nat)) (ring : List Nat) (extra : Nat)
+    (d j : Nat) : Term :=
+  match decode n k i j with
+  | .member m =>
+    let q := ring.idxOf m
+    if q < ring.length then .app (.var (d + extra - 1)) (.lit (.nat q))
+    else .var (d + extra + st.idxOf (some m))
+  | .outer v => .var (d + extra + st.length + v)
+
+/-- The members a ring's function chooses between: member `q` is under `q`
+    binders, one for each number counted down. -/
+def selChain : List Term → Term
+  | [] => wrongTerm
+  | [b] => b
+  | b :: more => .dcase (.var 0) b (selChain more) wrongTerm wrongTerm
+
+def bindMembers (cont : List (Option Nat) → Term) :
+    List Nat → Nat → List (Option Nat) → Term
+  | [], _, st => cont st
+  | i :: more, q, st =>
+    .app (.lam (bindMembers cont more (q + 1) (some i :: st)))
+      (.app (.var q) (.lit (.nat q)))
+
+/-- `uses[i]` is the definitions that definition `i` mentions. A definition by
+    itself is bound as it always was: a function, under `recurT` when it
+    mentions itself. A ring of `r` definitions is one function of a number
+    under `recurT`; member `q` is that function applied to `q`, and each is
+    then bound to its name for what follows. -/
+def emit (n k : Nat) (defs : Array Term) (uses : Array (List Nat)) (rest : Term) :
+    List (List Nat) → List (Option Nat) → Term
+  | [], st => mapFree (place n k (k - 1) st [] 0) 0 rest
+  | [i] :: groups, st =>
+    let body := defs.getD i wrongTerm
+    let value :=
+      if (uses.getD i []).contains i then
+        Term.app recurT (.lam (mapFree (place n k i (some i :: st) [] 0) 0 body))
+      else mapFree (place n k i st [] 0) 0 body
+    .app (.lam (emit n k defs uses rest groups (some i :: st))) value
+  | ring :: groups, st =>
+    let bodies := ring.zipIdx.map fun (i, q) =>
+      mapFree (place n k i st ring (q + 2)) 0 (defs.getD i wrongTerm)
+    .app (.lam (bindMembers (fun st' => emit n k defs uses rest groups st') ring 0 (none :: st)))
+      (.app recurT (.lam (.lam (selChain bodies))))
+
+/-- Everything a definition reaches through one use or more. -/
+def reach (uses : Array (List Nat)) (i : Nat) : List Nat :=
+  (List.range uses.size).foldl
+    (fun seen _ => seen.foldl
+      (fun acc x => (uses.getD x []).foldl
+        (fun acc y => if acc.contains y then acc else acc ++ [y]) acc) seen)
+    (uses.getD i [])
+
+/-- The run as one term. Definitions that reach one another are one group. The
+    groups are emitted so that each follows what it uses, the earliest written
+    first where there is a choice; a run in which no definition mentions a
+    later one keeps the order it was written in. -/
+def assemble (n : Nat) (defs : Array Term) (rest : Term) : Term :=
+  let k := defs.size
+  let uses : Array (List Nat) := (Array.range k).map fun i =>
+    ((frees 0 (defs.getD i wrongTerm) []).filterMap fun j =>
+      match decode n k i j with
+      | .member m => some m
+      | .outer _ => none).eraseDups
+  let reaches := (Array.range k).map (reach uses)
+  let group (i : Nat) : List Nat := (List.range k).filter fun j =>
+    j == i || ((reaches.getD i []).contains j && (reaches.getD j []).contains i)
+  let order := ((List.range k).foldl
+    (fun (acc : List Nat × List (List Nat)) _ =>
+      match (List.range k).find? (fun i => !acc.1.contains i &&
+          (group i).all fun m => (uses.getD m []).all fun y =>
+            acc.1.contains y || (group i).contains y) with
+      | some i => (acc.1 ++ group i, acc.2 ++ [group i])
+      | none => acc)
+    ([], [])).2
+  emit n k defs uses rest order []
+
+/-- The names of the `def`s a run goes on with. -/
+def runNames : Expr → List String
+  | .defE f _ _ r => f :: runNames r
+  | _ => []
 
 /-- `ctx` is the names in scope, nearest first. Inside a quotation `ctx` holds
-    only the names bound inside it, and `outer` the names bound outside it. -/
+    only the names bound inside it, and `outer` the names bound outside it.
+    `later` is the names of the definitions still to come in the runs being
+    read, nearest first: a name found nowhere else is looked for there, and
+    reads as a variable past the end of `ctx`, which `assemble` resolves.
+    `held` is the `later` of the code around a quotation, for its splices. -/
 structure Scope where
   ctx : List String
   outer : Option (List String)
+  later : List String := []
+  held : List String := []
 
 def Scope.push (sc : Scope) (x : String) : Scope := { sc with ctx := x :: sc.ctx }
 
@@ -708,73 +920,104 @@ def lookup (sc : Scope) (p : Pos) (x : String) : Except String TT :=
   else if x == "ask" then .ok (.term askTerm)
   else match arithNames.lookup x with
     | some n => .ok (.term (binaryOp n))
-    | none => .error (fmtPos p s!"unbound name `{x}`")
+    | none =>
+      let j := sc.later.idxOf x
+      if j < sc.later.length then .ok (.var (sc.ctx.length + j))
+      else if sc.held.contains x then
+        .error (fmtPos p s!"the quotation mentions `{x}`, which is defined outside it")
+      else .error (fmtPos p s!"unbound name `{x}`")
 
-def tr : Scope → Expr → Except String TT
-  | _, .num n => .ok (.lit (.nat n))
-  | _, .nil => .ok (.lit (.arr []))
-  | sc, .ref p x => lookup sc p x
-  | sc, .lam x b => do
-    let b' ← tr (sc.push x) b
-    pure (.lam b')
-  | sc, .app f a => do
-    let f' ← tr sc f
-    let a' ← tr sc a
-    pure (.app f' a')
-  | sc, .cons a b => do
-    let a' ← tr sc a
-    let b' ← tr sc b
-    pure (.cons a' b')
-  | sc, .succ e => do
-    let e' ← tr sc e
-    pure (.succ e')
-  | sc, .letE x v r => do
-    let v' ← tr sc v
-    let r' ← tr (sc.push x) r
-    pure (.app (.lam r') v')
-  | sc, .defE f ps b r => do
-    let n := ps.length
-    let b1 ← tr { sc with ctx := ps.reverse ++ f :: sc.ctx } b
-    let value ←
-      if uses n b1.toTerm then pure (TT.app (.term recurT) (.lam (TT.lams n b1)))
+mutual
+  def tr : Scope → Expr → Except String TT
+    | _, .num n => .ok (.lit (.nat n))
+    | _, .nil => .ok (.lit (.arr []))
+    | sc, .ref p x => lookup sc p x
+    | sc, .lam x b => do
+      let b' ← tr (sc.push x) b
+      pure (.lam b')
+    | sc, .app f a => do
+      let f' ← tr sc f
+      let a' ← tr sc a
+      pure (.app f' a')
+    | sc, .cons a b => do
+      let a' ← tr sc a
+      let b' ← tr sc b
+      pure (.cons a' b')
+    | sc, .succ e => do
+      let e' ← tr sc e
+      pure (.succ e')
+    | sc, .letE x v r => do
+      let v' ← tr sc v
+      let r' ← tr (sc.push x) r
+      pure (.app (.lam r') v')
+    | sc, .defE f ps b r => do
+      -- The first definition of a run; `trRun` reads the ones after it.
+      let b' ← tr { sc with ctx := ps.reverse ++ f :: sc.ctx,
+                            later := runNames r ++ sc.later } b
+      let (defs, rest) ← trRun sc [f] r
+      pure (.term (assemble sc.ctx.length (lamsT ps.length b'.toTerm :: defs).toArray rest))
+    | sc, .caseE s z m sn arrs a any => do
+      let s' ← tr sc s
+      let caught := !any.isMissing
+      -- With a catch-all, the scrutinee is bound once. Only the catch-all body may
+      -- name it; the written arms see that slot under a name no program can write.
+      let hidden := "\x00scrutinee"
+      let base := if caught then sc.push hidden else sc
+      -- What an arm that is not written reads as, under `d` binders.
+      let anyT ← if caught then (do let t ← tr (sc.push a) any; pure t.toTerm)
+        else pure wrongTerm
+      let fill (d : Nat) : Term := if caught then shift d anyT else wrongTerm
+      let z' ← if z.isMissing then pure (.term (fill 0)) else tr base z
+      let sn' ← if sn.isMissing then pure (.term (fill 1)) else tr (base.push m) sn
+      let arms ← trArms base arrs
+      let n' : TT := match arms.find? (·.takes 0) with
+        | some w => w.body
+        | none => .term (fill 0)
+      let deepest := arms.foldl (fun k a => max k a.k) 0
+      let c' : TT := .term (arrayNode arms fill (deepest + 2) 1)
+      if caught then pure (.app (.lam (.dcase (.var 0) z' sn' n' c')) s')
+      else pure (.dcase s' z' sn' n' c')
+    | sc, .quote p e =>
+      if sc.outer.isSome then
+        .error (fmtPos p "a quotation inside a quotation is not supported")
       else do
-        let b2 ← tr { sc with ctx := ps.reverse ++ sc.ctx } b
-        pure (TT.lams n b2)
-    let r' ← tr (sc.push f) r
-    pure (.app (.lam r') value)
-  | sc, .caseE s z m sn n h t c a any => do
-    let s' ← tr sc s
-    let caught := !any.isMissing
-    -- With a catch-all, the scrutinee is bound once. Only the catch-all body may
-    -- name it; the written arms see that slot under a name no program can write.
-    let hidden := "\x00scrutinee"
-    let base := if caught then sc.push hidden else sc
-    let fill := sc.push a
-    let wrong : TT := .term wrongTerm
-    let z' ← if z.isMissing then (if caught then tr fill any else pure wrong) else tr base z
-    let sn' ← if sn.isMissing then (if caught then tr (fill.push hidden) any else pure wrong)
-      else tr (base.push m) sn
-    let n' ← if n.isMissing then (if caught then tr fill any else pure wrong) else tr base n
-    let c' ← if c.isMissing then
-        (if caught then tr ((fill.push hidden).push hidden) any else pure wrong)
-      else tr ((base.push h).push t) c
-    if caught then pure (.app (.lam (.dcase (.var 0) z' sn' n' c')) s')
-    else pure (.dcase s' z' sn' n' c')
-  | sc, .quote p e =>
-    if sc.outer.isSome then
-      .error (fmtPos p "a quotation inside a quotation is not supported")
-    else do
-      let tt ← tr { ctx := [], outer := some sc.ctx } e
-      pure (.term tt.build)
-  | sc, .splice p e =>
-    match sc.outer with
-    | none => .error (fmtPos p "a splice `~` must be inside a quotation")
-    | some o =>
-      if sc.ctx.isEmpty then do
-        let tt ← tr { ctx := o, outer := none } e
-        pure (.hole tt.toTerm)
-      else .error (fmtPos p "a splice `~` cannot be under a binder of its quotation")
-  | _, .missing => .ok (.term wrongTerm)
+        let tt ← tr { ctx := [], outer := some sc.ctx, held := sc.later } e
+        pure (.term tt.build)
+    | sc, .splice p e =>
+      match sc.outer with
+      | none => .error (fmtPos p "a splice `~` must be inside a quotation")
+      | some o =>
+        if sc.ctx.isEmpty then do
+          let tt ← tr { ctx := o, outer := none, later := sc.held } e
+          pure (.hole tt.toTerm)
+        else .error (fmtPos p "a splice `~` cannot be under a binder of its quotation")
+    | _, .arm _ _ _ _ => .ok (.term wrongTerm)
+    | _, .missing => .ok (.term wrongTerm)
+  termination_by _ e => (sizeOf e, 0)
+
+  /-- The rest of a run, where `earlier` is its definitions already read,
+      nearest first: the definitions still to come, each in the layout
+      `assemble` takes, and then the rest of the block. -/
+  def trRun (sc : Scope) (earlier : List String) : Expr → Except String (List Term × Term)
+    | .defE f ps b r => do
+      let b' ← tr { sc with ctx := ps.reverse ++ f :: earlier ++ sc.ctx,
+                            later := runNames r ++ sc.later } b
+      let (defs, rest) ← trRun sc (f :: earlier) r
+      pure (lamsT ps.length b'.toTerm :: defs, rest)
+    | e => do
+      let t ← tr { sc with ctx := earlier ++ sc.ctx } e
+      pure ([], t.toTerm)
+  termination_by e => (sizeOf e, 1)
+
+  /-- The array arms of a `case`, each body read where its names are bound. -/
+  def trArms (base : Scope) : Expr → Except String (List ArmT)
+    | .arm items rest body next => do
+      let b ← tr { base with ctx := rest.toList ++ items.reverse ++ base.ctx } body
+      let more ← trArms base next
+      pure ({ k := items.length, rest := rest.isSome, body := b } :: more)
+    | _ => pure []
+  termination_by e => (sizeOf e, 0)
+end
 
 end Surface.Read
 
