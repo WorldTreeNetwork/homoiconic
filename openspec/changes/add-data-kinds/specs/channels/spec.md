@@ -3,13 +3,13 @@
 ### Requirement: Channel requests are payloads
 <!-- base: f9683e877dd64ed1d9d3c993c2d4bc7252676185 openspec/specs/channels/spec.md -->
 
-A request whose payload is `[0]` SHALL be a request for a new channel. `[1, name, message]`, with `name` a name value, SHALL be a send. `[2, name]`, with `name` a name value, SHALL be a receive. `[3, program, start]`, with `program` the data form of a program, SHALL be a request to start that program applied to the data `start` as a new process. Every other payload SHALL be a request to the outside; `[1, n, message]` and `[2, n]` with `n` a number are among them. No term, value, outcome, evaluation rule, interpreter branch or machine instruction SHALL be added for channels.
+A request whose payload is `[0]` SHALL be a request for a new channel. `[1, name, message]`, with `name` a name value, SHALL be a send. `[2, name]`, with `name` a name value, SHALL be a receive. `[3, program, start]`, with `program` the data form of a program, SHALL be a request to start that program applied to the data `start` as a new process. Every other payload SHALL be a request to the outside; `[1, n, message]` and `[2, n]` with `n` a number are among them. No term, value, outcome, evaluation rule, interpreter branch or machine instruction SHALL be added for channels. The rules of `Direct` and the cases of `step` that a name has SHALL be those of a data value that carries a number, and SHALL NOT mention a channel, a send, a receive or holding.
 
 #### Scenario: Channels add nothing to the language
 
 - GIVEN the definitions of `Term`, `Value`, `Outcome`, `Direct`, `interp`, `step` and `Drive`
-- WHEN this change lands
-- THEN none of them has changed
+- WHEN each is read for a term, rule, branch or instruction that is there for channel scheduling
+- THEN none has one: `Term`, `Value`, `Outcome`, `interp` and `Drive` are as they were before names, and what `Direct` and `step` gained is the rules and cases for text and names as data, the same whether or not a program uses a channel
 
 #### Scenario: A start request with no program is the outside's
 

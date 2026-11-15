@@ -33,6 +33,10 @@ number by the one way they would differ.
 
 ### D2. Text is seen as the list of its code points
 
+A text holds Unicode scalar values: code points with the surrogates
+(U+D800 to U+DFFF) left out, which is what a Lean `Char` and valid UTF-8 hold.
+Its code points, below, are the numbers of those scalar values.
+
 `case` on empty text takes the empty arm. Otherwise it binds the first code
 point, a number, at 1 and the rest, a text, at 0. `cons x t` is the array of
 `x` followed by the code points of `t`. `succ t` and `prim t d` are `wrong`.
@@ -56,36 +60,60 @@ apart; `case` does not. `text` (operation 7) makes text again.
   copy of its neighbour. Look at this again when a third kind (byte strings)
   comes.
 
-### D4. Text is a Lean `String`, behind three functions
+### D4. Text is a `List Char`, behind three functions
 
 New file `kernel/Reflect/Text.lean`, imported by `Syntax.lean`:
 
-    def Text.uncons? : String → Option (Nat × String)   -- first code point, rest
-    def Text.codes   : String → List Nat
-    def Text.ofCodes? : List Nat → Option String        -- none if an item is not
-                                                        -- a Unicode scalar value
+    def Text.uncons? : List Char → Option (Nat × List Char)  -- first code point, rest
+    def Text.codes   : List Char → List Nat
+    def Text.ofCodes? : List Nat → Option (List Char)        -- none if an item is not
+                                                             -- a Unicode scalar value
 
-`Data.text : String → Data`. The two case rules carry a premise:
+`Data.text : List Char → Data`. A `Char` is a Unicode scalar value, so a text
+holds nothing else. The two case rules are plain patterns, as `caseNil` and
+`caseCons` are:
 
-    caseTextNil  (hs : Direct env s (.value (.data (.text t))))
-                 (hu : Text.uncons? t = none) (h : Direct env n o)
-    caseTextCons (hs : … (.text t)) (hu : Text.uncons? t = some (c, r))
-                 (h : Direct (.data (.text r) :: .data (.nat c) :: env) cb o)
+    caseTextNil  (hs : Direct env s (.value (.data (.text []))))
+                 (h : Direct env n o)
+    caseTextCons (hs : Direct env s (.value (.data (.text (c :: r)))))
+                 (h : Direct (.data (.text r) :: .data (.nat c.toNat) :: env) cb o)
     consText     (ha : … (.data x)) (hb : … (.data (.text t))) :
                  Direct env (.cons a b) (.value (.data (.arr (x :: (Text.codes t).map .nat))))
 
-No proof unfolds the three functions. Nothing is proved about `String`; that
-`codes` and `uncons?` agree is tested in `ReflectRun.lean`.
+`evalFuel`, `step` and `lCase` match the same two patterns. `Text.uncons?` is
+the same split as a function, for code that is not a proof. No proof unfolds
+`Text.codes` or `Text.ofCodes?`. Nothing is proved about the three functions;
+that `codes` and `uncons?` agree is tested in `ReflectRun.lean`.
 
-Cost: with `String`, `uncons?` copies the rest (`String.drop` gives a slice in
-Lean 4.35 and must be copied to keep one form per text). A walk by `case` is
-quadratic in the length. `codes` is linear, and a program that reads long text
-should use it.
+Bytes are made and read only at the UTF-8 boundary, and each place converts
+in the open:
 
-- Rejected: `List Char`. The rules become plain patterns and a step is
-  constant time, but a character stays a list cell in memory, which the bead
-  names. It is the fallback: only `Text.lean`, `Data`'s constructor and the
-  reader and writer change, and no proof.
+- Reading bytes (the wire reader, the piece reader, the source of a program):
+  `String.fromUTF8?`, which refuses bytes that are not UTF-8, then
+  `String.toList`.
+- Writing bytes (the wire writer, the piece writer, the renderer, `--text`):
+  `String.ofList`, then `String.toUTF8`. A length written before a text, and
+  the size `cut` compares, is the count of those UTF-8 bytes, not of
+  characters.
+
+Nothing inside `Reflect/` but `Text.lean` mentions `String` for a text.
+
+Cost: a step of `case` on a text is constant time and a walk is linear in the
+length; `codes` is linear. A character is a list cell in memory, as it is
+today in an array of code points. The bead names that cost and this change
+does not answer it: the owner decided on 2026-11-12 that the representation
+is optimised later. The three functions stay so that most callers need no
+edit when it is; the two case rules would then be restated. A `case` walk and
+a `codes` walk over a text of 100,000 characters are measured after step 2
+and both numbers go in `docs/LEARNINGS.md` (a task, not a risk).
+
+- Rejected: a Lean `String`. It saves the list cell per character. But
+  `uncons?` must copy the rest (`String.drop` gives a slice in Lean 4.35 and
+  must be copied to keep one form per text), so a walk by `case` is quadratic
+  in the length; and the two case rules would carry a side equation
+  (`Text.uncons? t = none`, `= some (c, r)`), the first premises that are not
+  patterns, with extra work in `direct_deterministic`, `stuck_core` and
+  `MachineProof.rev`.
 - Rejected: text with a start offset. Two forms of one text; derived equality
   and the byte form would need normalising.
 
@@ -103,8 +131,22 @@ each taking its operand itself, not an array of operands:
   gives `[]`. `codes ""` is also `[]`.
 
 `arithNames` gains an arity so the reader can make `text` and `codes`
-functions of one argument. No operation makes a name, and none tells a name
-from a number except equality.
+functions of one argument. No operation makes a name.
+
+`arith` is not widened for names. Its arithmetic lines match on plain
+numbers (`.arr [.nat a, .nat b]`), so an operand that is a name falls to the
+last line: operation 0 on `[#3, 0]` answers `[]`, and on `[3, 0]` answers 3.
+Operations 1 to 4 and 6 likewise. So:
+
+- Arithmetic operands remain plain numbers.
+- A name is accepted as a number only where the language's own constructs
+  look: the scrutinee of `case`, the operand of `succ`, and the operation
+  number of `prim` (D1). Section 1 forces those three and no more.
+- Equality also tells the constructors apart: `equal #3 3` is 0.
+
+A program can therefore tell a name from its number by arithmetic as well as
+by equality. It gets the plain number of a name with `case`, or with `succ`
+and operation 1.
 
 ### D6. Channels
 
@@ -165,45 +207,58 @@ with a number, which is the outside's. In both, `[2, 0, 1]` is refused.
 ### D7. Bytes
 
 - Text: major type 3, definite length in the shortest form, then UTF-8. The
-  reader refuses bytes that are not valid UTF-8 (`String.fromUTF8?`). Not
-  normalised; dCBOR asks for NFC and this project does not do it, as with
+  writer goes from the `List Char` through `String.ofList` and
+  `String.toUTF8`; the length is the count of those bytes. The reader refuses
+  bytes that are not valid UTF-8 (`String.fromUTF8?`) and keeps
+  `String.toList` of the rest. Not normalised; dCBOR asks for NFC and this project does not do it, as with
   tag 2 for large numbers.
 - Name: tag 39 over the number in the number's own form (an unsigned integer,
   or tag 2 at 2^64 and above). `#3` is `d8 27 03`. Tag 39 is registered at
   IANA as "Identifier" (checked 2026-11-14), which is the meaning here. The
   registry has no private range; 6 to 15 are unassigned but in the Standards
   Action range, where a private use may later collide. The reader refuses
-  tag 39 over anything but a number, and every tag but 2 and 39.
+  tag 39 over anything but a number, and every tag but 2 and 39. Tag 39 over
+  tag 39 is refused: a name's number is not a name. So are tag 2 over a
+  number that fits an unsigned integer, a tag head in a longer form than it
+  needs (`d9 00 27`), and an inner number in a longer form. The bytes of a
+  name's number are bounded as a plain number's are: fewer than 2^64 of them
+  under tag 2. Wrapping a number in a name does not lift that limit.
 - No collision with a reference. A reference is a bare byte string (major
   type 2) of 32 bytes. Text is major type 3. A name and a large number are
   tags (major type 6); the byte string inside tag 2 is read by the tag's own
   branch and is never an item. Reading data still refuses a bare byte string.
 - `Wire.Item` gains `text` and `name`. `Item.toData` is `none` only for
   `bytes`.
-- Pieces. `Reflect.P` gains two leaves, `text : String → P R` and
+- Pieces. `Reflect.P` gains two leaves, `text : List Char → P R` and
   `name : Nat → P R`. `Data.toP`, `P.toData`, `P.hyd`, `Unf` and `UnfD` gain
   a line each. `Wire.pieceItem` writes a text piece as the text and a name
-  piece as the tagged number; `itemPiece` reads them back. Neither is an
+  piece as the tagged number; `itemPiece` reads them back. `Wire.Item.text`
+  carries the `List Char` too, so the only conversions are the two in the
+  byte reader and writer. Neither is an
   array, so neither can be taken for a pair `[0, h, t]` or a function
   `[1, body, captured]`.
 - The lazy machine takes text apart with no fetch, since a text is a leaf.
-  `lCase` on `.text t` uses `Text.uncons?`. `lCons` with `.text t` under the
+  `lCase` matches `.text []` and `.text (c :: r)`, as `step` does. `lCons` with `.text t` under the
   head builds the list of code points. `lSucc` and `lCheckNat` pass `.name n`
   as the plain machine does; `lPrim` takes `.name n` as the operation number.
 - Saving does not cut text. `cut` treats a text as it treats a number:
-  stored whole under its hash when its bytes pass the size, kept in place
+  stored whole under its hash when its UTF-8 bytes pass the size, kept in place
   otherwise. A long text is one piece and is fetched whole.
 
 ### D8. Surface
 
-- `"..."` reads as `lit (text …)`; `Tk.str` carries a `String`. `'c'` stays
+- `"..."` reads as `lit (text …)`; `Tk.str` carries the `List Char` the
+  literal holds. The source is UTF-8 bytes; the reader decodes it once and
+  the tokens hold characters from there on. `'c'` stays
   the number of one ASCII character: the head `case` gives is a number, and
   `equal c ' '` has to hold of it.
 - `renderData`: a text in double quotes with `\n`, `\t`, `\\` and `\"`
-  written as escapes and every other character as itself. The reader takes
+  written as escapes and every other character as itself; the renderer goes
+  through `String.ofList` to make the line. The reader takes
   every byte but a line feed and a backslash inside quotes, so rendered text
   reads back. A name is `#` and its number, which does not read.
-- `--text` (bit 1 of `flags`): a result that is a text is written raw. Every
+- `--text` (bit 1 of `flags`): a result that is a text is written raw, as
+  the UTF-8 of its characters. Every
   other result is written as without the flag. `textOf` and the rule about
   printable code points are deleted (open question 4).
 - `text` and `codes` are built-in names of one argument, usable in a
@@ -217,7 +272,7 @@ Counts are lines that mention a `Data` constructor
 | File | Lines | What changes |
 |---|---|---|
 | `Reflect/Syntax.lean` | 16 | `Data` gains two constructors. `reify` unchanged. `unreify` unchanged: text and a name fall to its last line and are no program. `unreify_reify` unchanged. |
-| `Reflect/Text.lean` | new | D4. |
+| `Reflect/Text.lean` | new | D4: three functions over `List Char`. |
 | `Reflect/Semantics.lean` | 32 | Twelve rules; `evalFuel` gains their branches. `reifyValue`, `reifyOutcome` unchanged. |
 | `Reflect/SemanticsProofs.lean` | 0 | A case per rule in `direct_deterministic`, `evalFuel_sound`, `evalFuel_mono`, `evalFuel_complete`. |
 | `Reflect/Interpreter.lean` | 3 | Nothing. |
@@ -227,7 +282,7 @@ Counts are lines that mention a `Data` constructor
 | `Reflect/MachineProof.lean` | 17 | A case per rule in `fwd`; sub-cases in `rev`. |
 | `Reflect/Store.lean` | 15 | D7. |
 | `Reflect/StoreProof.lean` | 32 | D7; see proofs below. |
-| `Reflect/Arith.lean` | 8 | D5. |
+| `Reflect/Arith.lean` | 8 | D5: operations 7 and 8 only. The arithmetic lines are not widened. |
 | `Reflect/Request.lean` | 4 | Nothing; `interpreted` matches arrays `interp` builds. |
 | `Reflect/RequestProof.lean` | 1 | Nothing expected. |
 | `Reflect/Channel.lean` | 12 | D6. |
@@ -247,7 +302,8 @@ Counts are lines that mention a `Data` constructor
 | `Surface/Run.lean`, `Host.lean`, `Bytes.lean` | 1, 0, 4 | `--text`. |
 | `Surface/Expect.lean`, `Check.lean` | 4, 2 | Expectations. |
 | `ReflectRun.lean`, `WireCheck.lean`, `StoreCheck.lean`, `KeepCheck.lean`, `LogCheck.lean`, `NodeCheck.lean`, `Bench.lean` | 5, 22, 9, 7, 19, 20, 2 | New checks; old ones stand unless a match is exhaustive. |
-| `ReflectContract.lean`, `MachineContract.lean`, `StoreContract.lean`, `RequestContract.lean`, `LogContract.lean`, `NodeContract.lean` | — | Not edited. They must still check: that is the acceptance test for "no statement changed". |
+| `ReflectContract.lean`, `MachineContract.lean`, `StoreContract.lean`, `RequestContract.lean`, `LogContract.lean`, `NodeContract.lean` | — | Not edited. They must still check: that is the acceptance test for "no statement changed". Each imports the umbrella `Reflect`, so each is checked only once every module is rebuilt (section 4). |
+| `InterpGate.lean` | new | The early gate (section 4). Imports `Reflect.Correctness` alone. |
 | `ChannelContract.lean` | — | Gains `held_nodup`. |
 | `host/*.zig`, `host/runtime.c` | 0 | Nothing but the usage line for `--text`, if it describes the old rule. |
 | `host/check.sh` | — | Expectations for strings, `--text`, held names, sieve, guess. |
@@ -287,9 +343,29 @@ each new rule, what the unchanged term does:
 | `primNameArgClosure` | `c` gives `#k`, `x` a function: wrong | the same | `argument` finds the tag 0 | `[2]` |
 | `primNameData` | `c` gives `#k`, `x` gives `d`: `op k d` | the same | its own `prim dc dx` | `[0, [1, op k d]]` |
 
-Three rules need no row. `lit` hands `d` over without looking, so a literal
-that is text or a name is `[0, [1, d]]`. `appData` looks only at the value's
-tag. `primData` passes any data to the table.
+The thirty existing rules need no row, but each was read, because a text or
+a name can now sit wherever a rule has a data value it does not look into:
+
+- `varBound`, `varUnbound`, `lam`, `lit`: lookup and the wrappers keep any
+  data. `lit` hands `d` over without looking, so a literal that is text or a
+  name is `[0, [1, d]]`, and its program form is still `[2, d]`.
+- `appFunError`, `appData`, `appArgError`, `appValue`: function and data are
+  told apart by the value's tag, not by the kind of data. A text or a name
+  as an argument, or captured, comes through unchanged.
+- `succNat`, `succArr`, `succClosure`, `succError`: the old operands and the
+  error and tag checks, as before.
+- `consArr`, `consHeadClosure`, `consHeadError`, `consTailNat`,
+  `consTailClosure`, `consTailError`: the head `x` may now be a text or a
+  name. The tag check takes either as data and `cons` keeps it. The closure
+  and error paths keep their order: a head that is a function is `wrong`
+  before the tail runs.
+- `caseZero`, `caseSucc`, `caseNil`, `caseCons`, `caseClosure`, `caseError`:
+  the old scrutinees. The head of an array may be a text or a name; the tail
+  of an array is still an array.
+- `primCodeError`, `primCodeArr`, `primCodeClosure`, `primArgError`,
+  `primArgClosure`, `primData`: the old paths with a plain number as the
+  operation number. `primData` passes any data to the table and takes any
+  data back.
 
 `interp` applied to data that is no program's form is outside the theorem, as
 before. There a name is read as a variable index and a text as a list.
@@ -299,9 +375,9 @@ before. There a name is read as a variable index and a text as a list.
 
 Mechanical: a new case that copies a neighbour.
 
-- `direct_deterministic`: twelve cases in the form the others have. For the
-  two text case rules the clash is two equations about `Text.uncons? t`;
-  `simp_all` closes it.
+- `direct_deterministic`: twelve cases in the form the others have. The two
+  text case rules are plain patterns, so they clash as `caseNil` and
+  `caseCons` do.
 - `evalFuel_sound`, `evalFuel_mono`, `evalFuel_complete`: a case per rule.
 - `Proof.fwd`: the error rules and the `cases k` rules are copies. The four
   new case rules go through the last `| _ =>` once `walk` knows them.
@@ -322,20 +398,14 @@ Needs care or a new argument:
   first: `apply Direct.succName (Direct.varBound rfl)`,
   `refine Direct.consText ?_ (Direct.varBound rfl)`,
   `refine Direct.primNameData (Direct.varBound rfl) ?_`, and the four case
-  rules with `(Direct.varBound rfl)`, the text ones also with
-  `(by assumption)` for the premise. Getting this order wrong shows as `fwd`
+  rules with `(Direct.varBound rfl)`. Getting this order wrong shows as `fwd`
   failing in a case that passed before.
 - **`stuck_core` runs at `maxHeartbeats 4000000` today.** It gains about a
   third more cases. If it times out, split it by construct into lemmas; do
   not raise the limit past 8000000.
-- **A premise that is not a pattern.** `caseTextNil` and `caseTextCons` are
-  the first rules with a side equation. `evalFuel` matches on
-  `Text.uncons? t`; in `stuck_core` and `MachineProof.rev` that means
-  `cases hu : Text.uncons? t` and `simp only [hu]` where the other cases
-  reduce by themselves.
 - **`StoreProof.cons_top`.** Its `hshape` lists the shapes the second entry
   can have; it gains name and text. Its inner `cases p'` gains the text
-  tail, where the result is `.cons y (listToP (codes t))` and the proof needs
+  tail, where the result is `.cons y (listToP (Text.codes t))` and the proof needs
   `rv_data_mk` at the array of code points. `lPrim_nat`, `lPrim_mono`,
   `lPrim_needs` and `prim_top` are stated for `.nat n` under the argument and
   each needs a `.name n` twin.
@@ -358,40 +428,136 @@ Two steps. The tree is green and committed after each.
 `held_nodup`; `Wire` tag 39 and the name piece; `Render` and `Chan` and `Keep`
 print `#n`; `guess.hom`, `number.hom`; `check.sh`. What compiles first:
 `Syntax`, `Semantics`, `SemanticsProofs`, then `Proof` and `Correctness`.
-`ReflectContract.lean` checking unchanged is the first gate, before any other
-file is touched. If `interp` needs an edit, it shows here.
+The early gate comes there, before any other file is touched. If `interp`
+needs an edit, it shows here.
 
 **Step 2, text.** `Text.lean`; `Data.text`; the five text rules; the same
-files in the same order; `Arith` 7 and 8; `Wire` major type 3 and the text
-piece; the reader, the renderer, `--text`; `calc.hom`, `words.hom`;
-`check.sh`.
+files in the same order, with the same early gate after `Proof`; `Arith` 7
+and 8; `Wire` major type 3 and the text piece; the reader, the renderer,
+`--text`; `calc.hom`, `words.hom`; `check.sh`.
 
-Names first because the bug is P1, the step needs nothing from `String`, and
-it is the smaller. Each proof file is opened twice; that is the price of a
-green tree in between.
+Names first because the bug is P1, the step needs nothing from `Text.lean`,
+and it is the smaller. Each proof file is opened twice; that is the price of
+a green tree in between.
+
+### The two gates
+
+`ReflectContract.lean` cannot be the early gate. It imports the umbrella
+`Reflect`, and `kernel/Reflect.lean` imports `MachineProof`, `ChannelProof`,
+`NodeProof`, `StoreProof` and the rest. Once `Data` has a new constructor,
+those do not compile until their own tasks are done, so a fresh check of
+`ReflectContract.lean` must fail at that point whatever `interp` does, and a
+check that passes there has read old `.olean` files.
+
+**The early gate, in each step, after `Proof.lean`.** Three conditions, all
+of them:
+
+1. `lake build Reflect.Correctness` exits 0. `Correctness` imports `Proof`,
+   which imports `Interpreter` and `SemanticsProofs`, and so `Semantics`,
+   `Syntax` (and `Text` in step 2); nothing else. `lake` rebuilds every one
+   of those whose source or imports changed, so after exit 0 their `.olean`
+   files are of the edited sources.
+2. `lake env lean InterpGate.lean` exits 0. `kernel/InterpGate.lean` is a new
+   file, added by the implementer in step 1 and not edited in step 2. It
+   imports `Reflect.Correctness` and nothing else, restates the signatures of
+   `reflective`, `reflective_coverage`, `reflective_env` and `tower` exactly
+   as `ReflectContract.lean` has them, and prints their axioms:
+
+       import Reflect.Correctness
+
+       open Reflect
+
+       example : ∀ [Ops], ∀ p o,
+           Direct [] p o ↔
+           Direct [] (.app interp (.lit (reify p))) (.value (.data (reifyOutcome o))) :=
+         Reflect.reflective
+
+       example : ∀ [Ops], ∀ p w,
+           Direct [] (.app interp (.lit (reify p))) w →
+           ∃ o, w = .value (.data (reifyOutcome o)) :=
+         Reflect.reflective_coverage
+
+       example : ∀ [Ops], ∀ env p o,
+           Direct env p o ↔
+           Direct [] (.app (.app evalTerm (.lit (reify p))) (.lit (.arr (reifyEnv env))))
+             (.value (.data (reifyOutcome o))) :=
+         Reflect.reflective_env
+
+       example : ∀ [Ops], ∀ k p o, Direct [] p o ↔ Direct [] (level k p) (lift k o) :=
+         Reflect.tower
+
+       #print axioms Reflect.reflective
+       #print axioms Reflect.reflective_coverage
+       #print axioms Reflect.reflective_env
+       #print axioms Reflect.tower
+
+   The four statements are copied from `ReflectContract.lean` character for
+   character. The axioms printed are the ones `ReflectContract.lean` printed
+   before the change, and `sorryAx` is not among them. The file does not
+   import a table.
+3. `git diff --stat <base> -- kernel/Reflect/Interpreter.lean
+   kernel/Reflect/Correctness.lean` prints nothing, where `<base>` is the
+   commit before step 1. Neither file is edited, in either step.
+
+This gate reads only modules that condition 1 has just rebuilt, so the
+untouched machine, channel, node and store files cannot fail it and their old
+`.olean` files cannot pass it.
+
+**The contract gate, in each step, after every module is updated.**
+`ReflectContract.lean` is checked unedited, with the five other unedited
+contract files, once its whole import closure compiles (`ChannelContract.lean`
+is checked with them, with `held_nodup` added):
+
+1. `lake build` exits 0. It builds `Reflect`, `Wire` and `Surface`, so every
+   module `Reflect.lean` imports is rebuilt from its edited source.
+2. `git diff --stat <base> -- kernel/ReflectContract.lean` prints nothing,
+   and likewise for `MachineContract.lean`, `StoreContract.lean`,
+   `RequestContract.lean`, `LogContract.lean` and `NodeContract.lean`.
+3. `lake env lean ReflectContract.lean` exits 0, and so for each of the
+   others. `host/check.sh` runs `lake build` and then these, in that order.
+
+**No stale `.olean`.** `lake env lean F.lean` reads whatever `.olean` files
+are in `.lake/build`; it builds nothing. A `lake build` that fails leaves the
+old files of the modules it did not reach. So each gate runs its `lake build`
+first, in the same shell, and goes on only at exit 0:
+
+    cd kernel && lake build Reflect.Correctness && lake env lean InterpGate.lean
+    cd kernel && lake build && lake env lean ReflectContract.lean
+
+A gate whose build did not exit 0 has not been run. When in doubt, remove
+`.lake/build` and build again; the result must be the same.
+
+The contract gate shows that no statement changed. It does not show that the
+definitions the statements mention mean what they did: `Data`, `Direct` and
+`step` do change, by the rules of this design. So the unchanged terms
+(`interp`, `evalTerm`, by condition 3 of the early gate) and the unchanged
+signatures are two checks, and after both steps the definitions the
+contracts mention and the axioms each contract prints are read against the
+ones before the change (a task under Close).
 
 ## 5. Risks, and when to stop
 
-- **A rule `interp` does not mirror.** The table says there is none. If
-  `ReflectContract.lean` cannot be made to check in step 1 without editing
-  `Interpreter.lean`, stop: the principle in section 1 is wrong somewhere and
+- **A rule `interp` does not mirror.** The table says there is none. If the
+  early gate of section 4 cannot be made to pass in step 1 without editing
+  `Interpreter.lean` or `Correctness.lean`, stop: the principle in section 1 is wrong somewhere and
   the change goes back to design.
 - **A contract file needs an edit.** Other than the added `held_nodup`, a
   changed statement means something moved that the proposal says did not.
   Stop and say which.
-- **`String` friction.** If `Text.lean` or the two premised rules cost more
-  than a day, switch `Data.text` to `List Char` behind the same three
-  functions and record it. No statement changes.
-- **Quadratic `case` on text.** After step 2, measure a `case` walk and a
-  `codes` walk over a text of 100,000 characters and put both numbers in
-  `docs/LEARNINGS.md`. If the `case` walk is unusable at the sizes
-  `examples/` need, take open question 1 back to the owner.
+- **A gate passes on old files.** See "No stale `.olean`" in section 4. A
+  gate is the build and the check together.
 - **`held_nodup` runs long.** Past about 100 lines, drop the theorem, keep
   `gain`, test it in `check.sh`, and change the channels delta to say tested.
+  That is a smaller change than the one proposed, not this one done. The
+  channels delta now says `Network.held_nodup` SHALL hold and names a
+  scenario in `ChannelContract.lean`. If the fallback is used, the
+  requirement, that scenario and the `ChannelContract.lean` task are revised
+  and stamped again before the change is said to be complete.
 - **The other session.** `unikernel/` links the same Lean objects. Its
   sources are not touched here. Tell it when step 1 lands, since its Linux
   comparison is built from them.
-- **Old kept states.** Not read as before; see the proposal.
+- **Old kept states.** Not migrated; see the proposal and section 6
+  item 10. An old root is not refused and not converted.
 
 ## 6. Open questions, as decided
 
@@ -399,13 +565,7 @@ Decided by the conductor on 2026-11-14 under the owner's instruction to carry
 beads `homoiconic-q59.35` and `homoiconic-q59.36` through. The owner may
 overrule any of them; a reviewer should say where one is wrong.
 
-1. **Text is a `List Char`, not a `String`.** This amends D4. A walk by `case`
-   is then linear, the two text case rules are plain patterns with no side
-   equation, and the risks "`String` friction" and "quadratic `case` on text"
-   in section 5 fall away. A list cell per character stays in memory, as it is
-   today; the owner decided on 2026-11-12 that representation is optimised
-   later. `Text.lean` keeps the three functions so the representation can
-   still be swapped. The byte form is unchanged: UTF-8.
+1. Text is a `List Char`, not a `String`. D4 was rewritten to it.
 2. A name is seen as its number.
 3. A start hands over names found in its start data only.
 4. The printable-array rule of `--text` is deleted.
@@ -413,5 +573,12 @@ overrule any of them; a reviewer should say where one is wrong.
 6. Text is not normalised.
 7. `[2, 0]` with a plain number is a request to the outside.
 8. No `kind` operation in this change.
-9. `Network.held_nodup` is proved, with the fallback in section 5.
-10. Old kept states are not migrated.
+9. `Network.held_nodup` is proved, with the fallback in section 5. Using
+   the fallback means revising the requirement before claiming completion.
+10. Old kept states are not migrated. Nothing rejects an old root and
+    nothing converts it. A node kept before this change is still pieces that
+    read: numbers and arrays. But a number in it that was a channel name is
+    now a plain number, so a process continued from it that sends or
+    receives on that number is making a request to the outside. Its held
+    list still reads, since held names are kept as numbers. The fixtures are
+    made again; a kept node anyone depends on is run again from its program.

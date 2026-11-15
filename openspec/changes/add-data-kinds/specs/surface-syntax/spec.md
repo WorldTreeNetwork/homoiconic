@@ -55,7 +55,7 @@ The reader SHALL resolve the names `add`, `sub`, `mul`, `div`, `mod`, `equal`, a
 ### Requirement: Text is written in quotes
 <!-- base: d5a02d8b50051f86d14c59f977b2d86756edce4e openspec/specs/surface-syntax/spec.md -->
 
-The reader SHALL read `"..."` as the literal of the text between the quotes, and `'c'` as the number of one ASCII character. Inside either, `\n`, `\t`, `\\`, `\"` and `\'` SHALL stand for a line feed, a tab, a backslash, a double quote and a single quote, and any other backslash SHALL be refused. A string SHALL be UTF-8 and SHALL end on the line it begins on. A string is a text, not an array: a program SHALL be able to tell it from the array of the same code points by `equal`, and SHALL take it apart by `case` as it takes that array apart, with each head a number. A character literal SHALL stay a number, so that it can be compared with a head.
+The reader SHALL read `"..."` as the literal of the text between the quotes, and `'c'` as the number of one ASCII character. Inside either, `\n`, `\t`, `\\`, `\"` and `\'` SHALL stand for a line feed, a tab, a backslash, a double quote and a single quote, and any other backslash SHALL be refused. A string SHALL be UTF-8, so the text holds Unicode scalar values, and SHALL end on the line it begins on. A string is a text, not an array: a program SHALL be able to tell it from the array of the same code points by `equal`, and SHALL take it apart by `case` as it takes that array apart, with each head a number. A character literal SHALL stay a number, so that it can be compared with a head.
 
 #### Scenario: A string is a text
 
