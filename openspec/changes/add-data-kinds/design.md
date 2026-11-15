@@ -92,9 +92,10 @@ in the open:
   `String.fromUTF8?`, which refuses bytes that are not UTF-8, then
   `String.toList`.
 - Writing bytes (the wire writer, the piece writer, the renderer, `--text`):
-  `String.ofList`, then `String.toUTF8`. A length written before a text, and
-  the size `cut` compares, is the count of those UTF-8 bytes, not of
-  characters.
+  `String.ofList`, then `String.toUTF8`. The length written in a text's CBOR
+  head is the count of those UTF-8 bytes, not of characters. The size `cut`
+  compares is a different count: the whole byte form of the piece, head
+  included (D7).
 
 Nothing inside `Reflect/` but `Text.lean` mentions `String` for a text.
 
@@ -241,9 +242,12 @@ with a number, which is the outside's. In both, `[2, 0, 1]` is refused.
   `lCase` matches `.text []` and `.text (c :: r)`, as `step` does. `lCons` with `.text t` under the
   head builds the list of code points. `lSucc` and `lCheckNat` pass `.name n`
   as the plain machine does; `lPrim` takes `.name n` as the operation number.
-- Saving does not cut text. `cut` treats a text as it treats a number:
-  stored whole under its hash when its UTF-8 bytes pass the size, kept in place
-  otherwise. A long text is one piece and is fetched whole.
+- Saving does not cut text. `cut` treats a text as it treats a number,
+  `kept size (.text t)`: stored whole under its hash when the piece's byte
+  form, the CBOR head and the UTF-8 bytes together, is larger than the size,
+  and kept in place otherwise. A text of 24 ASCII characters is 26 bytes
+  (`78 18` and the 24), so at size 25 it is stored. A long text is one piece
+  and is fetched whole.
 
 ### D8. Surface
 

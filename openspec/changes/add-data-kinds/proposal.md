@@ -1,6 +1,6 @@
 # Give data two more kinds: text and channel names
 
-> Disposition: PENDING, 2026-11-14. Beads homoiconic-q59.35, homoiconic-q59.36.
+> Disposition: ACTIVE BUILD, 2026-11-14. Beads homoiconic-q59.35, homoiconic-q59.36. The owner asked on 2026-11-14 for these beads to be carried through; two reads by another model family found the semantics sound and their four required fixes are answered in the documents.
 
 ## Why
 
