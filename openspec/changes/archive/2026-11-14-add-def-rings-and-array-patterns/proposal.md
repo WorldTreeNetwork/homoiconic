@@ -1,6 +1,6 @@
 # Let definitions name one another, and take arrays apart by length
 
-> Disposition: ACTIVE BUILD, 2026-11-14. Beads homoiconic-q59.37, homoiconic-q59.38.
+> **FOLDED 2026-11-14** into `openspec/specs/surface-syntax/spec.md`. Archived. Beads homoiconic-q59.37 (closed), homoiconic-q59.38 (closed: the pattern half is here; functions kept in arrays is `homoiconic-q59.39`, for the owner).
 
 The owner asked for this work directly on 2026-11-14.
 

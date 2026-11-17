@@ -11,4 +11,4 @@
 - [x] `sh host/check.sh` exits 0 (2026-11-14, macOS arm64).
 - [x] Advise by a reader from another model family (gpt-6.1-sol), 2026-11-14, on `8f26fd2`. Send-back, one required fix: a catch-all arm that nothing falls to was being read, so an old program with an unbound name there was refused. It is not read now. Review in `reviews/`.
 - [x] `sh host/check.sh` exits 0 after the fix (2026-11-14).
-- [ ] Fold.
+- [x] Fold. 2026-11-14, after the send-back was answered in `95ba66e`: the MODIFIED requirement "Programs are written with names and indentation" and the two ADDED requirements are in `openspec/specs/surface-syntax/spec.md`.

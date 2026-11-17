@@ -93,3 +93,8 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - A data kind that `case` goes wrong on would break the interpreter theorem. `interp` must answer a wrong outcome as the data `[2]`, and it cannot tell that a value is of a kind it may not take apart, so it would not answer `[2]` where the program goes wrong. A text kind of its own must therefore be visible to `case` as the list of its code points (`homoiconic-q59.35`).
 - In `examples/sieve.hom` every filter process ends up holding channel 0. Held names are found by matching numbers anywhere in a process's start data, quoted code included, so any 0 in the code a process is started with counts as holding channel 0 (`homoiconic-q59.36`).
 - `--text` first treated any array of valid code points as text and printed `[1, 2, 3, 4]` as control characters. The rule is now printable characters, tab and line feed; any other number leaves the result printed as numbers.
+
+## 2026-11-14 — definitions that name one another, and array patterns
+
+- The old reader never read a catch-all arm that no branch fell to, so a `case` covering `0`, `m + 1`, `[]` and `[h, ...t]` with `_ -> ghost` read and ran even though `ghost` is bound nowhere. The new reader first read every catch-all, and that old program became a syntax error; advise (gpt-6.1-sol) found it, though every file of `examples/` read to its old bytes. The reader again leaves such an arm unread (`95ba66e`): a promise that old programs read to the same term covers what the old reader skipped, not only what it checked.
+- A definition with no parameter in a ring is worked out again at each use, not once where it is bound, so `def a = b` and `def b = a` do not end rather than being refused.
