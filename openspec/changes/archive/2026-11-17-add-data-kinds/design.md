@@ -194,14 +194,17 @@ and operation 1.
 Rendering: `holds [#1, #0]`; `waiting on [1, #0, 7]`. The schedule line is
 unchanged.
 
-`examples/guess.hom` becomes:
+`examples/guess.hom` becomes (as landed; the text first written here put the
+splice under the binder `fn nothing` of its quotation, which the reader
+refuses, section 7):
 
     ask [0] (fn ch ->
-      let guesser = quote (fn nothing -> ask [2, ~[2, ch]] (fn x -> x))
-      ask [3, guesser, []] (fn started ->
+      let body = quote (ask [2, ~[2, ch]] (fn x -> x))
+      ask [3, [1, body], []] (fn started ->
         ask [1, ch, 7] (fn sent -> [])))
 
-`~[2, ch]` is the code of a literal of the name. Process 1 waits on `[2, #0]`
+`~[2, ch]` is the code of a literal of the name, and `[1, body]` is the code
+of a function with that body. Process 1 waits on `[2, #0]`
 and holds `[]`. `examples/number.hom` is the old text: process 1 asks `[2, 0]`
 with a number, which is the outside's. In both, `[2, 0, 1]` is refused.
 
@@ -589,7 +592,7 @@ overrule any of them; a reviewer should say where one is wrong.
 
 ## 7. Found while building step 1 (2026-11-17)
 
-- The text D6 gives for `examples/guess.hom` does not read: a splice cannot be
+- The text D6 first gave for `examples/guess.hom` did not read (D6 now shows the landed text, at fold): a splice cannot be
   under a binder of its quotation. The example quotes the body alone and builds
   the function's code as data, `[1, body]`. The run is the one D6 describes:
   the second process waits on `[2, #0]` and holds nothing.

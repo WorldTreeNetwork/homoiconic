@@ -1,6 +1,6 @@
 # state-store
 
-What is built: a running program's state can be held in pieces, in a store that may lack any of them. A lazy machine runs a partial state, fetches a piece when a step first looks at it, and pauses when the store lacks it. The kind of reference is a parameter. The definitions are in `kernel/Reflect/Store.lean`, the proofs in `kernel/Reflect/StoreProof.lean`, and the exact statements in `kernel/StoreContract.lean`. A session runs one turn of a program against a store it is handed piece by piece, and saves the waiting program when the turn ends in a request (`kernel/Surface/Keep.lean`). There a reference is the Blake3 hash of a piece's bytes, and the session checks each piece it is given against the name it asked for. The command `host/out/keep` keeps the pieces as files in a directory (`openspec/specs/zig-host/spec.md`). The theorems still hold for every kind of reference, hashes among them. The session is tested by `kernel/KeepCheck.lean` and `host/check.sh`, not proved.
+What is built: a running program's state can be held in pieces, in a store that may lack any of them. A lazy machine runs a partial state, fetches a piece when a step first looks at it, and pauses when the store lacks it. The kind of reference is a parameter. A piece is a number, a text, a name, an empty list, a pair, a function or a reference; a text and a name are leaves, so the lazy machine takes a text apart, and sees a name as its number, with no fetch beyond the piece itself (`openspec/changes/archive/2026-11-17-add-data-kinds/`). The definitions are in `kernel/Reflect/Store.lean`, the proofs in `kernel/Reflect/StoreProof.lean`, and the exact statements in `kernel/StoreContract.lean`. A session runs one turn of a program against a store it is handed piece by piece, and saves the waiting program when the turn ends in a request (`kernel/Surface/Keep.lean`). There a reference is the Blake3 hash of a piece's bytes, and the session checks each piece it is given against the name it asked for. The command `host/out/keep` keeps the pieces as files in a directory (`openspec/specs/zig-host/spec.md`). The theorems still hold for every kind of reference, hashes among them. Saving stores a text whole, as one piece, when its byte form is larger than the size it cuts at. A state kept before text and names were kinds of data is not migrated: it still reads, and a number in it that was a channel name is now a plain number. The session is tested by `kernel/KeepCheck.lean` and `host/check.sh`, not proved.
 
 ## Purpose
 
@@ -10,13 +10,25 @@ State what a piece, a store and a partial state are, what the lazy machine does 
 
 ### Requirement: State can be held in pieces
 
-A piece SHALL be a number, an empty list, a pair, a function, or a reference, and any part of a piece MAY be a reference. A store SHALL map references to pieces and MAY lack any reference. The kind of reference SHALL be a parameter of every definition and theorem. A machine state held whole SHALL resolve to itself under every store. A piece held in the store SHALL be replaceable by its reference without changing what resolves. A piece SHALL resolve to at most one thing.
+A piece SHALL be a number, a text, a name, an empty list, a pair, a function, or a reference, and any part of a pair or a function MAY be a reference. A text SHALL be one piece with no parts. A store SHALL map references to pieces and MAY lack any reference. The kind of reference SHALL be a parameter of every definition and theorem. A machine state held whole SHALL resolve to itself under every store. A piece held in the store SHALL be replaceable by its reference without changing what resolves. A piece SHALL resolve to at most one thing. The lazy machine SHALL take a text apart, and SHALL see a name as its number, with no fetch beyond the piece itself. The theorems of this spec SHALL hold with their statements unchanged by text and names, and `kernel/StoreContract.lean` SHALL check without having been edited.
 
 #### Scenario: Cut and resolve
 
 - GIVEN a machine state cut at every value into a store
 - WHEN its pieces are resolved
 - THEN the result is the state that was cut
+
+#### Scenario: Text in stored state
+
+- GIVEN a program stopped while it holds a text, and another stopped while it holds a name, each cut at every value
+- WHEN the lazy machine continues each with the whole store, taking the text apart by `case` and the name by `case`, `succ` or as an operation number
+- THEN each halts with what the plain machine halts with
+
+#### Scenario: A withheld text is a pause
+
+- GIVEN a stored program whose next step looks at a text, and a store with that text's piece withheld
+- WHEN it is run
+- THEN it pauses needing that piece's reference
 
 ### Requirement: A program cannot tell that its state is stored
 

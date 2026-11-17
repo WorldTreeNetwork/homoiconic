@@ -1,6 +1,6 @@
 # wire-bytes
 
-What is built: one byte form for data, for the part of dCBOR that `Data` has, numbers and arrays. A program's bytes are the bytes of its quoted form, and a machine value, a waiting program among them, has a byte form too. The reader and writer are in `kernel/Wire/Cbor.lean`, the byte forms of a program and a machine value in `kernel/Wire/Form.lean`, and the tests in `kernel/WireCheck.lean`, which `host/check.sh` runs. `Wire` is its own library; no definition or theorem in `Reflect` mentions bytes. The reader and writer are tested, not proved, by decision D7 of `add-verifiable-network-vision`. One statement is proved: `Reflect.unreify_reify`. It and `unreify`, which reads a program back from its data form, are in `kernel/Reflect/Syntax.lean`, beside `reify`. Numbers of 2^64 and above are written with CBOR tag 2; that is this project's rule, not dCBOR's. A piece of stored state (`openspec/specs/state-store/spec.md`) has a byte form too, and a reference to it is the 32-byte Blake3 hash of those bytes. Blake3 is written in Lean in `kernel/Wire/Blake3.lean`; the byte form of a piece and saving by cutting are in `kernel/Wire/Piece.lean`. The reader and writer also handle byte strings, for references; reading data refuses one. `kernel/KeepCheck.lean`, which `host/check.sh` runs, tests the hash against the official vectors and saves real runs. The hash, the byte form of a piece and saving are tested, not proved. That two different pieces do not share a hash is assumed (D5).
+What is built: one byte form for data, for the part of dCBOR that `Data` has: numbers, arrays, text and names. Text is a CBOR text string of UTF-8, not normalised; a name is CBOR tag 39 over its number (`openspec/changes/archive/2026-11-17-add-data-kinds/`). A program's bytes are the bytes of its quoted form, and a machine value, a waiting program among them, has a byte form too. The reader and writer are in `kernel/Wire/Cbor.lean`, the byte forms of a program and a machine value in `kernel/Wire/Form.lean`, and the tests in `kernel/WireCheck.lean`, which `host/check.sh` runs. `Wire` is its own library; no definition or theorem in `Reflect` mentions bytes. The reader and writer are tested, not proved, by decision D7 of `add-verifiable-network-vision`. One statement is proved: `Reflect.unreify_reify`. It and `unreify`, which reads a program back from its data form, are in `kernel/Reflect/Syntax.lean`, beside `reify`. Numbers of 2^64 and above are written with CBOR tag 2, and names with tag 39; those are this project's rules, not dCBOR's. A piece of stored state (`openspec/specs/state-store/spec.md`) has a byte form too, and a reference to it is the 32-byte Blake3 hash of those bytes. Blake3 is written in Lean in `kernel/Wire/Blake3.lean`; the byte form of a piece and saving by cutting are in `kernel/Wire/Piece.lean`. The reader and writer also handle byte strings, for references; reading data refuses one. A text or a name is a piece of its own kind, and saving stores a text whole, never cut. `kernel/KeepCheck.lean`, which `host/check.sh` runs, tests the hash against the official vectors and saves real runs. The hash, the byte form of a piece and saving are tested, not proved. That two different pieces do not share a hash is assumed (D5).
 
 ## Purpose
 
@@ -10,11 +10,11 @@ State the byte form of a data value, of a program, of a machine value and of a p
 
 ### Requirement: A data value has one byte form
 
-The kernel SHALL provide a writer from data to bytes, for every data value in which each array has fewer than 2^64 items and each number fewer than 2^64 bytes, and a reader from bytes to data. A number below 2^64 SHALL be written as a CBOR unsigned integer in the shortest form that holds it. A number of 2^64 or more SHALL be written as CBOR tag 2 over a byte string of its bytes, most significant first, with no leading zero. An array SHALL be written as a definite-length CBOR array with its length in the shortest form. The reader SHALL refuse a number or length in a longer form than it needs, an indefinite length, bytes after the value, a value cut short, a bignum with a leading zero or one that fits an unsigned integer, and every kind of CBOR value other than these three. The reader and writer are tested, not proved.
+The kernel SHALL provide a writer from data to bytes, for every data value in which each array has fewer than 2^64 items, each number and the number of each name fewer than 2^64 bytes, and each text fewer than 2^64 bytes of UTF-8, and a reader from bytes to data. A number below 2^64 SHALL be written as a CBOR unsigned integer in the shortest form that holds it. A number of 2^64 or more SHALL be written as CBOR tag 2 over a byte string of its bytes, most significant first, with no leading zero. An array SHALL be written as a definite-length CBOR array with its length in the shortest form. A text SHALL be written as a definite-length CBOR text string, its length in bytes in the shortest form, followed by its UTF-8. A name SHALL be written as CBOR tag 39 over its number in the form a number has: an unsigned integer below 2^64, tag 2 over its bytes from 2^64. A text SHALL hold Unicode scalar values only. Text SHALL NOT be normalised: two different sequences of scalar values are two texts with two byte forms. Tag 2 for large numbers, tag 39 for names and text without normalisation are this project's rules, not dCBOR's. The reader SHALL refuse a number or length in a longer form than it needs, an indefinite length, bytes after the value, a value cut short, a bignum with a leading zero or one that fits an unsigned integer, a text that is not valid UTF-8, tag 39 over anything but a number, tag 39 over tag 39 among them, a tag written in a longer form than it needs, every other tag, and every kind of CBOR value other than these five. The reader and writer are tested, not proved.
 
 #### Scenario: The standard's examples
 
-- GIVEN each example in RFC 8949 appendix A that is an unsigned number or an array of them
+- GIVEN each example in RFC 8949 appendix A that is an unsigned number, a definite-length text string, or an array of them
 - WHEN the value is written
 - THEN the bytes are the standard's, and reading them gives the value
 
@@ -29,6 +29,24 @@ The kernel SHALL provide a writer from data to bytes, for every data value in wh
 - GIVEN every string of one or two bytes
 - WHEN each is read
 - THEN it is refused, or it is exactly the bytes the writer gives for the value read
+
+#### Scenario: A name
+
+- GIVEN the name with number 3
+- WHEN it is written
+- THEN the bytes are `d8 27 03`, and reading them gives the name and not the number 3
+
+#### Scenario: Text that is not UTF-8 is refused
+
+- GIVEN the bytes `61 ff`, `62 c0 80` and `63 ed a0 80`
+- WHEN each is read
+- THEN the reader refuses it
+
+#### Scenario: A tag over the wrong thing is refused
+
+- GIVEN the bytes `d8 27 80`, tag 39 over an empty array; `d8 27 d8 27 03`, tag 39 over tag 39; `d9 00 27 03`, tag 39 in three bytes; and `d8 28 03`, tag 40 over 3
+- WHEN each is read
+- THEN the reader refuses it
 
 ### Requirement: A program's bytes are the bytes of its quoted form
 
@@ -80,13 +98,19 @@ The kernel SHALL define the 32-byte Blake3 hash in Lean. A reference to a stored
 
 ### Requirement: A piece has a byte form
 
-The reader and writer SHALL handle a definite-length CBOR byte string, with its length in the shortest form. Reading data SHALL refuse a byte string anywhere in it. A piece SHALL be written as follows: a number as itself; an empty list as an empty array; a pair as `[0, head, tail]`; a function as `[1, body, captured]`, where `body` is the quoted form of the program its code was compiled from; a reference as a byte string of 32 bytes. A function whose code is not exactly the compilation of a program SHALL have no byte form. A byte string of another length SHALL NOT be read as a piece.
+The reader and writer SHALL handle a definite-length CBOR byte string, with its length in the shortest form. Reading data SHALL refuse a byte string anywhere in it. A piece SHALL be written as follows: a number as itself; a text as the text; a name as the name; an empty list as an empty array; a pair as `[0, head, tail]`; a function as `[1, body, captured]`, where `body` is the quoted form of the program its code was compiled from; a reference as a byte string of 32 bytes. A function whose code is not exactly the compilation of a program SHALL have no byte form. A byte string of another length SHALL NOT be read as a piece. A text of any length, 32 bytes among them, SHALL NOT be read as a reference, and the byte string inside a large number SHALL NOT be read as one.
 
 #### Scenario: A stored piece reads back
 
 - GIVEN a machine state saved into pieces
 - WHEN each piece's bytes are read and written again
 - THEN the bytes are the same, and the piece's name is the hash of them
+
+#### Scenario: A text of 32 bytes is not a reference
+
+- GIVEN a piece that is a text of 32 ASCII characters
+- WHEN its bytes are written and read as a piece
+- THEN the bytes begin `78 20` and the piece read is that text
 
 ### Requirement: Saving cuts a value by size
 
@@ -97,3 +121,13 @@ Saving SHALL cut a value from the leaves up, store each part whose byte form is 
 - GIVEN a program stopped after some steps and saved, cut at 256 bytes or at every value
 - WHEN the lazy machine continues from the stored pieces
 - THEN it halts with what the plain machine halts with
+
+### Requirement: A text is stored whole
+
+Saving SHALL treat a text as it treats a number: a text whose byte form is larger than the given size SHALL be stored under its hash as one piece and replaced by its reference, and a smaller one SHALL be left in place. Saving SHALL NOT cut a text into parts.
+
+#### Scenario: A long text is one piece
+
+- GIVEN a waiting program that holds a text of 1,000 characters, saved with cuts at 256 bytes
+- WHEN the pieces are listed
+- THEN exactly one of them is that text, and its next turn, which does not look at the text, is not supplied it

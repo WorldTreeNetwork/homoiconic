@@ -7,7 +7,7 @@ out. The exact statements are in `kernel/ReflectContract.lean`,
 the requirements are in `openspec/specs/`.
 Written 2026-11-10, after `add-operation-tables`; updated 2026-11-10, after
 `add-requests`, 2026-11-11, after `add-state-store` and `add-wire-bytes`, and
-2026-11-12, after `add-kept-state`.
+2026-11-12, after `add-kept-state`, and 2026-11-17, after `add-data-kinds`.
 
 ## In one sentence
 
@@ -69,9 +69,27 @@ handed piece by piece, and the command `host/out/keep` keeps the pieces as
 files. Nothing new is proved. The hash, the byte form of a piece, saving and
 the session are tested.
 
+**2026-11-17: text and names.** `Data` gained two kinds, text and channel
+names (`046ab3f`, `b854f38`). The interpreter tests a value only with its own
+`case` and builds its answer with its own `succ`, `cons` and `prim`, so each
+kind is seen by `case` as a number or as a list and goes `wrong` exactly where
+that view does: a name is seen as its number, a text as the list of its code
+points. `Direct` gained twelve rules and no existing rule changed. `interp`,
+`evalTerm`, `Interpreter.lean` and `Correctness.lean` were not edited, and
+`reflective`, `reflective_coverage`, `reflective_env` and `tower` were proved
+again, with the same statements, for the wider `Data`. So were the machine,
+store, request, log and node theorems: their contract files were checked
+unedited and print the axioms they printed before. One theorem is new,
+`Network.held_nodup`. Before `ReflectContract.lean` could be checked, an early
+gate, `kernel/InterpGate.lean`, imports `Reflect.Correctness` alone and
+restates the four interpreter theorems with their axioms.
+
 ## The definitions
 
-- **Data** is numbers and arrays.
+- **Data** is numbers, arrays, text and names. A text is a list of Unicode
+  scalar values, seen by `case` and `cons` as the list of its code points; a
+  name carries a number, seen as that number by `case`, `succ` and the
+  operation number of `prim`.
 - **Terms** are variable, function, application, literal, successor, cons,
   case on data, and operation.
 - **`reify`** turns any term into data.
@@ -140,6 +158,7 @@ configuration is every process, the names each holds, and the names made.
 | `Step.comm_held` | A send and a receive meet only on a name both processes hold |
 | `Step.held_from` | After an event a process holds a name only if it held it before, or the event made it for that process, or the event is a message to it, or a start, from a process that held it |
 | `Network.held_issued` | Every name a process holds was made by an event of the schedule |
+| `Network.held_nodup` | No process holds a name twice. It rests on an invariant, `Config.Tidy`: every held list has no repeat and is within the names made |
 | `network_machine`, `network_machine_exact` | The machine runs a schedule exactly as direct evaluation does |
 | `replay_true`, `auto_true` | The events the executable scheduler reports as done, and the configuration it reports, are a run of the program by direct evaluation, however the run stopped |
 
@@ -204,7 +223,7 @@ One theorem. It does not depend on an operation table.
 It is checked, with its axioms printed, in `kernel/WireCheck.lean`, not in a
 contract file. The reader and writer of bytes are not proved. They are tested
 by `WireCheck.lean` (decision D7): the RFC 8949 appendix A examples that are
-numbers or arrays, each integer width at its edges, twenty-six spellings that
+numbers, text strings or arrays, names under tag 39, text that is not UTF-8, each integer width at its edges, twenty-six spellings that
 must be refused, every string of one or two bytes, eleven programs written,
 read back and run from their bytes, and a waiting run kept as bytes and
 continued.
@@ -263,7 +282,9 @@ theorems; `advance` is tested against it.
   `add-state-store` was accepted on first reading. `add-wire-bytes` and
   `add-kept-state` were each sent back once, with two required fixes; all
   were made before the fold. `add-unikernel-image` was sent back once, with
-  six required fixes, all made before it was accepted.
+  six required fixes, all made before it was accepted. `add-data-kinds` was
+  sent back twice in design, with three required fixes and then one, and its
+  implementation was accepted with none.
 
 ## What the proofs do not cover
 
@@ -271,9 +292,17 @@ theorems; `advance` is tested against it.
 - **Running through the interpreter, and text.** `reflect_interp` runs the
   closed term `interp` on the machine, so what runs is covered by the
   interpreter and machine theorems. Reading the answer back through the
-  levels of an outcome's data form (`unreifyOutcome`, `unlift`) and writing an
-  array of code points as text (`textOf`, `renderMOutcomeText`) are tested by
-  `host/check.sh`, not proved. String literals add nothing to `Data`.
+  levels of an outcome's data form (`unreifyOutcome`, `unlift`) and writing a
+  text raw (`renderMOutcomeText`) are tested by `host/check.sh` and
+  `kernel/Surface/Check.lean`, not proved. A string literal is a text; that
+  rendered text reads back is tested, not proved.
+- **Text and names.** The twelve rules are proved through the interpreter,
+  machine and store theorems. Not proved, and tested: the three functions of
+  `kernel/Reflect/Text.lean` (that `codes` agrees with a `case` walk is
+  checked in `ReflectRun.lean`), operations 7 and 8, the UTF-8 boundary in the
+  byte form and the reader, tag 39, that a text is stored whole, and that a
+  held name is printed and kept as a name. Text is not normalised. A state
+  kept before names were data is not migrated.
 - **The machine image.** `unikernel/out/reflect.elf` runs the same compiled
   Lean objects as the Linux process, and nothing under them is proved. Its
   trusted base is the boot code (`unikernel/boot.S`), the Zig layer
@@ -289,11 +318,13 @@ theorems; `advance` is tested against it.
   guard is outside it. The Linux comparison shares the runtime adaptation, so
   it cannot find a defect they share. The clock is a stand-in from the tick
   counter; nothing a program computes depends on it.
-- **That a channel name cannot be guessed.** A name is a number. What is proved
-  is that a process cannot use a name it does not hold, where holding is kept
-  by the scheduler. Nothing is proved about a particular program of processes:
+- **That a channel name cannot be guessed.** A name is a kind of data, so a
+  number no longer hands a channel over, but a name value is not a key: a
+  process can have one it does not hold, spliced into its code or answered
+  from outside. What is proved is that a process cannot use a name it does not
+  hold, where holding is kept by the scheduler, and holds each name once. Nothing is proved about a particular program of processes:
   not that it finishes, and not that it never waits forever.
-- **What an operation computes.** The arithmetic table is seven Lean
+- **What an operation computes.** The arithmetic table is nine Lean
   definitions with test scenarios. No theorem is about it.
 - **Failure inside an operation.** An operation is a total function from data
   to data. It cannot fail as `wrong`; arithmetic answers `[]` for input it does
@@ -323,9 +354,10 @@ theorems; `advance` is tested against it.
   How a reference is made and checked is outside the kernel.
 - **The byte form.** The reader and writer are tested, not proved, by
   decision D7. That they round-trip, and that no two values share a byte form,
-  is tested on examples. Tag 2 for numbers of 2^64 and above is this project's
-  rule; dCBOR does not define it. The identikey-protocol fixtures have not
-  been compared: they hold maps, text and byte strings, which `Data` lacks.
+  is tested on examples. Tag 2 for numbers of 2^64 and above and tag 39 for
+  names are this project's rules, and text is not normalised to NFC as dCBOR
+  asks. The identikey-protocol fixtures have not been compared: they hold maps
+  and byte strings, which `Data` lacks.
 - **The hash and the byte form of a piece.** Blake3 is checked against the
   official vectors, not proved to be Blake3. That no two pieces share a hash
   is assumed (D5). The byte form of a piece and saving are tested.

@@ -1,6 +1,8 @@
 # Give data two more kinds: text and channel names
 
-> Disposition: ACTIVE BUILD, 2026-11-14. Beads homoiconic-q59.35, homoiconic-q59.36. The owner asked on 2026-11-14 for these beads to be carried through; two reads by another model family found the semantics sound and their four required fixes are answered in the documents.
+> **FOLDED 2026-11-17** into `openspec/specs/code-as-data/spec.md`, `channels`, `wire-bytes`, `state-store`, `surface-syntax`, `bytecode-machine` and `zig-host`. Archived. Beads homoiconic-q59.35 (closed), homoiconic-q59.36 (closed); the unikernel image is homoiconic-q59.40, and a review suggestion is homoiconic-q59.41.
+>
+> Was: ACTIVE BUILD, 2026-11-14. The owner asked on 2026-11-14 for these beads to be carried through; two reads by another model family found the semantics sound and their four required fixes are answered in the documents. The implementation was accepted on 2026-11-17 with no required fix.
 
 ## Why
 
