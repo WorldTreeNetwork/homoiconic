@@ -17,7 +17,7 @@ inductive Code where
   | succ : Code → Code
   | cons : Code → Code
   | dcase : Code → Code → Code → Code → Code → Code
-  /-- The value on top must be a number, checked before the argument runs. -/
+  /-- The value on top must be a number or a name, checked before the argument runs. -/
   | checkNat : Code → Code
   | prim : Code → Code
   deriving Repr
@@ -119,6 +119,8 @@ def step : State → State
   | .running (.checkData _) _ [] _ => .fault
   | .running (.succ k) env (.data (.nat n) :: stk) frs =>
       .running k env (.data (.nat (n + 1)) :: stk) frs
+  | .running (.succ k) env (.data (.name n) :: stk) frs =>
+      .running k env (.data (.nat (n + 1)) :: stk) frs
   | .running (.succ _) _ (_ :: _) _ => .halted .wrong
   | .running (.succ _) _ [] _ => .fault
   | .running (.cons k) env (.data (.arr xs) :: .data x :: stk) frs =>
@@ -129,6 +131,10 @@ def step : State → State
       .running z env stk (⟨k, env⟩ :: frs)
   | .running (.dcase _ sc _ _ k) env (.data (.nat (n + 1)) :: stk) frs =>
       .running sc (.data (.nat n) :: env) stk (⟨k, env⟩ :: frs)
+  | .running (.dcase z _ _ _ k) env (.data (.name 0) :: stk) frs =>
+      .running z env stk (⟨k, env⟩ :: frs)
+  | .running (.dcase _ sc _ _ k) env (.data (.name (n + 1)) :: stk) frs =>
+      .running sc (.data (.nat n) :: env) stk (⟨k, env⟩ :: frs)
   | .running (.dcase _ _ n _ k) env (.data (.arr []) :: stk) frs =>
       .running n env stk (⟨k, env⟩ :: frs)
   | .running (.dcase _ _ _ c k) env (.data (.arr (x :: xs)) :: stk) frs =>
@@ -137,11 +143,16 @@ def step : State → State
   | .running (.dcase _ _ _ _ _) _ [] _ => .fault
   | .running (.checkNat k) env (.data (.nat n) :: stk) frs =>
       .running k env (.data (.nat n) :: stk) frs
+  | .running (.checkNat k) env (.data (.name n) :: stk) frs =>
+      .running k env (.data (.name n) :: stk) frs
   | .running (.checkNat _) _ (_ :: _) _ => .halted .wrong
   | .running (.checkNat _) _ [] _ => .fault
   | .running (.prim k) env (.data d :: .data (.nat n) :: stk) frs =>
       .running k env (.data (Ops.op n d) :: stk) frs
   | .running (.prim _) _ (.closure _ _ :: .data (.nat _) :: _) _ => .halted .wrong
+  | .running (.prim k) env (.data d :: .data (.name n) :: stk) frs =>
+      .running k env (.data (Ops.op n d) :: stk) frs
+  | .running (.prim _) _ (.closure _ _ :: .data (.name _) :: _) _ => .halted .wrong
   | .running (.prim _) _ _ _ => .fault
 
 def run : Nat → State → State

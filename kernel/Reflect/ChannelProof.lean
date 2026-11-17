@@ -12,6 +12,7 @@ What is proved about channels.
   before, or the event made it for that process, or the event is a message or a
   start from a process that held it.
 - `Sched.held_issued`: every name held was made by an event of the schedule.
+- `Network.held_nodup`: no process of a program holds a name twice.
 - `PSim.forward`, `PSim.backward`: a run by direct evaluation is, in compiled
   form, a run on the machine, and the machine has no others.
 - `stepRun_sound`, `schedRun_sound`, `autoRun_sound`: the executable scheduler
@@ -177,10 +178,12 @@ theorem Step.held_from {S : PSys C R} {cfg cfg' : Config C R} {ev : Event}
       · exact .inl ⟨_, hi, hn⟩
       · exact .inl ⟨_, hk'', hn⟩
     · exact .inr (.inr ⟨_, _, hi, (List.mem_filter.mp hn).1, .inr rfl⟩)
-  | comm hi hj hq hq' hh hh' ht ht' =>
+  | @comm i j c p held c' p' held' ch v st st' hi hj hq hq' hh hh' ht ht' =>
     rcases getElem?_set_cases hk with ⟨rfl, rfl⟩ | ⟨_, hk'⟩
-    · rcases List.mem_append.mp hn with hg | hn'
-      · exact .inr (.inr ⟨_, _, hi, (List.mem_filter.mp hg).1, .inl rfl⟩)
+    · have hn : n ∈ (grant held v).filter (fun n => !held'.contains n) ++ held' := hn
+      rcases List.mem_append.mp hn with hg | hn'
+      · exact .inr (.inr ⟨_, _, hi,
+          (List.mem_filter.mp (List.mem_filter.mp hg).1).1, .inl rfl⟩)
       · exact .inl ⟨_, hj, hn'⟩
     · rcases getElem?_set_cases hk' with ⟨rfl, rfl⟩ | ⟨_, hk''⟩
       · exact .inl ⟨_, hi, hn⟩
@@ -218,6 +221,77 @@ theorem Network.held_issued {S : PSys C R} {p : Term} {evs : List Event} {cfg : 
     | zero => simp at hi; subst hi; cases hn'
     | succ i => simp at hi
   · exact h'
+
+/-- What is handed over, added to a list with no repeat, has no repeat. -/
+theorem gain_nodup {held' handed : List Nat} (h' : held'.Nodup) (h : handed.Nodup) :
+    (gain held' handed).Nodup := by
+  unfold gain
+  refine List.nodup_append.mpr ⟨h.sublist List.filter_sublist, h', ?_⟩
+  intro a ha b hb hab
+  subst hab
+  have := (List.mem_filter.mp ha).2
+  simp [hb] at this
+
+/-- Every held list has no repeat and holds only names that were made. -/
+def Config.Tidy (cfg : Config C R) : Prop :=
+  ∀ (k : Nat) (q : Proc C R), cfg.procs[k]? = some q →
+    q.held.Nodup ∧ ∀ n, n ∈ q.held → n ∈ cfg.names
+
+theorem Step.tidy {S : PSys C R} {cfg cfg' : Config C R} {ev : Event}
+    (h : Step S cfg ev cfg') (ht : cfg.Tidy) : cfg'.Tidy := by
+  intro k q hk
+  cases h with
+  | fresh hi hq hfresh _ =>
+    obtain ⟨hnd, hsub⟩ := ht _ _ hi
+    rcases getElem?_set_cases hk with ⟨rfl, rfl⟩ | ⟨_, hk'⟩
+    · refine ⟨List.nodup_cons.mpr ⟨fun hm => hfresh (hsub _ hm), hnd⟩, ?_⟩
+      intro m hm
+      rcases List.mem_cons.mp hm with rfl | hm'
+      · exact List.mem_cons_self
+      · exact List.mem_cons_of_mem _ (hsub _ hm')
+    · exact ⟨(ht _ _ hk').1, fun m hm => List.mem_cons_of_mem _ ((ht _ _ hk').2 m hm)⟩
+  | spawn hi hq hs hc _ =>
+    obtain ⟨hnd, hsub⟩ := ht _ _ hi
+    rcases getElem?_append_single hk with hk' | rfl
+    · rcases getElem?_set_cases hk' with ⟨rfl, rfl⟩ | ⟨_, hk''⟩
+      · exact ⟨hnd, hsub⟩
+      · exact ht _ _ hk''
+    · exact ⟨hnd.sublist List.filter_sublist, fun m hm => hsub m (List.mem_filter.mp hm).1⟩
+  | @comm i j c p held c' p' held' ch v st st' hi hj hq hq' hh hh' _ _ =>
+    obtain ⟨hnd, hsub⟩ := ht _ _ hi
+    obtain ⟨hnd', hsub'⟩ := ht _ _ hj
+    rcases getElem?_set_cases hk with ⟨rfl, rfl⟩ | ⟨_, hk'⟩
+    · refine ⟨gain_nodup hnd' (hnd.sublist List.filter_sublist), ?_⟩
+      intro m hm
+      have hm : m ∈ (grant held v).filter (fun n => !held'.contains n) ++ held' := hm
+      rcases List.mem_append.mp hm with hg | hm'
+      · exact hsub m (List.mem_filter.mp (List.mem_filter.mp hg).1).1
+      · exact hsub' m hm'
+    · rcases getElem?_set_cases hk' with ⟨rfl, rfl⟩ | ⟨_, hk''⟩
+      · exact ⟨hnd, hsub⟩
+      · exact ht _ _ hk''
+  | answer hi hq _ =>
+    obtain ⟨hnd, hsub⟩ := ht _ _ hi
+    rcases getElem?_set_cases hk with ⟨rfl, rfl⟩ | ⟨_, hk'⟩
+    · exact ⟨hnd, hsub⟩
+    · exact ht _ _ hk'
+
+theorem Sched.tidy {S : PSys C R} {c₀ cfg : Config C R} {evs : List Event}
+    (h : Sched S c₀ evs cfg) (ht : c₀.Tidy) : cfg.Tidy := by
+  induction h with
+  | nil => exact ht
+  | cons h _ ih => exact ih (h.tidy ht)
+
+/-- No process of a program holds a name twice. -/
+theorem Network.held_nodup {S : PSys C R} {p : Term} {evs : List Event} {cfg : Config C R}
+    (h : Network S p evs cfg) {k : Nat} {q : Proc C R}
+    (hk : cfg.procs[k]? = some q) : q.held.Nodup := by
+  obtain ⟨c, ⟨r, st, _, _, rfl⟩, hd⟩ := h
+  refine (hd.tidy ?_ k q hk).1
+  intro i q₀ hi
+  cases i with
+  | zero => simp at hi; subst hi; exact ⟨List.nodup_nil, fun _ hm => by cases hm⟩
+  | succ i => simp at hi
 
 /-- Two ways of evaluating that agree turn by turn and on beginning a program. -/
 structure PSim (S₁ : PSys C₁ R₁) (S₂ : PSys C₂ R₂) (f : R₁ → R₂) (g : C₁ → C₂) : Prop where
@@ -381,9 +455,9 @@ theorem PSim.step_forward {S₁ : PSys C₁ R₁} {S₂ : PSys C₂ R₂} {f : R
       (s.sim.turn_forward ht)
   | @comm i j c p held c' p' held' ch v st st' hi hj hq hq' hh hh' ht ht' =>
     have e : Config.map f g
-          ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', grant held v ++ held'⟩, cfg.names⟩ =
+          ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', gain held' (grant held v)⟩, cfg.names⟩ =
         ⟨((cfg.map f g).procs.set i ⟨st.map f g, held⟩).set j
-          ⟨st'.map f g, grant held v ++ held'⟩, (cfg.map f g).names⟩ := by
+          ⟨st'.map f g, gain held' (grant held v)⟩, (cfg.map f g).names⟩ := by
       simp [Config.map, List.map_set, Proc.map]
     rw [e]
     exact .comm (waiting_map hi) (waiting_map hj) hq hq' hh hh' (s.sim.turn_forward ht)

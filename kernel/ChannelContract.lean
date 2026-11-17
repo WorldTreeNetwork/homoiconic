@@ -35,6 +35,12 @@ example : ∀ {C R : Type} {S : PSys C R} {p : Term} {evs : List Event} {cfg : C
     cfg.procs[k]? = some q → n ∈ q.held → ∃ i, Event.fresh i n ∈ evs :=
   fun h => Reflect.Network.held_issued h
 
+-- No process of a program holds a name twice.
+example : ∀ {C R : Type} {S : PSys C R} {p : Term} {evs : List Event} {cfg : Config C R},
+    Network S p evs cfg → ∀ {k : Nat} {q : Proc C R},
+    cfg.procs[k]? = some q → q.held.Nodup :=
+  fun h => Reflect.Network.held_nodup h
+
 -- The machine runs a schedule as direct evaluation does.
 example : ∀ [Ops] {p : Term} {evs : List Event} {cfg : Config Value Outcome},
     Network sourceP p evs cfg → Network machineP p evs (cfg.map MP.injO MP.injV) :=
@@ -62,6 +68,7 @@ example : ∀ [Ops] {budget : Nat} {p : Term} {c₀ : MConfig} (limit : Nat),
 #print axioms Reflect.Step.comm_held
 #print axioms Reflect.Step.held_from
 #print axioms Reflect.Network.held_issued
+#print axioms Reflect.Network.held_nodup
 #print axioms Reflect.network_machine
 #print axioms Reflect.network_machine_exact
 #print axioms Reflect.replay_true

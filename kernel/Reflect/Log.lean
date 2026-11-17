@@ -18,8 +18,14 @@ mutual
   def Data.decEq : (a b : Data) → Decidable (a = b)
     | .nat m, .nat n =>
       if h : m = n then isTrue (h ▸ rfl) else isFalse (fun e => h (Data.nat.inj e))
+    | .name m, .name n =>
+      if h : m = n then isTrue (h ▸ rfl) else isFalse (fun e => h (Data.name.inj e))
     | .nat _, .arr _ => isFalse nofun
+    | .nat _, .name _ => isFalse nofun
     | .arr _, .nat _ => isFalse nofun
+    | .arr _, .name _ => isFalse nofun
+    | .name _, .nat _ => isFalse nofun
+    | .name _, .arr _ => isFalse nofun
     | .arr xs, .arr ys =>
       match Data.decEqList xs ys with
       | isTrue h => isTrue (h ▸ rfl)

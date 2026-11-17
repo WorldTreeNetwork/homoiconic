@@ -2,8 +2,8 @@ import Reflect.Request
 
 /-!
 Channels. Several programs run side by side as *processes* and talk over
-*channels*, in the style of the pi-calculus: a channel is named by a number, and
-a name can be sent over a channel. Nothing is added to the language. A process
+*channels*, in the style of the pi-calculus: a channel is named by a name value
+(`Data.name`, which carries a number), and a name can be sent over a channel. Nothing is added to the language. A process
 is a program that makes requests (`Reflect.Request`), and four shapes of payload
 are read here as channel requests:
 
@@ -13,24 +13,30 @@ are read here as channel requests:
   `[3, program, start]`  start `program`, a quoted program, on the data `start`
                          as a new process; the answer is `[]`
 
-Every other payload is a request to the outside, answered as before.
+`name` is a name value. Every other payload is a request to the outside,
+answered as before; `[1, n, message]` and `[2, n]` with `n` a plain number are
+among them.
 
 A send and a receive on one name meet: there is no queue. What happens next is
 chosen by a *schedule*, a list of events, and a new name is supplied by the
 event that makes it. The definitions here say what each event does; they do not
 choose.
 
-Each process *holds* a list of names. It holds a name it made, a name its
-starter held that occurs in the data it was started on, and a name its sender
-held that occurs in a message it received. A send or a receive on a name the
-process does not hold never happens.
+Each process *holds* a list of names, kept as their numbers. It holds a name it
+made, a name its starter held that occurs as a name value in the data it was
+started on, and a name its sender held that occurs as a name value in a message
+it received. A plain number hands over nothing. A send or a receive on a name
+the process does not hold never happens. A name value is not a key: holding is
+this list.
 -/
 namespace Reflect
 
 mutual
-  /-- Does the number `n` occur in the data? -/
+  /-- Does the name with number `n` occur in the data, as a name value? A
+      plain number is not a name. -/
   def Data.mentions : Data → Nat → Bool
-    | .nat k, n => k == n
+    | .name k, n => k == n
+    | .nat _, _ => false
     | .arr xs, n => mentionsAny xs n
   def mentionsAny : List Data → Nat → Bool
     | [], _ => false
@@ -39,6 +45,10 @@ end
 
 /-- The names among `held` that occur in `d`: what handing over `d` hands over. -/
 def grant (held : List Nat) (d : Data) : List Nat := held.filter (d.mentions ·)
+
+/-- Add what is handed over, leaving out what is already held. -/
+def gain (held' handed : List Nat) : List Nat :=
+  handed.filter (fun n => !held'.contains n) ++ held'
 
 /-- What a payload asks for. -/
 inductive Req where
@@ -52,8 +62,8 @@ inductive Req where
     program is a request to the outside. -/
 def classify : Data → Req
   | .arr [.nat 0] => .fresh
-  | .arr [.nat 1, .nat ch, v] => .send ch v
-  | .arr [.nat 2, .nat ch] => .receive ch
+  | .arr [.nat 1, .name ch, v] => .send ch v
+  | .arr [.nat 2, .name ch] => .receive ch
   | .arr [.nat 3, prog, arg] =>
     match unreify prog with
     | some t => .spawn t arg
@@ -114,7 +124,7 @@ inductive Event where
 inductive Step {C R : Type} (S : PSys C R) : Config C R → Event → Config C R → Prop where
   | fresh {cfg i n c p held st} (hi : cfg.procs[i]? = some ⟨.waiting c p, held⟩)
       (hq : classify p = .fresh) (hn : n ∉ cfg.names)
-      (ht : Turn S.toSys c (.nat n) st) :
+      (ht : Turn S.toSys c (.name n) st) :
       Step S cfg (.fresh i n) ⟨cfg.procs.set i ⟨st, n :: held⟩, n :: cfg.names⟩
   | spawn {cfg i c p held t arg r child st} (hi : cfg.procs[i]? = some ⟨.waiting c p, held⟩)
       (hq : classify p = .spawn t arg) (hs : S.start (.app t (.lit arg)) r)
@@ -128,7 +138,7 @@ inductive Step {C R : Type} (S : PSys C R) : Config C R → Event → Config C R
       (hh : ch ∈ held) (hh' : ch ∈ held')
       (ht : Turn S.toSys c (.arr []) st) (ht' : Turn S.toSys c' v st') :
       Step S cfg (.comm i j)
-        ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', grant held v ++ held'⟩, cfg.names⟩
+        ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', gain held' (grant held v)⟩, cfg.names⟩
   | answer {cfg i a c p held st} (hi : cfg.procs[i]? = some ⟨.waiting c p, held⟩)
       (hq : classify p = .outside) (ht : Turn S.toSys c a st) :
       Step S cfg (.answer i a) ⟨cfg.procs.set i ⟨st, held⟩, cfg.names⟩
@@ -204,7 +214,7 @@ def stepRun (budget : Nat) (cfg : MConfig) : Event → Tried
       match classify p with
       | .fresh =>
         if cfg.names.contains n then .refused else
-        match turnRun budget c (.nat n) with
+        match turnRun budget c (.name n) with
         | some st => .ok ⟨cfg.procs.set i ⟨st, n :: held⟩, n :: cfg.names⟩
         | none => .unfinished
       | _ => .refused
@@ -231,7 +241,7 @@ def stepRun (budget : Nat) (cfg : MConfig) : Event → Tried
         if ch == ch' && held.contains ch && held'.contains ch then
           match turnRun budget c (.arr []), turnRun budget c' v with
           | some st, some st' =>
-            .ok ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', grant held v ++ held'⟩, cfg.names⟩
+            .ok ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', gain held' (grant held v)⟩, cfg.names⟩
           | _, _ => .unfinished
         else .refused
       | _, _ => .refused

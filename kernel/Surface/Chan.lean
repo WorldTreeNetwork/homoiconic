@@ -45,7 +45,7 @@ def renderProcs : Nat → List (Proc MValue MOutcome) → String
       (match q.status with
        | .waiting _ p => "waiting on " ++ renderData p
        | .finished w => renderMOutcome w) ++
-      "; holds " ++ renderData (.arr (q.held.map .nat)) ++ "\n" ++ renderProcs (i + 1) qs
+      "; holds " ++ renderData (.arr (q.held.map .name)) ++ "\n" ++ renderProcs (i + 1) qs
 
 /-- The schedule that happened, each process, and how the run stopped. `more`:
     `pick` offers a next event. -/

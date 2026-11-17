@@ -25,7 +25,9 @@ import Std.Data.HashMap
     several processes, each event run as the jobs of its plan
     (`Reflect.plan`), and the node saved at the end as the piece
     `[seen, names, processes]`. A process is `[held, status]`, and a waiting
-    status there also holds the payload: `[0, function, payload]`.
+    status there also holds the payload: `[0, function, payload]`. The names
+    made and the names held are kept as plain numbers; a name value in a
+    payload, a result or a function is kept as a name.
 
     Each machine run here is covered by `Reflect.lazy_turn_complete` and
     `Reflect.lazy_turn_sound`. The session that joins the runs, the hashing
@@ -187,7 +189,7 @@ def renderNodeProcs : Nat → List (Proc (P Ref) Final) → String
        | .finished (.value d) => renderData d
        | .finished (.unbound k) => renderMOutcome (.unbound k)
        | .finished .wrong => renderMOutcome .wrong) ++
-      "; holds " ++ renderData (.arr (q.held.map .nat)) ++ "\n" ++ renderNodeProcs (i + 1) qs
+      "; holds " ++ renderData (.arr (q.held.map .name)) ++ "\n" ++ renderNodeProcs (i + 1) qs
 
 /-- The log is applied, or an op of it cannot happen: save the node as it
     stands and say where each process is. -/
@@ -234,6 +236,7 @@ def steps (σ : Store Ref) : Nat → PState Ref → LRun Ref × Nat
     would hold a hash of bytes that contain that hash. -/
 partial def full (σ : Store Ref) : P Ref → Except Ref (Option Data)
   | .nat n => .ok (some (.nat n))
+  | .name n => .ok (some (.name n))
   | .nil => .ok (some (.arr []))
   | .cons h t => do
       match ← full σ h, ← full σ t with

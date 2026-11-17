@@ -46,6 +46,8 @@ inductive Direct : Env → Term → Outcome → Prop where
   | succNat (h : Direct env t (.value (.data (.nat k)))) :
       Direct env (.succ t) (.value (.data (.nat (k + 1))))
   | succArr (h : Direct env t (.value (.data (.arr xs)))) : Direct env (.succ t) .wrong
+  | succName (h : Direct env t (.value (.data (.name k)))) :
+      Direct env (.succ t) (.value (.data (.nat (k + 1))))
   | succClosure (h : Direct env t (.value (.closure b cap))) : Direct env (.succ t) .wrong
   | succError (h : Direct env t e) (he : e.IsError) : Direct env (.succ t) e
   | consArr (ha : Direct env a (.value (.data x)))
@@ -56,6 +58,8 @@ inductive Direct : Env → Term → Outcome → Prop where
   | consHeadError (ha : Direct env a e) (he : e.IsError) : Direct env (.cons a b) e
   | consTailNat (ha : Direct env a (.value (.data x)))
       (hb : Direct env b (.value (.data (.nat k)))) : Direct env (.cons a b) .wrong
+  | consTailName (ha : Direct env a (.value (.data x)))
+      (hb : Direct env b (.value (.data (.name k)))) : Direct env (.cons a b) .wrong
   | consTailClosure (ha : Direct env a (.value (.data x)))
       (hb : Direct env b (.value (.closure c cap))) : Direct env (.cons a b) .wrong
   | consTailError (ha : Direct env a (.value (.data x)))
@@ -63,6 +67,10 @@ inductive Direct : Env → Term → Outcome → Prop where
   | caseZero (hs : Direct env s (.value (.data (.nat 0)))) (h : Direct env z o) :
       Direct env (.dcase s z sc n c) o
   | caseSucc (hs : Direct env s (.value (.data (.nat (k + 1)))))
+      (h : Direct (.data (.nat k) :: env) sc o) : Direct env (.dcase s z sc n c) o
+  | caseNameZero (hs : Direct env s (.value (.data (.name 0)))) (h : Direct env z o) :
+      Direct env (.dcase s z sc n c) o
+  | caseNameSucc (hs : Direct env s (.value (.data (.name (k + 1)))))
       (h : Direct (.data (.nat k) :: env) sc o) : Direct env (.dcase s z sc n c) o
   | caseNil (hs : Direct env s (.value (.data (.arr [])))) (h : Direct env n o) :
       Direct env (.dcase s z sc n c) o
@@ -81,6 +89,13 @@ inductive Direct : Env → Term → Outcome → Prop where
   | primArgClosure (hc : Direct env c (.value (.data (.nat k))))
       (hx : Direct env x (.value (.closure b cap))) : Direct env (.prim c x) .wrong
   | primData (hc : Direct env c (.value (.data (.nat k))))
+      (hx : Direct env x (.value (.data d))) :
+      Direct env (.prim c x) (.value (.data (Ops.op k d)))
+  | primNameArgError (hc : Direct env c (.value (.data (.name k))))
+      (hx : Direct env x e) (he : e.IsError) : Direct env (.prim c x) e
+  | primNameArgClosure (hc : Direct env c (.value (.data (.name k))))
+      (hx : Direct env x (.value (.closure b cap))) : Direct env (.prim c x) .wrong
+  | primNameData (hc : Direct env c (.value (.data (.name k))))
       (hx : Direct env x (.value (.data d))) :
       Direct env (.prim c x) (.value (.data (Ops.op k d)))
 
@@ -110,6 +125,7 @@ def evalFuel : Nat → Env → Term → Option Outcome
       | none => none
       | some (.value (.data (.nat k))) => some (.value (.data (.nat (k + 1))))
       | some (.value (.data (.arr _))) => some .wrong
+      | some (.value (.data (.name k))) => some (.value (.data (.nat (k + 1))))
       | some (.value (.closure _ _)) => some .wrong
       | some (.unbound i) => some (.unbound i)
       | some .wrong => some .wrong
@@ -121,6 +137,7 @@ def evalFuel : Nat → Env → Term → Option Outcome
           | none => none
           | some (.value (.data (.arr xs))) => some (.value (.data (.arr (x :: xs))))
           | some (.value (.data (.nat _))) => some .wrong
+          | some (.value (.data (.name _))) => some .wrong
           | some (.value (.closure _ _)) => some .wrong
           | some (.unbound i) => some (.unbound i)
           | some .wrong => some .wrong
@@ -132,6 +149,8 @@ def evalFuel : Nat → Env → Term → Option Outcome
       | none => none
       | some (.value (.data (.nat 0))) => evalFuel n env z
       | some (.value (.data (.nat (k + 1)))) => evalFuel n (.data (.nat k) :: env) sc
+      | some (.value (.data (.name 0))) => evalFuel n env z
+      | some (.value (.data (.name (k + 1)))) => evalFuel n (.data (.nat k) :: env) sc
       | some (.value (.data (.arr []))) => evalFuel n env ni
       | some (.value (.data (.arr (x :: xs)))) =>
           evalFuel n (.data (.arr xs) :: .data x :: env) c
@@ -142,6 +161,13 @@ def evalFuel : Nat → Env → Term → Option Outcome
       match evalFuel n env c with
       | none => none
       | some (.value (.data (.nat k))) =>
+          match evalFuel n env x with
+          | none => none
+          | some (.value (.data d)) => some (.value (.data (Ops.op k d)))
+          | some (.value (.closure _ _)) => some .wrong
+          | some (.unbound i) => some (.unbound i)
+          | some .wrong => some .wrong
+      | some (.value (.data (.name k))) =>
           match evalFuel n env x with
           | none => none
           | some (.value (.data d)) => some (.value (.data (Ops.op k d)))

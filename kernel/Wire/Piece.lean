@@ -16,12 +16,13 @@ open Reflect
 /-- A reference: 32 bytes. -/
 abbrev Ref := ByteArray
 
-/-- A piece as an item. A number is itself, an empty list is `[]`, a pair is
+/-- A piece as an item. A number is itself, a name is the name, an empty list is `[]`, a pair is
     `[0, head, tail]`, a function is `[1, body, captured]` with `body` the
     quoted program of its code, and a reference is a byte string. `none` for a
     function whose code is not a compiled program. -/
 def pieceItem : P Ref → Option Item
   | .nat n => some (.nat n)
+  | .name n => some (.name n)
   | .nil => some (.arr [])
   | .cons h t =>
       match pieceItem h, pieceItem t with
@@ -35,6 +36,7 @@ def pieceItem : P Ref → Option Item
 
 def itemPiece : Item → Option (P Ref)
   | .nat n => some (.nat n)
+  | .name n => some (.name n)
   | .arr [] => some .nil
   | .arr [.nat 0, h, t] =>
       match itemPiece h, itemPiece t with
@@ -75,6 +77,7 @@ def kept (size : Nat) (p : P Ref) : Saver (P Ref) := do
     as a chain of stored runs, each a little over `size` bytes. -/
 def cut (size : Nat) : P Ref → Saver (P Ref)
   | .nat n => kept size (.nat n)
+  | .name n => kept size (.name n)
   | .nil => kept size .nil
   | .ref r => pure (.ref r)
   | .cons h t => do

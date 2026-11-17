@@ -271,7 +271,10 @@ def refused : List (String × String) := [
   ("case [1]\n  [a, b]\n-> a", "indented"),
   -- A `let` ends a run, and a quotation does not see a later definition.
   ("def f x = g x\nlet y = 1\ndef g x = 8\nf 1", "unbound name `g`"),
-  ("def f x = quote (g 1)\ndef g x = x\nf 1", "quotation")
+  ("def f x = quote (g 1)\ndef g x = x\nf 1", "quotation"),
+  -- A name renders as `#3`, and that is not program text.
+  ("#3", "unexpected character"),
+  ("[1, #3]", "unexpected character")
 ]
 
 /-- Program text, step budget, and the text the host must print. -/
@@ -407,7 +410,111 @@ def renders : List (Outcome × String) := [
   (.unbound 0, "error: unbound 0"),
   (.wrong, "error: wrong"),
   (.value (.data (.arr [.nat 1, .arr []])), "[1, []]"),
-  (.value (.closure (.var 0) []), "<function>")
+  (.value (.closure (.var 0) []), "<function>"),
+  -- A name is `#` and its number. No text reads as one.
+  (.value (.data (.name 3)), "#3"),
+  (.value (.data (.name 0)), "#0"),
+  (.value (.data (.name 18446744073709551616)), "#18446744073709551616"),
+  (.value (.data (.arr [.nat 1, .name 0, .arr [.name 7]])), "[1, #0, [#7]]")
 ]
+
+/-- A name in hand is not a name held: `examples/guess.hom`. The name is
+    spliced into the program of the start request and the start data is `[]`. -/
+def guessText : String :=
+"ask [0] (fn ch ->
+  let body = quote (ask [2, ~[2, ch]] (fn x -> x))
+  ask [3, [1, body], []] (fn started ->
+    ask [1, ch, 7] (fn sent -> [])))"
+
+/-- The same program started on its own body, which is quoted code that holds
+    `[2, #0]`: the name is in the start data, so the process started holds it. -/
+def quotedStartText : String :=
+"ask [0] (fn ch ->
+  let body = quote (ask [2, ~[2, ch]] (fn x -> [x]))
+  ask [3, [1, body], body] (fn started ->
+    ask [1, ch, 7] (fn sent -> [])))"
+
+/-- A message with a name three arrays deep, or with the number there. -/
+def nestedMessageText (item : String) : String :=
+"let waiter = quote (fn meet -> ask [2, meet] (fn m -> m))
+ask [0] (fn meet ->
+  ask [0] (fn other ->
+    ask [3, waiter, meet] (fn started ->
+      ask [1, meet, [[[2, " ++ item ++ "]]]] (fn sent -> []))))"
+
+/-- A number is not a name: `examples/number.hom`. -/
+def numberText : String :=
+"let guesser = quote (fn nothing -> ask [2, 0] (fn x -> x))
+ask [0] (fn ch ->
+  ask [3, guesser, []] (fn started ->
+    ask [1, ch, 7] (fn sent -> [])))"
+
+/-- Program text, schedule text (empty: the events are chosen), and the text
+    `channelsText` must give. Who holds which name. -/
+def channels : List (String × String × String) := [
+  -- The name is only in the program of the start request: not handed over.
+  (guessText, "",
+    "schedule: [[0, 0, 0], [1, 0]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: waiting on [2, #0]; holds []\nno event is offered"),
+  (guessText, "[[0, 0, 0], [1, 0], [2, 0, 1]]",
+    "schedule: [[0, 0, 0], [1, 0]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: waiting on [2, #0]; holds []\nrefused: [2, 0, 1] cannot happen"),
+  -- The name is inside quoted code in the start data: handed over, and the two meet.
+  (quotedStartText, "",
+    "schedule: [[0, 0, 0], [1, 0], [2, 0, 1]]\nprocess 0: []; holds [#0]\nprocess 1: [7]; holds [#0]\nno event is offered"),
+  -- A name nested in arrays in a message is handed to the receiver.
+  (nestedMessageText "other", "",
+    "schedule: [[0, 0, 0], [0, 0, 1], [1, 0], [2, 0, 1]]\nprocess 0: []; holds [#1, #0]\nprocess 1: [[[2, #1]]]; holds [#1, #0]\nno event is offered"),
+  -- The same message with the number 1, which is the number of that name:
+  -- nothing is handed over.
+  (nestedMessageText "1", "",
+    "schedule: [[0, 0, 0], [0, 0, 1], [1, 0], [2, 0, 1]]\nprocess 0: []; holds [#1, #0]\nprocess 1: [[[2, 1]]]; holds [#0]\nno event is offered"),
+  -- A receive on a number is a request to the outside; the two never meet.
+  (numberText, "",
+    "schedule: [[0, 0, 0], [1, 0]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: waiting on [2, 0]; holds []\nno event is offered"),
+  (numberText, "[[0, 0, 0], [1, 0], [2, 0, 1]]",
+    "schedule: [[0, 0, 0], [1, 0]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: waiting on [2, 0]; holds []\nrefused: [2, 0, 1] cannot happen"),
+  -- That request is answered from outside, by the schedule.
+  (numberText, "[[0, 0, 0], [1, 0], [3, 1, 9]]",
+    "schedule: [[0, 0, 0], [1, 0], [3, 1, 9]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: 9; holds []\nno event is offered"),
+  -- A send on a number is the outside's too, and a name made is a name value:
+  -- `equal` tells it from its number, `case` and `+ 1` see the number.
+  ("ask [0] (fn ch -> ask [1, 0, ch] (fn a -> [equal ch 0, equal ch ch, ch + 1, a]))", "[[0, 0, 0], [3, 0, 5]]",
+    "schedule: [[0, 0, 0], [3, 0, 5]]\nprocess 0: [0, 1, 1, 5]; holds [#0]\nno event is offered")
+]
+
+/-- An example file, its schedule file (empty: the events are chosen), and the
+    text `channelsText` must give. The files are in `examples/`. -/
+def channelFiles : List (String × String × String) := [
+  ("ping.hom", "",
+    "schedule: [[0, 0, 0], [1, 0], [0, 0, 1], [2, 0, 1], [2, 0, 1], [2, 1, 0]]\nprocess 0: 42; holds [#1, #0]\nprocess 1: [41]; holds [#1, #0]\nno event is offered"),
+  ("race.hom", "",
+    "schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 0, 1]]\nprocess 0: []; holds [#0]\nprocess 1: [7]; holds [#0]\nprocess 2: waiting on [2, #0]; holds [#0]\nno event is offered"),
+  ("race.hom", "race.schedule",
+    "schedule: [[0, 0, 5], [1, 0], [1, 0], [2, 0, 2]]\nprocess 0: []; holds [#5]\nprocess 1: waiting on [2, #5]; holds [#5]\nprocess 2: [7]; holds [#5]\nno event is offered"),
+  ("guess.hom", "",
+    "schedule: [[0, 0, 0], [1, 0]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: waiting on [2, #0]; holds []\nno event is offered"),
+  ("guess.hom", "guess.schedule",
+    "schedule: [[0, 0, 0], [1, 0]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: waiting on [2, #0]; holds []\nrefused: [2, 0, 1] cannot happen"),
+  ("number.hom", "",
+    "schedule: [[0, 0, 0], [1, 0]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: waiting on [2, 0]; holds []\nno event is offered"),
+  ("number.hom", "number.schedule",
+    "schedule: [[0, 0, 0], [1, 0]]\nprocess 0: waiting on [1, #0, 7]; holds [#0]\nprocess 1: waiting on [2, 0]; holds []\nrefused: [2, 0, 1] cannot happen")
+]
+
+/-- The process lines of `examples/sieve.hom` with the events chosen: no
+    process after process 2 holds `#0`, and none holds a name twice. -/
+def sieveProcesses : String :=
+"process 0: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]; holds [#1, #0]
+process 1: []; holds [#0]
+process 2: [2]; holds [#2, #1, #0]
+process 3: [3]; holds [#3, #2, #1]
+process 4: [5]; holds [#4, #3, #1]
+process 5: [7]; holds [#5, #4, #1]
+process 6: [11]; holds [#6, #5, #1]
+process 7: [13]; holds [#7, #6, #1]
+process 8: [17]; holds [#8, #7, #1]
+process 9: [19]; holds [#9, #8, #1]
+process 10: [23]; holds [#10, #9, #1]
+process 11: [29]; holds [#11, #10, #1]
+process 12: []; holds [#11, #1]"
 
 end Surface

@@ -475,8 +475,8 @@ channels() {
     echo "chan $* => $(echo "$got" | tr '\n' '|')"
 }
 channels "schedule: [[0, 0, 0], [1, 0], [0, 0, 1], [2, 0, 1], [2, 0, 1], [2, 1, 0]]
-process 0: 42; holds [1, 0]
-process 1: [41]; holds [1, 0]
+process 0: 42; holds [#1, #0]
+process 1: [41]; holds [#1, #0]
 no event is offered" "$EXAMPLES/ping.hom"
 # Replay: the schedule line of a run, given back, gives the same text.
 "$OUT/chan" "$EXAMPLES/ping.hom" > "$OUT/ping.txt"
@@ -492,38 +492,116 @@ sed -n 's/^schedule: //p' "$OUT/sieve.txt" > "$OUT/sieve.schedule"
 "$OUT/chan" "$EXAMPLES/sieve.hom" "$OUT/sieve.schedule" > "$OUT/sieve-replay.txt"
 cmp "$OUT/sieve.txt" "$OUT/sieve-replay.txt"
 echo "chan: the sieve finds the primes to 30 and replays"
+# Numbers in code and messages hand over nothing. Each filter is started on its
+# own quoted code, which is full of numbers, and the numbers 2 to 30 and 0 go
+# by as messages: no process after process 2 holds #0, the channel only the
+# first three were given, and no process holds a name twice.
+want "$(grep '^process' "$OUT/sieve.txt")" "process 0: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]; holds [#1, #0]
+process 1: []; holds [#0]
+process 2: [2]; holds [#2, #1, #0]
+process 3: [3]; holds [#3, #2, #1]
+process 4: [5]; holds [#4, #3, #1]
+process 5: [7]; holds [#5, #4, #1]
+process 6: [11]; holds [#6, #5, #1]
+process 7: [13]; holds [#7, #6, #1]
+process 8: [17]; holds [#8, #7, #1]
+process 9: [19]; holds [#9, #8, #1]
+process 10: [23]; holds [#10, #9, #1]
+process 11: [29]; holds [#11, #10, #1]
+process 12: []; holds [#11, #1]"
+if ! awk -F'; holds ' '/^process/ {
+        count++
+        split("", seen)
+        n = split(substr($2, 2, length($2) - 2), held, ", ")
+        for (i = 1; i <= n; i++) { if (held[i] in seen) bad = 1; seen[held[i]] = 1 }
+        split($1, word, "[ :]")
+        if (word[2] > 2 && ("#0" in seen)) bad = 1
+    } END { exit (bad || count != 13) }' "$OUT/sieve.txt"; then
+    echo "chan: in the sieve a process holds a name twice, or a process after process 2 holds #0" >&2
+    exit 1
+fi
+echo "chan: in the sieve no process holds a name twice and none after process 2 holds #0"
 # A prefix of the schedule stops part way, and the chooser has a next event.
 printf '[[0, 0, 0], [1, 0]]\n' > "$OUT/prefix.schedule"
 channels "schedule: [[0, 0, 0], [1, 0]]
-process 0: waiting on [0]; holds [0]
-process 1: waiting on [2, 0]; holds [0]
+process 0: waiting on [0]; holds [#0]
+process 1: waiting on [2, #0]; holds [#0]
 an event is offered" "$EXAMPLES/ping.hom" "$OUT/prefix.schedule"
 # One message, two receivers: the schedule decides, and supplies the name.
 channels "schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 0, 1]]
-process 0: []; holds [0]
-process 1: [7]; holds [0]
-process 2: waiting on [2, 0]; holds [0]
+process 0: []; holds [#0]
+process 1: [7]; holds [#0]
+process 2: waiting on [2, #0]; holds [#0]
 no event is offered" "$EXAMPLES/race.hom"
 channels "schedule: [[0, 0, 5], [1, 0], [1, 0], [2, 0, 2]]
-process 0: []; holds [5]
-process 1: waiting on [2, 5]; holds [5]
-process 2: [7]; holds [5]
+process 0: []; holds [#5]
+process 1: waiting on [2, #5]; holds [#5]
+process 2: [7]; holds [#5]
 no event is offered" "$EXAMPLES/race.hom" "$EXAMPLES/race.schedule"
-# A process that was not given a name cannot use it: nothing is chosen, and a
-# schedule that says they meet is refused.
+# A name in hand is not a name held. The first process splices the name into
+# the program of its start request and starts it on []: the second process has
+# the name value and does not hold it. Nothing is chosen, and a schedule that
+# says they meet is refused.
 channels "schedule: [[0, 0, 0], [1, 0]]
-process 0: waiting on [1, 0, 7]; holds [0]
-process 1: waiting on [2, 0]; holds []
+process 0: waiting on [1, #0, 7]; holds [#0]
+process 1: waiting on [2, #0]; holds []
 no event is offered" "$EXAMPLES/guess.hom"
 channels "schedule: [[0, 0, 0], [1, 0]]
-process 0: waiting on [1, 0, 7]; holds [0]
-process 1: waiting on [2, 0]; holds []
+process 0: waiting on [1, #0, 7]; holds [#0]
+process 1: waiting on [2, #0]; holds []
 refused: [2, 0, 1] cannot happen" "$EXAMPLES/guess.hom" "$EXAMPLES/guess.schedule"
+# A number is not a name: [2, 0] with the number 0 is a request to the outside.
+# No event is offered, a schedule that says the two meet is refused, and the
+# schedule can answer it from outside.
+channels "schedule: [[0, 0, 0], [1, 0]]
+process 0: waiting on [1, #0, 7]; holds [#0]
+process 1: waiting on [2, 0]; holds []
+no event is offered" "$EXAMPLES/number.hom"
+channels "schedule: [[0, 0, 0], [1, 0]]
+process 0: waiting on [1, #0, 7]; holds [#0]
+process 1: waiting on [2, 0]; holds []
+refused: [2, 0, 1] cannot happen" "$EXAMPLES/number.hom" "$EXAMPLES/number.schedule"
+printf '[[0, 0, 0], [1, 0], [3, 1, 9]]\n' > "$OUT/number-outside.schedule"
+channels "schedule: [[0, 0, 0], [1, 0], [3, 1, 9]]
+process 0: waiting on [1, #0, 7]; holds [#0]
+process 1: 9; holds []
+no event is offered" "$EXAMPLES/number.hom" "$OUT/number-outside.schedule"
+# What hands a name over. The same program as guess.hom started on its own
+# body, quoted code that holds [2, #0]: the name is in the start data, the
+# process started holds it, and the two meet.
+printf 'ask [0] (fn ch ->\n  let body = quote (ask [2, ~[2, ch]] (fn x -> [x]))\n  ask [3, [1, body], body] (fn started ->\n    ask [1, ch, 7] (fn sent -> [])))\n' > "$OUT/quoted-start.hom"
+channels "schedule: [[0, 0, 0], [1, 0], [2, 0, 1]]
+process 0: []; holds [#0]
+process 1: [7]; holds [#0]
+no event is offered" "$OUT/quoted-start.hom"
+# A name three arrays deep in a message is handed to the receiver; the same
+# message with the number of that name hands over nothing.
+for item in other 1; do
+    printf 'let waiter = quote (fn meet -> ask [2, meet] (fn m -> m))\nask [0] (fn meet ->\n  ask [0] (fn other ->\n    ask [3, waiter, meet] (fn started ->\n      ask [1, meet, [[[2, %s]]]] (fn sent -> []))))\n' "$item" > "$OUT/nested-$item.hom"
+done
+channels "schedule: [[0, 0, 0], [0, 0, 1], [1, 0], [2, 0, 1]]
+process 0: []; holds [#1, #0]
+process 1: [[[2, #1]]]; holds [#1, #0]
+no event is offered" "$OUT/nested-other.hom"
+channels "schedule: [[0, 0, 0], [0, 0, 1], [1, 0], [2, 0, 1]]
+process 0: []; holds [#1, #0]
+process 1: [[[2, 1]]]; holds [#0]
+no event is offered" "$OUT/nested-1.hom"
+# A name is a value of its own kind: `equal` tells it from its number, `add`
+# does not take it, `case` and `+ 1` see its number. It is written #0, which
+# is not program text.
+printf 'ask [0] (fn ch ->\n  case ch\n    0 -> [equal ch 0, equal ch ch, add ch 0, ch + 1, ch]\n    m + 1 -> m)\n' > "$OUT/name-kind.hom"
+printf '[[0, 0, 0]]\n' > "$OUT/name-kind.schedule"
+channels "schedule: [[0, 0, 0]]
+process 0: [0, 1, [], 1, #0]; holds [#0]
+no event is offered" "$OUT/name-kind.hom" "$OUT/name-kind.schedule"
+printf '#0\n' > "$OUT/name-text.hom"
+expect "syntax error: line 1, column 1: unexpected character; programs are ASCII text" "$OUT/name-text.hom"
 # A name that was already made is refused.
 printf '[[0, 0, 3], [1, 0], [0, 0, 3]]\n' > "$OUT/twice.schedule"
 channels "schedule: [[0, 0, 3], [1, 0]]
-process 0: waiting on [0]; holds [3]
-process 1: waiting on [2, 3]; holds [3]
+process 0: waiting on [0]; holds [#3]
+process 1: waiting on [2, #3]; holds [#3]
 refused: [0, 0, 3] cannot happen" "$EXAMPLES/ping.hom" "$OUT/twice.schedule"
 # A request that is none of the four is the outside's, answered by the schedule.
 printf 'ask [9] (fn a -> add a 1)\n' > "$OUT/outside.hom"
@@ -714,8 +792,8 @@ wantNode() {
 }
 # The whole log from the start: the processes end where chan's run ends.
 node start "$EXAMPLES/ping.hom" "$EXAMPLES/ping.log"
-wantNode "$(sed -n 1,3p "$OUT/node.out")" "process 0: 42; holds [1, 0]
-process 1: [41]; holds [1, 0]
+wantNode "$(sed -n 1,3p "$OUT/node.out")" "process 0: 42; holds [#1, #0]
+process 1: [41]; holds [#1, #0]
 entries: 6 given, 6 acted on"
 wantNode "$(sed -n 1,2p "$OUT/node.out")" "$("$OUT/chan" "$EXAMPLES/ping.hom" | sed -n 2,3p)"
 WHOLE="$STATE"
@@ -723,8 +801,8 @@ wantNode "${#WHOLE}" "64"
 # Stop after three ops with both processes waiting, then give the whole log to
 # the kept node in a new process: it applies the three ops it has not seen.
 node start "$EXAMPLES/ping.hom" "$EXAMPLES/ping-part.log"
-wantNode "$(sed -n 1,3p "$OUT/node.out")" "process 0: waiting on [1, 0, 1]; holds [1, 0]
-process 1: waiting on [2, 0]; holds [0]
+wantNode "$(sed -n 1,3p "$OUT/node.out")" "process 0: waiting on [1, #0, #1]; holds [#1, #0]
+process 1: waiting on [2, #0]; holds [#0]
 entries: 3 given, 3 acted on"
 node from "$STATE" "$EXAMPLES/ping.log"
 wantNode "$(sed -n 3p "$OUT/node.out")" "entries: 6 given, 3 acted on"
@@ -757,6 +835,54 @@ REFUSED="$STATE"
 printf '[[1, [0, 0, 0]], [2, [1, 0]]]\n' > "$OUT/guess-two.log"
 node start "$EXAMPLES/guess.hom" "$OUT/guess-two.log"
 wantNode "$STATE" "$REFUSED"
+wantNode "$(sed -n 1,2p "$OUT/node.out")" "process 0: waiting on [1, #0, 7]; holds [#0]
+process 1: waiting on [2, #0]; holds []"
+# The same log on number.hom: the meeting is refused there too, and the second
+# process is waiting on the outside.
+node start "$EXAMPLES/number.hom" "$OUT/guess.log"
+wantNode "$(sed -n 1,4p "$OUT/node.out")" "process 0: waiting on [1, #0, 7]; holds [#0]
+process 1: waiting on [2, 0]; holds []
+entries: 4 given, 2 acted on
+refused: [3, [2, 0, 1]] cannot happen"
+# A logged node and a name. The log makes two channels, starts a second process
+# on the first, hands it the second name in a message, and then hands it both
+# names again. It holds each once. An op delivered a second time changes
+# nothing; the node saved part way and given the whole log reaches the same
+# root; and the saved pieces hold the name value under tag 39 (d8 27 01).
+HANDSTORE="$OUT/handoff-store"
+rm -rf "$HANDSTORE"
+mkdir -p "$HANDSTORE"
+printf 'let child = quote (fn meet ->\n  ask [2, meet] (fn a ->\n    ask [2, meet] (fn b ->\n      ask [1, a, 5] (fn sent -> [a, b]))))\nask [0] (fn meet ->\n  ask [3, child, meet] (fn started ->\n    ask [0] (fn line ->\n      ask [1, meet, line] (fn first ->\n        ask [1, meet, [line, meet]] (fn second ->\n          ask [2, line] (fn reply -> reply))))))\n' > "$OUT/handoff.hom"
+printf '[[1, [0, 0, 0]], [2, [1, 0]], [3, [0, 0, 1]], [4, [2, 0, 1]], [5, [2, 0, 1]], [6, [2, 1, 0]]]\n' > "$OUT/handoff.log"
+printf '[[1, [0, 0, 0]], [2, [1, 0]], [3, [0, 0, 1]], [4, [2, 0, 1]]]\n' > "$OUT/handoff-part.log"
+printf '[[1, [0, 0, 0]], [2, [1, 0]], [3, [0, 0, 1]], [4, [2, 0, 1]], [4, [2, 0, 1]], [5, [2, 0, 1]], [3, [0, 0, 1]], [6, [2, 1, 0]], [5, [2, 0, 1]]]\n' > "$OUT/handoff-again.log"
+"$OUT/node" "$HANDSTORE" start "$OUT/handoff.hom" "$OUT/handoff.log" > "$OUT/handoff.out"
+wantNode "$(sed -n 1,3p "$OUT/handoff.out")" "process 0: 5; holds [#1, #0]
+process 1: [#1, [#1, #0]]; holds [#1, #0]
+entries: 6 given, 6 acted on"
+wantNode "$(sed -n 1,2p "$OUT/handoff.out")" "$("$OUT/chan" "$OUT/handoff.hom" | sed -n 2,3p)"
+HANDED="$(sed -n 's/^state: //p' "$OUT/handoff.out")"
+wantNode "${#HANDED}" "64"
+"$OUT/node" "$HANDSTORE" start "$OUT/handoff.hom" "$OUT/handoff-again.log" > "$OUT/handoff.out"
+wantNode "$(sed -n 3p "$OUT/handoff.out")" "entries: 9 given, 6 acted on"
+wantNode "$(sed -n 's/^state: //p' "$OUT/handoff.out")" "$HANDED"
+rm -rf "$HANDSTORE"
+mkdir -p "$HANDSTORE"
+"$OUT/node" "$HANDSTORE" start "$OUT/handoff.hom" "$OUT/handoff-part.log" > "$OUT/handoff.out"
+wantNode "$(sed -n 1,3p "$OUT/handoff.out")" "process 0: waiting on [1, #0, [#1, #0]]; holds [#1, #0]
+process 1: waiting on [2, #0]; holds [#1, #0]
+entries: 4 given, 4 acted on"
+PARTWAY="$(sed -n 's/^state: //p' "$OUT/handoff.out")"
+if ! cat "$HANDSTORE"/* | od -An -v -tx1 | tr -d ' \n' | grep -q 'd82701'; then
+    echo "node: no saved piece of the handoff holds the name #1 under tag 39" >&2
+    exit 1
+fi
+"$OUT/node" "$HANDSTORE" from "$PARTWAY" "$OUT/handoff-again.log" > "$OUT/handoff.out"
+wantNode "$(sed -n 1,3p "$OUT/handoff.out")" "process 0: 5; holds [#1, #0]
+process 1: [#1, [#1, #0]]; holds [#1, #0]
+entries: 9 given, 2 acted on"
+wantNode "$(sed -n 's/^state: //p' "$OUT/handoff.out")" "$HANDED"
+echo "node: a name handed over twice is held once, and the logged node restarts to the same root"
 # The kernel's text for a bad log, a bad root, a root that is another kind of
 # state, and a run that does not end.
 wantNode "$("$OUT/node" "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/ask.log")" "log: entry 0 is not an identifier and an event"

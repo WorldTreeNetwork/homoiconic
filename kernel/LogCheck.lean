@@ -128,3 +128,25 @@ def budget : Nat := 100000000
     -- The order of first deliveries matters.
     IO.println (line (state [e2, e1] != state [e1, e2])
       s!"{name}: another order is another state")
+
+-- An identifier that is a name is not the identifier that is its number
+-- (`Data.decEq`): both are acted on, and each delivered again is not. This is
+-- the proved fold; a log file is text, and no text reads as a name.
+#eval do
+  let src ← IO.FS.readFile "../examples/ask.hom"
+  match Surface.read src.toUTF8 with
+  | .error _ => IO.println (line false "names as identifiers: ask.hom does not read")
+  | .ok t =>
+    let seen (log : List Entry) : Option (List Data) := (vmRun budget t log).map fun (v : MVm) => v.seen
+    let both := seen [⟨.name 7, .nat 20⟩, ⟨.nat 7, .nat 22⟩]
+    let again := seen [⟨.name 7, .nat 20⟩, ⟨.name 7, .nat 1⟩, ⟨.nat 7, .nat 22⟩, ⟨.nat 7, .nat 1⟩, ⟨.name 7, .nat 1⟩]
+    let one := seen [⟨.name 7, .nat 20⟩, ⟨.name 7, .nat 22⟩]
+    IO.println (line (both == some [Data.nat 7, Data.name 7] && again == both && one == some [Data.name 7])
+      "the identifiers #7 and 7 are two, and each delivered again is not acted on")
+    -- An answer that is a name value is a name in the result.
+    let result := match vmRun budget t [⟨.nat 1, .name 20⟩, ⟨.nat 2, .nat 22⟩] with
+      | some v => (match v.status with
+          | .finished (.value (.data d)) => Surface.renderData d
+          | _ => "not a result")
+      | none => "unfinished"
+    IO.println (line (result == "[]") s!"add of an answer that is the name #20 and 22: {result}")

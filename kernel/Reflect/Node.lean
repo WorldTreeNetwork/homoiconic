@@ -80,7 +80,7 @@ def plan {C R : Type} (cfg : Config C R) :
       match classify p with
       | .fresh =>
         if n ∈ cfg.names then none else
-        some ([.turn c (.nat n)], fun
+        some ([.turn c (.name n)], fun
           | [st] => some ⟨cfg.procs.set i ⟨st, n :: held⟩, n :: cfg.names⟩
           | _ => none)
       | _ => none
@@ -104,7 +104,7 @@ def plan {C R : Type} (cfg : Config C R) :
         if ch = ch' ∧ ch ∈ held ∧ ch ∈ held' then
           some ([.turn c (.arr []), .turn c' v], fun
             | [st, st'] =>
-              some ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', grant held v ++ held'⟩, cfg.names⟩
+              some ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', gain held' (grant held v)⟩, cfg.names⟩
             | _ => none)
         else none
       | _, _ => none

@@ -14,6 +14,7 @@ def put (p : P Nat) : Cut (P Nat) := modifyGet fun a => (.ref a.size, a.push p)
 /-- Cut at every node: each sub-piece is stored and replaced by its reference. -/
 def cutP : P Nat → Cut (P Nat)
   | .nat n => put (.nat n)
+  | .name n => put (.name n)
   | .nil => put .nil
   | .cons h t => do
       let h' ← cutP h
@@ -54,6 +55,7 @@ def go (σ : Store Nat) : Nat → PState Nat → LRun Nat
 
 partial def resolve (σ : Store Nat) : P Nat → Option (P Nat)
   | .nat n => some (.nat n)
+  | .name n => some (.name n)
   | .nil => some .nil
   | .cons h t => do
       let h' ← resolve σ h
@@ -150,3 +152,38 @@ def keptRun : String :=
   | _ => "FAIL the program did not wait"
 
 #eval IO.println keptRun
+
+/-! Names on the lazy machine. Each of the seven name rules, the program itself
+    and the program under `interp`, stopped at four points and cut at every
+    value: the lazy machine halts with what the plain machine halts with, with
+    the whole store and with a piece withheld. The program itself, cut before
+    its first step, also halts with the stated outcome; in the two operations
+    with a bad argument that is `unbound` and `wrong`, not `fault`. -/
+
+def nm (k : Nat) : Term := .lit (.name k)
+
+def nameRules : List (String × Term × String) :=
+  [ ("name: successor of #3", .succ (nm 3), "value " ++ reprStr (P.nat 4 : P Nat)),
+    ("name: cons onto #3", .cons (n 1) (nm 3), "wrong"),
+    ("name: case on #0", .dcase (nm 0) (n 7) (n 8) (n 9) (n 9), "value " ++ reprStr (P.nat 7 : P Nat)),
+    ("name: case on #3", .dcase (nm 3) (n 7) (.var 0) (n 9) (n 9), "value " ++ reprStr (P.nat 2 : P Nat)),
+    ("name: operation #0, unbound argument", .prim (nm 0) (.var 2), "unbound 2"),
+    ("name: operation #0 on a function", .prim (nm 0) identity, "wrong"),
+    ("name: operation #0 on [2, 3]", .prim (nm 0) (.lit (.arr [.nat 2, .nat 3])),
+      "value " ++ reprStr (P.nat 5 : P Nat)),
+    ("name: a name is kept as a name", .cons (nm 3) emptyArr,
+      "value " ++ reprStr (P.cons (.name 3) .nil : P Nat)) ]
+
+#eval do
+  for (name, p, want) in nameRules do
+    -- The stated outcome, from a state cut at every value before its first step.
+    let s := load (compile p)
+    let (ps, pieces) := (cutState s.toP).run #[]
+    let got := match go (storeOf pieces) budget ps with
+      | .at t => shown (storeOf pieces) t
+      | .paused _ _ => "paused"
+    IO.println s!"{if got == want && plain (runUntil budget s) == want then "ok  " else "FAIL"} {name} on the lazy machine: {got}"
+    for k in [0, 2, 5] do
+      IO.println (snapshot name p k).1
+    for k in [0, 7, 40, 300] do
+      IO.println (snapshot (name ++ ", interpreted") (level 1 p) k).1

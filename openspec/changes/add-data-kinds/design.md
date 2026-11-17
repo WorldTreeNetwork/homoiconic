@@ -586,3 +586,14 @@ overrule any of them; a reviewer should say where one is wrong.
     receives on that number is making a request to the outside. Its held
     list still reads, since held names are kept as numbers. The fixtures are
     made again; a kept node anyone depends on is run again from its program.
+
+## 7. Found while building step 1 (2026-11-17)
+
+- The text D6 gives for `examples/guess.hom` does not read: a splice cannot be
+  under a binder of its quotation. The example quotes the body alone and builds
+  the function's code as data, `[1, body]`. The run is the one D6 describes:
+  the second process waits on `[2, #0]` and holds nothing.
+- A log file is text and no text reads as a name, so `LogCheck.lean` checks a
+  name in a log through the proved fold, not through the session.
+- `Surface/Check.lean` was edited in step 1, not step 2, so the new
+  expectations run.

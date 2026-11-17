@@ -9,9 +9,11 @@ namespace Surface
 open Reflect
 
 mutual
-  /-- Numbers in decimal; arrays in brackets, items separated by a comma and a space. -/
+  /-- Numbers in decimal; arrays in brackets, items separated by a comma and a
+      space; a name as `#` and its number, which the reader does not read. -/
   def renderData : Data → String
     | .nat n => toString n
+    | .name n => "#" ++ toString n
     | .arr xs => "[" ++ ", ".intercalate (renderItems xs) ++ "]"
 
   def renderItems : List Data → List String

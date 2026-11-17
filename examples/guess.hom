@@ -1,6 +1,10 @@
-; a process that was not given a name cannot use it, though it can write the
-; number. The second process is started on [] and asks to receive on 0.
-let guesser = quote (fn nothing -> ask [2, 0] (fn x -> x))
+; a name in hand is not a name held. The first process splices the name it
+; made into the code of the second: `~[2, ch]` is the code of a literal of the
+; name, and `[1, body]` is the code of a function with that body. Only start
+; data is searched for names, not the program, and the second process is
+; started on []. So it has the name value and does not hold it: its receive
+; never happens.
 ask [0] (fn ch ->
-  ask [3, guesser, []] (fn started ->
+  let body = quote (ask [2, ~[2, ch]] (fn x -> x))
+  ask [3, [1, body], []] (fn started ->
     ask [1, ch, 7] (fn sent -> [])))

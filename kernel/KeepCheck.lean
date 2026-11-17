@@ -120,6 +120,7 @@ def go (σ : Store Ref) : Nat → PState Ref → LRun Ref
 
 partial def resolve (σ : Store Ref) : P Ref → Option (P Ref)
   | .nat n => some (.nat n)
+  | .name n => some (.name n)
   | .nil => some .nil
   | .cons h t => do
       let h' ← resolve σ h
@@ -234,3 +235,45 @@ def turns : String :=
                         s!"three turns from the store give the whole run; {m1.size} pieces after the first, {m2.size} after the second; second turn: {middle}"
 
 #eval IO.println turns
+
+/-- `ask [1] (fn x -> ask [2, x] (fn y -> [x, y, x + 1]))` -/
+def askName : Term :=
+  .app (.app askTerm (.lit (.arr [.nat 1])))
+    (.lam (.app (.app askTerm (.cons (n 2) (.cons (.var 0) emptyArr)))
+      (.lam (.cons (.var 1) (.cons (.var 0) (.cons (.succ (.var 1)) emptyArr))))))
+
+/-- A waiting process that holds a name value is saved and continued. It is
+    answered with the name `#20`, which it keeps in the function it waits with.
+    Saved with every part cut loose, one stored piece is exactly the name's
+    bytes, `d8 27 14`; every piece is named by its hash and reads back to its
+    bytes; and continued from the root with 22 it gives `[#20, 22, 21]`: the
+    name came back a name, and its successor is a plain number. Saved at the
+    session's own size the name stays in place, and the run gives the same. -/
+def keptName (size : Nat) : String :=
+  match converse 100000 askName [.name 20] with
+  | (asked, .waiting k) =>
+      match (cut size (k.toP : P Ref)).run #[] with
+      | none => "FAIL the waiting process has no byte form"
+      | some (root, stored) =>
+          let m : Pieces := stored.foldl (fun m rb => m.insert rb.1 rb.2) {}
+          let sound := stored.all fun rb =>
+            hex (Blake3.hash rb.2) == hex rb.1 &&
+              (match readPiece rb.2 with
+               | .ok q => (pieceBytes q).map hex == some (hex rb.2)
+               | .error _ => false)
+          let leaf := stored.any fun rb => hex rb.2 == "d82714"
+          -- Whole again, its bytes hold the name under tag 39.
+          let tagged := match resolve (storeOf m) root with
+            | some whole => (((pieceBytes whole).elim "" hex).splitOn "d82714").length > 1
+            | none => false
+          let start : PState Ref := .running (compile (resumeTerm (.nat 22))) (.cons root .nil) [] []
+          let got := match go (storeOf m) 100000 start with
+            | .at t => shown (storeOf m) t
+            | .paused _ _ => "paused"
+          let want := (pieceBytes ((Data.arr [.name 20, .nat 22, .nat 21]).toP : P Ref)).elim "none" hex
+          let ok := sound && got == want && asked.length == 2 && tagged && (size != 0 || leaf)
+          line ok s!"a waiting process that holds #20, cut at {size} bytes into {m.size} pieces (the name alone is a piece: {leaf}), continued with 22: {got}"
+  | _ => "FAIL the program did not wait"
+
+#eval IO.println (keptName 0)
+#eval IO.println (keptName Surface.Keep.pieceSize)

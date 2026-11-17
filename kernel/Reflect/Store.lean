@@ -8,6 +8,8 @@ namespace Reflect
     of reference; nothing here says how one is made. -/
 inductive P (R : Type) where
   | nat : Nat → P R
+  /-- A channel name: a leaf, as a number is. -/
+  | name : Nat → P R
   | nil : P R
   | cons : P R → P R → P R
   | closure : Code → P R → P R
@@ -35,6 +37,7 @@ mutual
   /-- Data as a piece with no reference in it. -/
   def Data.toP : Data → P R
     | .nat n => .nat n
+    | .name n => .name n
     | .arr xs => Data.listToP xs
   def Data.listToP : List Data → P R
     | [] => .nil
@@ -56,6 +59,7 @@ end
     that reaches the cycle. -/
 inductive Unf (σ : Store R) : P R → P R → Prop where
   | nat {n} : Unf σ (.nat n) (.nat n)
+  | name {n} : Unf σ (.name n) (.name n)
   | nil : Unf σ .nil .nil
   | cons {h t h' t'} (hh : Unf σ h h') (ht : Unf σ t t') : Unf σ (.cons h t) (.cons h' t')
   | closure {c e e'} (he : Unf σ e e') : Unf σ (.closure c e) (.closure c e')
@@ -64,6 +68,7 @@ inductive Unf (σ : Store R) : P R → P R → Prop where
 /-- The same, within `n` references deep. -/
 inductive UnfD (σ : Store R) : Nat → P R → P R → Prop where
   | nat {d n} : UnfD σ d (.nat n) (.nat n)
+  | name {d n} : UnfD σ d (.name n) (.name n)
   | nil {d} : UnfD σ d .nil .nil
   | cons {d h t h' t'} (hh : UnfD σ d h h') (ht : UnfD σ d t t') :
       UnfD σ d (.cons h t) (.cons h' t')
@@ -106,6 +111,7 @@ def fetch (σ : Store R) (r : R) (f : P R → PState R) : LStep R :=
 /-- Replace every reference by its piece, one level. -/
 def P.hyd (σ : Store R) : P R → Except R (P R)
   | .nat n => .ok (.nat n)
+  | .name n => .ok (.name n)
   | .nil => .ok .nil
   | .cons h t =>
       match h.hyd σ, t.hyd σ with
@@ -124,6 +130,7 @@ def P.hyd (σ : Store R) : P R → Except R (P R)
 /-- A piece that is complete data. -/
 def P.toData : P R → Option Data
   | .nat n => some (.nat n)
+  | .name n => some (.name n)
   | .nil => some (.arr [])
   | .cons h t =>
       match h.toData, t.toData with
@@ -174,6 +181,7 @@ def lSucc (σ : Store R) (k : Code) (env : P R) (stk : List (P R))
     (frs : List (PFrame R)) : LStep R :=
   match stk with
   | .nat n :: stk => .next (.running k env (.nat (n + 1) :: stk) frs)
+  | .name n :: stk => .next (.running k env (.nat (n + 1) :: stk) frs)
   | .ref r :: stk => fetch σ r (fun p => .running (.succ k) env (p :: stk) frs)
   | _ :: _ => .next (.halted .wrong)
   | [] => .next .fault
@@ -194,6 +202,8 @@ def lCase (σ : Store R) (z sc n c k : Code) (env : P R) (stk : List (P R))
   match stk with
   | .nat 0 :: stk => .next (.running z env stk (⟨k, env⟩ :: frs))
   | .nat (m + 1) :: stk => .next (.running sc (.cons (.nat m) env) stk (⟨k, env⟩ :: frs))
+  | .name 0 :: stk => .next (.running z env stk (⟨k, env⟩ :: frs))
+  | .name (m + 1) :: stk => .next (.running sc (.cons (.nat m) env) stk (⟨k, env⟩ :: frs))
   | .nil :: stk => .next (.running n env stk (⟨k, env⟩ :: frs))
   | .cons h t :: stk => .next (.running c (.cons t (.cons h env)) stk (⟨k, env⟩ :: frs))
   | .ref r :: stk => fetch σ r (fun p => .running (.dcase z sc n c k) env (p :: stk) frs)
@@ -204,6 +214,7 @@ def lCheckNat (σ : Store R) (k : Code) (env : P R) (stk : List (P R))
     (frs : List (PFrame R)) : LStep R :=
   match stk with
   | .nat n :: stk => .next (.running k env (.nat n :: stk) frs)
+  | .name n :: stk => .next (.running k env (.name n :: stk) frs)
   | .ref r :: stk => fetch σ r (fun p => .running (.checkNat k) env (p :: stk) frs)
   | _ :: _ => .next (.halted .wrong)
   | [] => .next .fault
@@ -223,6 +234,14 @@ def lPrim (σ : Store R) (k : Code) (env : P R) (stk : List (P R))
       | none =>
           match x.hyd σ with
           | .ok x' => .next (.running (.prim k) env (x' :: .nat n :: stk) frs)
+          | .error r => .needs r
+  | .closure _ _ :: .name _ :: _ => .next (.halted .wrong)
+  | x :: .name n :: stk =>
+      match x.toData with
+      | some d => .next (.running k env ((Ops.op n d).toP :: stk) frs)
+      | none =>
+          match x.hyd σ with
+          | .ok x' => .next (.running (.prim k) env (x' :: .name n :: stk) frs)
           | .error r => .needs r
   | _ => .next .fault
 

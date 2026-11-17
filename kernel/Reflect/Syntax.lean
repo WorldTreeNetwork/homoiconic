@@ -4,6 +4,9 @@ namespace Reflect
 inductive Data where
   | nat : Nat → Data
   | arr : List Data → Data
+  /-- A channel name. `succ`, `case` and the operation number of `prim` see it
+      as its number; nothing in the language makes one. -/
+  | name : Nat → Data
   deriving Repr, BEq
 
 /-- De Bruijn index zero is the nearest binder. `lit d` denotes `d` and is

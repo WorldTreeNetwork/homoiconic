@@ -4,8 +4,11 @@ import Reflect.Syntax
 
     A number below 2^64 is a CBOR unsigned integer in its shortest form. A
     larger number is tag 2 (a positive bignum) over its big-endian bytes with
-    no leading zero. An array is a definite-length CBOR array. A byte string,
-    which is not data, is a definite-length CBOR byte string.
+    no leading zero. An array is a definite-length CBOR array. A name is tag 39
+    (registered as "Identifier") over its number, in the form a number has. A
+    byte string, which is not data, is a definite-length CBOR byte string.
+    Tag 2 for large numbers and tag 39 for names are this project's rules, not
+    dCBOR's.
 
     The reader is strict: it accepts exactly the bytes the writer produces, so
     a value has one byte form. Nothing here is proved. It is tested
@@ -20,11 +23,13 @@ open Reflect
 inductive Item where
   | nat : Nat → Item
   | arr : List Item → Item
+  | name : Nat → Item
   | bytes : ByteArray → Item
 
 mutual
   def Item.ofData : Data → Item
     | .nat n => .nat n
+    | .name n => .name n
     | .arr xs => .arr (Item.ofDatas xs)
   def Item.ofDatas : List Data → List Item
     | [] => []
@@ -35,6 +40,7 @@ mutual
   /-- `none` when there is a byte string anywhere in it. -/
   def Item.toData : Item → Option Data
     | .nat n => some (.nat n)
+    | .name n => some (.name n)
     | .arr xs => (Item.toDatas xs).map .arr
     | .bytes _ => none
   def Item.toDatas : List Item → Option (List Data)
@@ -64,13 +70,17 @@ def pushHead (major : UInt8) (n : Nat) (out : ByteArray) : ByteArray :=
 
 def limit : Nat := 0x10000000000000000
 
+/-- A number: an unsigned integer below 2^64, tag 2 over its bytes from there. -/
+def writeNat (n : Nat) (out : ByteArray) : ByteArray :=
+  if n < limit then pushHead 0 n out
+  else
+    let k := byteLength n
+    pushBE k n (pushHead 2 k (out.push 0xc2))
+
 mutual
   def writeTo : Item → ByteArray → ByteArray
-    | .nat n, out =>
-        if n < limit then pushHead 0 n out
-        else
-          let k := byteLength n
-          pushBE k n (pushHead 2 k (out.push 0xc2))
+    | .nat n, out => writeNat n out
+    | .name n, out => writeNat n (pushHead 6 39 out)
     | .arr xs, out => writeAll xs (pushHead 4 xs.length out)
     | .bytes b, out => pushHead 2 b.size out ++ b
   def writeAll : List Item → ByteArray → ByteArray
@@ -81,7 +91,8 @@ end
 def writeItem (i : Item) : ByteArray := writeTo i ByteArray.empty
 
 /-- The byte form of a data value. A CBOR length is below 2^64, so an array of
-    2^64 items or more, or a number of 2^64 bytes or more, has no byte form;
+    2^64 items or more, or a number (a name's number among them) of 2^64 bytes
+    or more, has no byte form;
     for those the bytes written are not read back. No such value fits in a
     machine. -/
 def write (d : Data) : ByteArray := writeItem (.ofData d)
@@ -126,6 +137,19 @@ def deliver (d : Item) : List Frame → Option Item × List Frame
       if f.left ≤ 1 then deliver (.arr (d :: f.items).reverse) rest
       else (none, { left := f.left - 1, items := d :: f.items } :: rest)
 
+/-- The byte string of a bignum, after its tag 2: the number and the position
+    after it. A leading zero, and a number that fits an unsigned integer, are
+    refused. -/
+def readBig (b : ByteArray) (pos : Nat) : Except String (Nat × Nat) := do
+  let (major, k, pos) ← readHead b pos
+  if major != 2 then .error "a bignum that is not a byte string"
+  else if pos + k > b.size then .error "the bytes end inside a value"
+  else if k == 0 || b.get! pos == 0 then .error "a bignum with a leading zero"
+  else
+    let v := takeBE b pos k 0
+    if v < limit then .error "a bignum that fits an unsigned integer"
+    else .ok (v, pos + k)
+
 def notData : String := "a kind of value that is not a number or an array"
 
 /-- One value is read each turn and each turn takes at least one byte, so
@@ -149,16 +173,19 @@ def readGo (b : ByteArray) : Nat → Nat → List Frame → Except String Item
         if pos + n > b.size then .error "the bytes end inside a value"
         else next (.bytes (b.extract pos (pos + n))) (pos + n)
       else if major == 6 then
-        if n != 2 then .error "a tag other than a positive bignum"
-        else do
+        if n == 2 then do
+          let (v, pos) ← readBig b pos
+          next (.nat v) pos
+        else if n == 39 then do
+          -- A name: the tag over a number in the number's own form, and
+          -- nothing else. A name's number is not a name.
           let (major, k, pos) ← readHead b pos
-          if major != 2 then .error "a bignum that is not a byte string"
-          else if pos + k > b.size then .error "the bytes end inside a value"
-          else if k == 0 || b.get! pos == 0 then .error "a bignum with a leading zero"
-          else
-            let v := takeBE b pos k 0
-            if v < limit then .error "a bignum that fits an unsigned integer"
-            else next (.nat v) (pos + k)
+          if major == 0 then next (.name k) pos
+          else if major == 6 && k == 2 then do
+            let (v, pos) ← readBig b pos
+            next (.name v) pos
+          else .error "a name that is not over a number"
+        else .error "a tag other than a positive bignum or a name"
       else .error notData
 
 /-- Read one item from exactly these bytes. Bytes the writer would not have

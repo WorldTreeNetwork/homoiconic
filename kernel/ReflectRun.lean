@@ -61,3 +61,59 @@ def emptyArr : Term := .lit (.arr [])
 #eval IO.println (check "quoted omega is data" (.lit (reify omega)))
 #eval IO.println (check "program builds code and runs it" buildsAndRuns)
 #eval IO.println s!"omega: direct none {(evalFuel 2000 [] omega).isNone}, interpreter none {(evalFuel 2000 [] (level 1 omega)).isNone}, machine still running {match run 100000 (load (compile omega)) with | .running .. => true | _ => false}"
+
+/-! Names. A name is seen by `succ`, `case` and the operation number of `prim`
+    as its number, and consing onto one is wrong. Each scenario states its
+    outcome: direct evaluation gives it, the machine halts with it (and so does
+    not fault), and `check` compares the interpreter at levels 1 and 2, the
+    machine whole and the interpreted run in three slices. -/
+
+def nm (k : Nat) : Term := .lit (.name k)
+
+/-- `check`, and the outcome said outright for direct evaluation and the machine. -/
+def checkIs (name : String) (p : Term) (want : Outcome) : String :=
+  let direct := match evalFuel 20000 [] p with
+    | some o => reifyOutcome o == reifyOutcome want
+    | none => false
+  let halts := match run 2000000 (load (compile p)) with
+    | .halted w => (readOutcome w).map reifyOutcome == some (reifyOutcome want)
+    | _ => false
+  let line := check name p
+  if direct && halts then line
+  else s!"FAIL {name}: direct is the stated outcome {direct}, machine halts with it {halts}; {line}"
+
+def nameScenarios : List (String × Term × Outcome) :=
+  [ ("name: successor of #3 is the number 4", .succ (nm 3), .value (.data (.nat 4))),
+    ("name: cons onto #3 is wrong", .cons (n 1) (nm 3), .wrong),
+    ("name: case on #0 takes the zero branch",
+      .dcase (nm 0) (n 7) (n 8) (n 9) (n 9), .value (.data (.nat 7))),
+    ("name: case on #3 binds the plain number 2",
+      .dcase (nm 3) (n 7) (.var 0) (n 9) (n 9), .value (.data (.nat 2))),
+    ("name: operation #0 with an unbound argument is that unbound",
+      .prim (nm 0) (.var 2), .unbound 2),
+    ("name: operation #0 on a function is wrong", .prim (nm 0) identity, .wrong),
+    ("name: operation #0 on [2, 3] is 5",
+      .prim (nm 0) (.lit (.arr [.nat 2, .nat 3])), .value (.data (.nat 5))),
+    -- Arithmetic operands stay plain numbers; equality tells a name from its number.
+    ("name: add of [#3, 0] is []",
+      .prim (n 0) (.lit (.arr [.name 3, .nat 0])), .value (.data (.arr []))),
+    ("name: add of [3, 0] is 3",
+      .prim (n 0) (.lit (.arr [.nat 3, .nat 0])), .value (.data (.nat 3))),
+    ("name: equal of [#3, 3] is 0",
+      .prim (n 5) (.lit (.arr [.name 3, .nat 3])), .value (.data (.nat 0))),
+    ("name: equal of [#3, #3] is 1",
+      .prim (n 5) (.lit (.arr [.name 3, .name 3])), .value (.data (.nat 1))),
+    -- A name is data wherever a rule does not look into it.
+    ("name: a literal name is itself", nm 3, .value (.data (.name 3))),
+    ("name: a name as the head of an array",
+      .cons (nm 3) emptyArr, .value (.data (.arr [.name 3]))),
+    ("name: case on an array binds a name head",
+      .dcase (.lit (.arr [.name 3, .nat 1])) (n 0) (n 0) (n 0) (.var 1), .value (.data (.name 3))),
+    ("name: applying a name is wrong", .app (nm 3) omega, .wrong),
+    ("name: successor of the successor of #0", .succ (.succ (nm 0)), .value (.data (.nat 2))),
+    ("name: operation number computed from a name",
+      .prim (.succ (nm 0)) (.lit (.arr [.nat 9, .nat 4])), .value (.data (.nat 5))) ]
+
+#eval do
+  for (name, p, want) in nameScenarios do
+    IO.println (checkIs name p want)

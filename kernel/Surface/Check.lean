@@ -1,11 +1,14 @@
 import Reflect.Arith
 import Surface.Expect
 import Surface.Run
+import Surface.Chan
 
 /-!
 Run with `lake env lean Surface/Check.lean` from `kernel/`. Checks every entry
-of `reads`, `refused`, `prints`, `converses`, and `renders`, and that rendered data reads
-back as a program with the same data as its outcome. Prints each failing entry
+of `reads`, `refused`, `prints`, `converses`, `renders`, `channels` and
+`channelFiles`, that rendered data with no name in it reads back as a program
+with the same data as its outcome, and that rendered data with a name in it
+does not read. Prints each failing entry
 and throws, so `lean` exits non-zero, if any check fails.
 -/
 open Reflect Surface
@@ -30,6 +33,30 @@ def roundTrip (d : Data) : Bool :=
   match dataOf (renderData d) 1000000 with
   | some d' => d' == d
   | none => false
+
+mutual
+  /-- Is there a name anywhere in the data? -/
+  def hasName : Data → Bool
+    | .name _ => true
+    | .nat _ => false
+    | .arr xs => anyName xs
+  def anyName : List Data → Bool
+    | [] => false
+    | x :: xs => hasName x || anyName xs
+end
+
+/-- Rendered data reads back; with a name in it, the reader refuses it. -/
+def readsBack (d : Data) : Bool :=
+  if hasName d then
+    match read (renderData d).toUTF8 with
+    | .error _ => true
+    | .ok _ => false
+  else roundTrip d
+
+/-- No process holds a name twice, and none after process 2 holds name 0. -/
+def sieveHeld (cfg : MConfig) : Bool :=
+  cfg.procs.all (fun q => q.held.eraseDups.length == q.held.length) &&
+    (cfg.procs.drop 3).all (fun q => !q.held.contains 0) && cfg.procs.length == 13
 
 def extraData : List Data := [
   .nat 0, .nat 18446744073709551616, .arr [], .arr [.arr []], .arr [.nat 1, .arr [.nat 2, .arr []], .nat 3],
@@ -93,10 +120,41 @@ def main : IO UInt32 := do
     match o with
     | .value (.data d) =>
       total := total + 1
-      if !roundTrip d then
-        IO.println s!"FAIL roundtrip {repr d}: `{renderData d}` does not read back"
+      if !readsBack d then
+        IO.println s!"FAIL roundtrip {repr d}: `{renderData d}` does not read back, or holds a name and reads"
         fails := fails + 1
     | _ => pure ()
+  for (text, schedule, out) in channels do
+    total := total + 1
+    let got := channelsText text.toUTF8 schedule.toUTF8 1000000 100
+    if got != out then
+      IO.println s!"FAIL channels {show1 text} with `{schedule}`: printed `{show1 got}`, expected `{show1 out}`"
+      fails := fails + 1
+  for (file, scheduleFile, out) in channelFiles do
+    total := total + 1
+    let program ← IO.FS.readBinFile s!"../examples/{file}"
+    let schedule ← if scheduleFile == "" then pure ByteArray.empty
+      else IO.FS.readBinFile s!"../examples/{scheduleFile}"
+    let got := channelsText program schedule 1000000 100
+    if got != out then
+      IO.println s!"FAIL channels {file} with `{scheduleFile}`: printed `{show1 got}`, expected `{show1 out}`"
+      fails := fails + 1
+  -- The sieve: its process lines, and the held lists themselves.
+  total := total + 2
+  let sieve ← IO.FS.readBinFile "../examples/sieve.hom"
+  let sieveText := channelsText sieve ByteArray.empty 100000000 100000
+  if (sieveText.splitOn "\n").filter (·.startsWith "process") != sieveProcesses.splitOn "\n" then
+    IO.println s!"FAIL sieve: the process lines are\n{sieveText}"
+    fails := fails + 1
+  let held := match read sieve with
+    | .error _ => false
+    | .ok t =>
+      match beginRun 100000000 t with
+      | none => false
+      | some c₀ => sieveHeld (autoRun 100000000 100000 c₀).2.1
+  if !held then
+    IO.println "FAIL sieve: a process holds a name twice, or a process after process 2 holds #0"
+    fails := fails + 1
   for d in extraData do
     total := total + 1
     if !roundTrip d then

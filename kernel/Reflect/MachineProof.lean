@@ -199,6 +199,10 @@ theorem fwd {env t o} (h : Direct env t o) :
     intro k stk frs
     obtain ⟨n1, h1⟩ := ih (.succ k) stk frs
     exact Reach.of_run h1 (Reach.step ⟨0, rfl⟩)
+  | succName h ih =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ih (.succ k) stk frs
+    exact ⟨n1 + 1, run_to h1 rfl⟩
   | succClosure h ih =>
     intro k stk frs
     obtain ⟨n1, h1⟩ := ih (.succ k) stk frs
@@ -219,6 +223,11 @@ theorem fwd {env t o} (h : Direct env t o) :
     intro k stk frs
     exact (iha (.checkData (comp _ (.cons k))) stk frs).lift_err he
   | consTailNat ha hb iha ihb =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := iha (.checkData (comp _ (.cons k))) stk frs
+    obtain ⟨n2, h2⟩ := ihb (.cons k) (.data _ :: stk) frs
+    exact Reach.of_run h1 (Reach.step (Reach.of_run h2 (Reach.step ⟨0, rfl⟩)))
+  | consTailName ha hb iha ihb =>
     intro k stk frs
     obtain ⟨n1, h1⟩ := iha (.checkData (comp _ (.cons k))) stk frs
     obtain ⟨n2, h2⟩ := ihb (.cons k) (.data _ :: stk) frs
@@ -259,6 +268,31 @@ theorem fwd {env t o} (h : Direct env t o) :
     obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
     refine Reach.of_run h1 (Reach.step ?_)
     exact (ihx (.prim k) (.data _ :: stk) frs).lift_err he
+  | primNameData hc hx ihc ihx =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
+    obtain ⟨n2, h2⟩ := ihx (.prim k) (.data _ :: stk) frs
+    exact ⟨n1 + 1 + (n2 + 1), run_to (run_to h1 rfl) (run_to h2 rfl)⟩
+  | primNameArgClosure hc hx ihc ihx =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
+    obtain ⟨n2, h2⟩ := ihx (.prim k) (.data _ :: stk) frs
+    exact Reach.of_run h1 (Reach.step (Reach.of_run h2 (Reach.step ⟨0, rfl⟩)))
+  | primNameArgError hc hx he ihc ihx =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihc (.checkNat (comp _ (.prim k))) stk frs
+    refine Reach.of_run h1 (Reach.step ?_)
+    exact (ihx (.prim k) (.data _ :: stk) frs).lift_err he
+  | caseNameZero hs hz ihs ihz =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihs (.dcase (comp _ .done) (comp _ .done) (comp _ .done) (comp _ .done) k) stk frs
+    refine Reach.of_run h1 (Reach.step ?_)
+    exact Reach.block (ihz .done stk (⟨k, _⟩ :: frs))
+  | caseNameSucc hs hsc ihs ihsc =>
+    intro k stk frs
+    obtain ⟨n1, h1⟩ := ihs (.dcase (comp _ .done) (comp _ .done) (comp _ .done) (comp _ .done) k) stk frs
+    refine Reach.of_run h1 (Reach.step ?_)
+    exact Reach.block (ihsc .done stk (⟨k, _⟩ :: frs))
   | caseZero hs hz ihs ihz =>
     intro k stk frs
     obtain ⟨n1, h1⟩ := ihs (.dcase (comp _ .done) (comp _ .done) (comp _ .done) (comp _ .done) k) stk frs
@@ -378,6 +412,7 @@ theorem rev : ∀ n, Rev n := by
             cases hn'
             exact Or.inl ⟨.wrong, .wrong, Direct.succArr hd⟩
           | nat j => exact Or.inr ⟨m + 1, .data (.nat (j + 1)), Direct.succNat hd, hrun⟩
+          | name j => exact Or.inr ⟨m + 1, .data (.nat (j + 1)), Direct.succName hd, hrun⟩
     | app f a ihf iha =>
       intro env k stk frs w h
       rcases ihf env (.checkFun (comp a (.apply k))) stk frs w h with
@@ -445,6 +480,12 @@ theorem rev : ∀ n, Rev n := by
                 rw [hst2, run_halted] at hn2
                 cases hn2
                 exact Or.inl ⟨.wrong, .wrong, Direct.consTailNat hda hdb⟩
+              | name j =>
+                have hst2 : step (.running (.cons k) (injE env)
+                    (injV (.data (.name j)) :: .data x :: stk) frs) = .halted .wrong := rfl
+                rw [hst2, run_halted] at hn2
+                cases hn2
+                exact Or.inl ⟨.wrong, .wrong, Direct.consTailName hda hdb⟩
               | arr xs =>
                 exact Or.inr ⟨(m1 + 1) + (m2 + 1), .data (.arr (x :: xs)),
                   Direct.consArr hda hdb, run_to hrun1 hrun2⟩
@@ -488,6 +529,25 @@ theorem rev : ∀ n, Rev n := by
               | data d =>
                 exact Or.inr ⟨(m1 + 1) + (m2 + 1), .data (Ops.op j d),
                   Direct.primData hdc hdx, run_to hrun1 hrun2⟩
+          | name j =>
+            have hst : step (.running (.checkNat (comp x (.prim k))) (injE env)
+                (injV (.data (.name j)) :: stk) frs) =
+                .running (comp x (.prim k)) (injE env) (.data (.name j) :: stk) frs := rfl
+            rw [hst] at hn1 hrun1
+            rcases ihn n1 hlt1 x env (.prim k) (.data (.name j) :: stk) frs w hn1 with
+              ⟨e, he, hd⟩ | ⟨m2, vx, hdx, hm2⟩
+            · exact Or.inl ⟨e, he, Direct.primNameArgError hdc hd he.isError⟩
+            · obtain ⟨n2, hlt2, hn2, hrun2⟩ := advance hn1 hm2
+              cases vx with
+              | closure b cap =>
+                have hst2 : step (.running (.prim k) (injE env)
+                    (injV (.closure b cap) :: .data (.name j) :: stk) frs) = .halted .wrong := rfl
+                rw [hst2, run_halted] at hn2
+                cases hn2
+                exact Or.inl ⟨.wrong, .wrong, Direct.primNameArgClosure hdc hdx⟩
+              | data d =>
+                exact Or.inr ⟨(m1 + 1) + (m2 + 1), .data (Ops.op j d),
+                  Direct.primNameData hdc hdx, run_to hrun1 hrun2⟩
     | dcase s z sc nl c ihs ihz ihsc ihnl ihc =>
       intro env k stk frs w h
       rcases ihs env (.dcase (comp z .done) (comp sc .done) (comp nl .done) (comp c .done) k)
@@ -524,6 +584,26 @@ theorem rev : ∀ n, Rev n := by
                 ⟨e, he, hd⟩ | ⟨m2, vz, hdz, hm2⟩
               · exact Or.inl ⟨e, he, Direct.caseSucc hds hd⟩
               · exact Or.inr ⟨(m1 + 1) + m2, vz, Direct.caseSucc hds hdz, run_to hrun1 hm2⟩
+          | name j =>
+            cases j with
+            | zero =>
+              have hst : step (.running (.dcase (comp z .done) (comp sc .done) (comp nl .done)
+                  (comp c .done) k) (injE env) (injV (.data (.name 0)) :: stk) frs) =
+                  .running (comp z .done) (injE env) stk (⟨k, injE env⟩ :: frs) := rfl
+              rw [hst] at hn1 hrun1
+              rcases blk ihn hlt1 hn1 with ⟨e, he, hd⟩ | ⟨m2, vz, hdz, hm2⟩
+              · exact Or.inl ⟨e, he, Direct.caseNameZero hds hd⟩
+              · exact Or.inr ⟨(m1 + 1) + m2, vz, Direct.caseNameZero hds hdz, run_to hrun1 hm2⟩
+            | succ j =>
+              have hst : step (.running (.dcase (comp z .done) (comp sc .done) (comp nl .done)
+                  (comp c .done) k) (injE env) (injV (.data (.name (j + 1))) :: stk) frs) =
+                  .running (comp sc .done) (.data (.nat j) :: injE env) stk
+                    (⟨k, injE env⟩ :: frs) := rfl
+              rw [hst] at hn1 hrun1
+              rcases blk (env' := .data (.nat j) :: env) ihn hlt1 hn1 with
+                ⟨e, he, hd⟩ | ⟨m2, vz, hdz, hm2⟩
+              · exact Or.inl ⟨e, he, Direct.caseNameSucc hds hd⟩
+              · exact Or.inr ⟨(m1 + 1) + m2, vz, Direct.caseNameSucc hds hdz, run_to hrun1 hm2⟩
           | arr xs =>
             cases xs with
             | nil =>

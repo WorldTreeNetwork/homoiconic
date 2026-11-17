@@ -1,0 +1,8 @@
+; a number is not a name. The second process is started on [] and asks
+; [2, 0] with the plain number 0. That is no receive on channel 0: it is a
+; request to the outside, so the two never meet, and a schedule that says they
+; do is refused.
+let guesser = quote (fn nothing -> ask [2, 0] (fn x -> x))
+ask [0] (fn ch ->
+  ask [3, guesser, []] (fn started ->
+    ask [1, ch, 7] (fn sent -> [])))

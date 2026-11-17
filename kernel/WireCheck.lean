@@ -41,12 +41,26 @@ def vectors : List (Data × String) :=
     (.nat 255, "18ff"), (.nat 256, "190100"), (.nat 65535, "19ffff"), (.nat 65536, "1a00010000"),
     (.nat 4294967295, "1affffffff"), (.nat 4294967296, "1b0000000100000000"),
     -- A program: the identity function, and its application to itself.
-    (reify identity, "820100"), (reify (.app identity identity), "8300820100820100") ]
+    (reify identity, "820100"), (reify (.app identity identity), "8300820100820100"),
+    -- A name: tag 39 over its number, in the form the number has.
+    (.name 3, "d82703"), (.name 0, "d82700"), (.name 23, "d82717"), (.name 24, "d8271818"),
+    (.name 18446744073709551615, "d8271bffffffffffffffff"),
+    (.name 18446744073709551616, "d827c249010000000000000000"),
+    (.arr [.nat 1, .name 3], "8201d82703"), (.arr [.arr [.arr [.nat 2, .name 3]]], "81818202d82703"),
+    -- The code of a literal of a name, and a send on it.
+    (reify (.lit (.name 3)), "8202d82703"), (.arr [.nat 1, .name 0, .nat 7], "8301d8270007") ]
 
 #eval do
   for (d, h) in vectors do
     let wrote := hex (write d)
     IO.println (line (wrote == h && readsAs (unhex h) d) s!"vector {h}")
+
+-- A name's bytes read as the name, and not as its number; the number's do not
+-- read as the name.
+#eval IO.println (line
+  (readsAs (unhex "d82703") (.name 3) && !readsAs (unhex "d82703") (.nat 3)
+    && readsAs (unhex "03") (.nat 3) && !readsAs (unhex "03") (.name 3))
+  "d82703 reads as the name #3, not the number 3")
 
 /-- Bytes that are well-formed CBOR, or nearly, and are not the one form. -/
 def refused : List (String × String) :=
@@ -73,6 +87,26 @@ def refused : List (String × String) :=
     ("a text string", "6161"),
     ("a map", "a0"),
     ("a date tag", "c100"),
+    ("tag 39 over an empty array", "d82780"),
+    ("tag 39 over an array of a number", "d8278103"),
+    ("tag 39 over a text", "d8276161"),
+    ("tag 39 over a byte string", "d8274103"),
+    ("tag 39 over a number in a longer form", "d8271803"),
+    ("tag 39 over a number in two bytes that fits one", "d8271900ff"),
+    ("tag 39 over tag 39", "d827d82703"),
+    ("tag 39 in a three-byte head", "d9002703"),
+    ("tag 39 in a five-byte head", "da0000002703"),
+    ("tag 39 over tag 2 of a number below 2^64", "d827c248ffffffffffffffff"),
+    ("tag 39 over a bignum with a leading zero", "d827c24a00010000000000000000"),
+    ("tag 39 over a bignum cut short", "d827c2490100"),
+    ("tag 39 over tag 2 over a number", "d827c203"),
+    ("tag 39 over a negative number", "d82720"),
+    ("tag 39 over false", "d827f4"),
+    ("tag 39 with nothing after it", "d827"),
+    ("tag 39 over a number, then more bytes", "d8270300"),
+    ("tag 40 over a number", "d82803"),
+    ("tag 38 over a number", "d82603"),
+    ("tag 2 in a two-byte head", "d80249010000000000000000"),
     ("false", "f4"),
     ("null", "f6"),
     ("a float", "f93c00") ]
@@ -121,6 +155,8 @@ def programs : List (String × Term) :=
     ("a function is the result", .app (.lam (.lam (.cons (.var 1) emptyArr))) (n 7)),
     ("a large number", .prim (n 2) (.cons (n 18446744073709551616) (.cons (n 18446744073709551616) emptyArr))),
     ("asks twice", askTwice),
+    ("a name in the program and in the result", .cons (.lit (.name 3)) (.cons (.succ (.lit (.name 3))) emptyArr)),
+    ("a function that captured a name", .app (.lam (.lam (.cons (.var 1) emptyArr))) (.lit (.name 18446744073709551616))),
     ("interpreter twice", level 2 (.succ (.succ (n 5)))) ]
 
 def budget : Nat := 4000000
@@ -179,11 +215,25 @@ def keptRun : String :=
     && (valueBytes (.closure (.literal (.nat 0) .done) [])).isSome)
   "a function whose code is not a compiled program has no byte form")
 
+-- The name piece: a name is written as the name, and read back as it.
+#eval do
+  let b := pieceBytes (.cons (.name 3) (.cons (.nat 3) .nil) : P Ref)
+  let leaf := (pieceBytes (.name 3 : P Ref)).map hex
+  let back := match b with
+    | some b => (match readPiece b with
+        | .ok (.cons (.name 3) (.cons (.nat 3) .nil)) => hex b == "8300d82703830003" ++ "80"
+        | .ok _ => false
+        | .error _ => false)
+    | none => false
+  IO.println (line (leaf == some "d82703" && back) s!"the name piece is {leaf.getD "none"}, and a pair that holds it reads back")
+
 /-- Data that is no program's form is refused, not guessed at. -/
 def notPrograms : List (String × Data) :=
   [ ("an empty array", .arr []), ("an unknown tag", .arr [.nat 7, .nat 0]),
     ("an application with one part", .arr [.nat 0, .nat 0]),
-    ("a tag that is an array", .arr [.arr [], .nat 0]) ]
+    ("a tag that is an array", .arr [.arr [], .nat 0]),
+    ("a name", .name 0), ("a name where a variable's index goes", .arr [.name 0, .nat 0]),
+    ("a name as a tag", .arr [.name 2, .nat 0]) ]
 
 #eval do
   for (what, d) in notPrograms do

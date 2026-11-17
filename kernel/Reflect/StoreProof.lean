@@ -10,6 +10,7 @@ variable {R : Type}
 mutual
   theorem toData_toP : ∀ d : Data, (d.toP : P R).toData = some d
     | .nat n => by simp [Data.toP, P.toData]
+    | .name n => by simp [Data.toP, P.toData]
     | .arr xs => by simp [Data.toP, toData_listToP xs]
   theorem toData_listToP : ∀ xs : List Data, (Data.listToP xs : P R).toData = some (.arr xs)
     | [] => by simp [Data.listToP, P.toData]
@@ -24,6 +25,7 @@ theorem Data.toP_inj {d d' : Data} (h : (d.toP : P R) = d'.toP) : d = d' := by
 mutual
   theorem unf_data (σ : Store R) : ∀ d : Data, Unf σ d.toP d.toP
     | .nat n => by simpa [Data.toP] using Unf.nat
+    | .name n => by simpa [Data.toP] using Unf.name
     | .arr xs => by simpa [Data.toP] using unf_list σ xs
   theorem unf_list (σ : Store R) : ∀ xs : List Data, Unf σ (Data.listToP xs) (Data.listToP xs)
     | [] => by simpa [Data.listToP] using Unf.nil
@@ -42,11 +44,13 @@ end
 theorem Data.toP_ne_closure {d : Data} {c e} : (d.toP : P R) ≠ .closure c e := by
   cases d with
   | nat n => simp [Data.toP]
+  | name n => simp [Data.toP]
   | arr xs => cases xs <;> simp [Data.toP, Data.listToP]
 
 theorem Data.toP_ne_ref {d : Data} {r} : (d.toP : P R) ≠ .ref r := by
   cases d with
   | nat n => simp [Data.toP]
+  | name n => simp [Data.toP]
   | arr xs => cases xs <;> simp [Data.toP, Data.listToP]
 
 theorem toP_ne_ref {v : MValue} {r} : (v.toP : P R) ≠ .ref r := by
@@ -66,6 +70,16 @@ theorem toP_nat {v : MValue} {n} (h : (v.toP : P R) = .nat n) : v = .data (.nat 
   | data d =>
     cases d with
     | nat m => simp [MValue.toP, Data.toP] at h; simp [h]
+    | name m => simp [MValue.toP, Data.toP] at h
+    | arr xs => cases xs <;> simp [MValue.toP, Data.toP, Data.listToP] at h
+
+theorem toP_name {v : MValue} {n} (h : (v.toP : P R) = .name n) : v = .data (.name n) := by
+  cases v with
+  | closure c' env => simp [MValue.toP] at h
+  | data d =>
+    cases d with
+    | nat m => simp [MValue.toP, Data.toP] at h
+    | name m => simp [MValue.toP, Data.toP] at h; simp [h]
     | arr xs => cases xs <;> simp [MValue.toP, Data.toP, Data.listToP] at h
 
 theorem toP_nil {v : MValue} (h : (v.toP : P R) = .nil) : v = .data (.arr []) := by
@@ -74,6 +88,7 @@ theorem toP_nil {v : MValue} (h : (v.toP : P R) = .nil) : v = .data (.arr []) :=
   | data d =>
     cases d with
     | nat m => simp [MValue.toP, Data.toP] at h
+    | name m => simp [MValue.toP, Data.toP] at h
     | arr xs => cases xs <;> simp [MValue.toP, Data.toP, Data.listToP] at h; rfl
 
 theorem toP_cons {v : MValue} {a b : P R} (h : v.toP = .cons a b) :
@@ -84,6 +99,7 @@ theorem toP_cons {v : MValue} {a b : P R} (h : v.toP = .cons a b) :
   | data d =>
     cases d with
     | nat m => simp [MValue.toP, Data.toP] at h
+    | name m => simp [MValue.toP, Data.toP] at h
     | arr xs =>
       cases xs with
       | nil => simp [MValue.toP, Data.toP, Data.listToP] at h
@@ -105,6 +121,7 @@ theorem envToP_cons {env : List MValue} {a b : P R} (h : envToP env = .cons a b)
 theorem Unf.mono {σ τ : Store R} (hle : σ.le τ) {p q} (h : Unf σ p q) : Unf τ p q := by
   induction h with
   | nat => exact .nat
+  | name => exact .name
   | nil => exact .nil
   | cons _ _ ih1 ih2 => exact .cons ih1 ih2
   | closure _ ih => exact .closure ih
@@ -114,6 +131,7 @@ theorem Unf.mono {σ τ : Store R} (hle : σ.le τ) {p q} (h : Unf σ p q) : Unf
 theorem Unf.unique {σ : Store R} {p q q'} (h : Unf σ p q) (h' : Unf σ p q') : q = q' := by
   induction h generalizing q' with
   | nat => cases h'; rfl
+  | name => cases h'; rfl
   | nil => cases h'; rfl
   | cons _ _ ih1 ih2 => cases h' with | cons a b => rw [ih1 a, ih2 b]
   | closure _ ih => cases h' with | closure a => rw [ih a]
@@ -124,6 +142,7 @@ theorem Unf.unique {σ : Store R} {p q q'} (h : Unf σ p q) (h' : Unf σ p q') :
 theorem UnfD.up {σ : Store R} {d p q} (h : UnfD σ d p q) : ∀ d', d ≤ d' → UnfD σ d' p q := by
   induction h with
   | nat => intro _ _; exact .nat
+  | name => intro _ _; exact .name
   | nil => intro _ _; exact .nil
   | cons _ _ ih1 ih2 => intro d' hd; exact .cons (ih1 d' hd) (ih2 d' hd)
   | closure _ ih => intro d' hd; exact .closure (ih d' hd)
@@ -136,6 +155,7 @@ theorem UnfD.up {σ : Store R} {d p q} (h : UnfD σ d p q) : ∀ d', d ≤ d' �
 theorem Unf.depth {σ : Store R} {p q} (h : Unf σ p q) : ∃ d, UnfD σ d p q := by
   induction h with
   | nat => exact ⟨0, .nat⟩
+  | name => exact ⟨0, .name⟩
   | nil => exact ⟨0, .nil⟩
   | cons _ _ ih1 ih2 =>
     obtain ⟨a, ha⟩ := ih1
@@ -147,6 +167,7 @@ theorem Unf.depth {σ : Store R} {p q} (h : Unf σ p q) : ∃ d, UnfD σ d p q :
 theorem UnfD.unf {σ : Store R} {d p q} (h : UnfD σ d p q) : Unf σ p q := by
   induction h with
   | nat => exact .nat
+  | name => exact .name
   | nil => exact .nil
   | cons _ _ ih1 ih2 => exact .cons ih1 ih2
   | closure _ ih => exact .closure ih
@@ -155,6 +176,7 @@ theorem UnfD.unf {σ : Store R} {d p q} (h : UnfD σ d p q) : Unf σ p q := by
 theorem UnfD.zero {σ : Store R} {d p q} (h : UnfD σ d p q) : d = 0 → p = q := by
   induction h with
   | nat => intro _; rfl
+  | name => intro _; rfl
   | nil => intro _; rfl
   | cons _ _ ih1 ih2 => intro hd; rw [ih1 hd, ih2 hd]
   | closure _ ih => intro hd; rw [ih hd]
@@ -163,6 +185,7 @@ theorem UnfD.zero {σ : Store R} {d p q} (h : UnfD σ d p q) : d = 0 → p = q :
 theorem UnfD.hyd {σ : Store R} : ∀ (p : P R) {d q}, UnfD σ (d + 1) p q →
     ∃ p', p.hyd σ = .ok p' ∧ UnfD σ d p' q
   | .nat n, _, _, h => by cases h; exact ⟨_, rfl, .nat⟩
+  | .name n, _, _, h => by cases h; exact ⟨_, rfl, .name⟩
   | .nil, _, _, h => by cases h; exact ⟨_, rfl, .nil⟩
   | .cons a b, _, _, h => by
     cases h with
@@ -197,6 +220,7 @@ theorem fetch_needs {σ : Store R} {r f r'} (h : fetch σ r f = .needs r') : σ 
 theorem hyd_mono {σ τ : Store R} (hle : σ.le τ) : ∀ (p : P R) {p'}, p.hyd σ = .ok p' →
     p.hyd τ = .ok p'
   | .nat n, _, h => by simpa [P.hyd] using h
+  | .name n, _, h => by simpa [P.hyd] using h
   | .nil, _, h => by simpa [P.hyd] using h
   | .cons a b, _, h => by
     simp only [P.hyd] at h ⊢
@@ -219,6 +243,7 @@ theorem hyd_mono {σ τ : Store R} (hle : σ.le τ) : ∀ (p : P R) {p'}, p.hyd 
 
 theorem hyd_needs {σ : Store R} : ∀ (p : P R) {r}, p.hyd σ = .error r → σ r = none
   | .nat n, _, h => by simp [P.hyd] at h
+  | .name n, _, h => by simp [P.hyd] at h
   | .nil, _, h => by simp [P.hyd] at h
   | .cons a b, _, h => by
     simp only [P.hyd] at h
@@ -253,6 +278,17 @@ theorem lPrim_nat (σ : Store R) (k : Code) (env : P R) (x : P R) (n : Nat) (stk
           | .error r => .needs r := by
   cases x <;> first | rfl | exact absurd rfl (hx _ _)
 
+theorem lPrim_name (σ : Store R) (k : Code) (env : P R) (x : P R) (n : Nat) (stk : List (P R))
+    (frs : List (PFrame R)) (hx : ∀ b cap, x ≠ .closure b cap) :
+    lPrim σ k env (x :: .name n :: stk) frs =
+      match x.toData with
+      | some d => .next (.running k env ((Ops.op n d).toP :: stk) frs)
+      | none =>
+          match x.hyd σ with
+          | .ok x' => .next (.running (.prim k) env (x' :: .name n :: stk) frs)
+          | .error r => .needs r := by
+  cases x <;> first | rfl | exact absurd rfl (hx _ _)
+
 theorem lPrim_mono {σ τ : Store R} (hle : σ.le τ) {k env stk frs} {ps' : PState R}
     (h : lPrim σ k env stk frs = .next ps') : lPrim τ k env stk frs = .next ps' := by
   rcases stk with _ | ⟨x, _ | ⟨y, stk⟩⟩
@@ -263,6 +299,17 @@ theorem lPrim_mono {σ τ : Store R} (hle : σ.le τ) {k env stk frs} {ps' : PSt
     | nat n =>
       by_cases hx : ∀ b cap, x ≠ .closure b cap
       · rw [lPrim_nat _ _ _ _ _ _ _ hx] at h ⊢
+        cases hd : x.toData with
+        | some d => simpa [hd] using h
+        | none =>
+          simp only [hd] at h ⊢
+          cases hh : x.hyd σ with
+          | ok x' => simp only [hh] at h; simp only [hyd_mono hle x hh]; exact h
+          | error r => simp [hh] at h
+      · cases x <;> first | exact h | exact absurd (by intro b cap hc; cases hc) hx
+    | name n =>
+      by_cases hx : ∀ b cap, x ≠ .closure b cap
+      · rw [lPrim_name _ _ _ _ _ _ _ hx] at h ⊢
         cases hd : x.toData with
         | some d => simpa [hd] using h
         | none =>
@@ -308,6 +355,7 @@ theorem lstep_mono {σ τ : Store R} (hle : σ.le τ) {ps ps' : PState R}
       · exact h
       · cases x with
         | nat m => cases m <;> exact h
+        | name m => cases m <;> exact h
         | ref r => exact fetch_mono hle h
         | _ => exact h
     | apply k =>
@@ -335,6 +383,17 @@ theorem lPrim_needs {σ : Store R} {k env stk frs} {r : R}
     | nat n =>
       by_cases hx : ∀ b cap, x ≠ .closure b cap
       · rw [lPrim_nat _ _ _ _ _ _ _ hx] at h
+        cases hd : x.toData with
+        | some d => simp [hd] at h
+        | none =>
+          simp only [hd] at h
+          cases hh : x.hyd σ with
+          | ok x' => simp [hh] at h
+          | error r' => simp [hh] at h; rw [← h]; exact hyd_needs x hh
+      · cases x <;> first | exact next_needs h | exact absurd (by intro b cap hc; cases hc) hx
+    | name n =>
+      by_cases hx : ∀ b cap, x ≠ .closure b cap
+      · rw [lPrim_name _ _ _ _ _ _ _ hx] at h
         cases hd : x.toData with
         | some d => simp [hd] at h
         | none =>
@@ -381,6 +440,7 @@ theorem lstep_needs {σ : Store R} {ps : PState R} {r : R}
       · exact next_needs h
       · cases x with
         | nat m => cases m <;> exact next_needs h
+        | name m => cases m <;> exact next_needs h
         | ref r => exact fetch_needs h
         | _ => exact next_needs h
     | apply k =>
@@ -415,6 +475,11 @@ theorem rv_nat {n v} (h : RValue σ (.nat n) v) : v = .data (.nat n) := by
   generalize hq : v.toP = q at h
   cases h; exact toP_nat hq
 
+theorem rv_name {n v} (h : RValue σ (.name n) v) : v = .data (.name n) := by
+  unfold RValue at h
+  generalize hq : v.toP = q at h
+  cases h; exact toP_name hq
+
 theorem rv_nil {v} (h : RValue σ .nil v) : v = .data (.arr []) := by
   unfold RValue at h
   generalize hq : v.toP = q at h
@@ -448,6 +513,11 @@ theorem re_nat {n env} (h : REnv σ (.nat n) env) : False := by
   generalize hq : envToP env = q at h
   cases h; cases env <;> simp [envToP] at hq
 
+theorem re_name {n env} (h : REnv σ (.name n) env) : False := by
+  unfold REnv at h
+  generalize hq : envToP env = q at h
+  cases h; cases env <;> simp [envToP] at hq
+
 theorem re_closure {c e env} (h : REnv σ (.closure c e) env) : False := by
   unfold REnv at h
   generalize hq : envToP env = q at h
@@ -455,6 +525,9 @@ theorem re_closure {c e env} (h : REnv σ (.closure c e) env) : False := by
 
 theorem rv_nat_mk {n} : RValue σ (.nat n) (.data (.nat n)) := by
   simpa [RValue, MValue.toP, Data.toP] using (Unf.nat : Unf σ (.nat n) (.nat n))
+
+theorem rv_name_mk {n} : RValue σ (.name n) (.data (.name n)) := by
+  simpa [RValue, MValue.toP, Data.toP] using (Unf.name : Unf σ (.name n) (.name n))
 
 theorem rv_nil_mk : RValue σ .nil (.data (.arr [])) := by
   simpa [RValue, MValue.toP, Data.toP, Data.listToP] using (Unf.nil : Unf σ .nil .nil)
@@ -478,6 +551,7 @@ theorem rv_data_mk (d : Data) : RValue σ d.toP (.data d) := by
 
 theorem toData_unf : ∀ (x : P R) {d q}, x.toData = some d → Unf σ x q → q = d.toP
   | .nat n, _, _, h, hu => by cases hu; simp [P.toData] at h; simp [← h, Data.toP]
+  | .name n, _, _, h, hu => by cases hu; simp [P.toData] at h; simp [← h, Data.toP]
   | .nil, _, _, h, hu => by cases hu; simp [P.toData] at h; simp [← h, Data.toP, Data.listToP]
   | .cons a b, _, _, h, hu => by
     cases hu with
@@ -491,6 +565,7 @@ theorem toData_unf : ∀ (x : P R) {d q}, x.toData = some d → Unf σ x q → q
         | some y =>
           cases y with
           | nat m => simp [h1, h2] at h
+          | name m => simp [h1, h2] at h
           | arr xs =>
             simp [h1, h2] at h
             have e1 := toData_unf a h1 ha
@@ -538,6 +613,7 @@ theorem force {F : P R → PState R} {t : State}
     (∀ p', (∀ r, p' ≠ .ref r) → Unf σ p' q → Reaches σ (F p') t) → Reaches σ (F p) t := by
   induction h with
   | nat => intro hh; exact hh _ (by intro r h; cases h) .nat
+  | name => intro hh; exact hh _ (by intro r h; cases h) .name
   | nil => intro hh; exact hh _ (by intro r h; cases h) .nil
   | cons a b _ _ => intro hh; exact hh _ (by intro r h; cases h) (.cons a b)
   | closure a _ => intro hh; exact hh _ (by intro r h; cases h) (.closure a)
@@ -566,6 +642,7 @@ theorem seek {j k} {e : P R} {menv stk mstk frs mfrs} (he : REnv σ e menv)
     cases p' with
     | ref r => exact absurd rfl (hp r)
     | nat n => exact (re_nat hu).elim
+    | name n => exact (re_name hu).elim
     | closure c e' => exact (re_closure hu).elim
     | nil =>
       have := re_nil hu; subst this
@@ -582,6 +659,7 @@ theorem seek {j k} {e : P R} {menv stk mstk frs mfrs} (he : REnv σ e menv)
     cases p' with
     | ref r => exact absurd rfl (hp r)
     | nat n => exact (re_nat hu).elim
+    | name n => exact (re_name hu).elim
     | closure c e' => exact (re_closure hu).elim
     | nil =>
       have := re_nil hu; subst this
@@ -637,20 +715,66 @@ theorem prim_top {k n} {e : P R} {menv stk mstk frs mfrs} (he : REnv σ e menv)
         exact .real rfl (.halted .wrong)
       | _ => exact absurd (by intro b cap h; cases h) hc
 
+theorem prim_top_name {k n} {e : P R} {menv stk mstk frs mfrs} (he : REnv σ e menv)
+    (hs : All2 (RValue σ) stk mstk) (hf : RFrames σ frs mfrs) {vx : MValue} :
+    ∀ d x, UnfD σ d x vx.toP →
+      Reaches σ (.running (.prim k) e (x :: .name n :: stk) frs)
+        (step (.running (.prim k) menv (vx :: .data (.name n) :: mstk) mfrs)) := by
+  intro d
+  induction d with
+  | zero =>
+    intro x hx
+    by_cases hc : ∀ b cap, x ≠ .closure b cap
+    · have hl := lPrim_name σ k e x n stk frs hc
+      cases hd : x.toData with
+      | some d0 =>
+        have := toP_data (toData_unf x hd hx.unf); subst this
+        exact .real (by show lPrim σ k e _ frs = _; rw [hl, hd])
+          (.running he (.cons (rv_data_mk _) hs) hf)
+      | none =>
+        have hxe := hx.zero rfl
+        subst hxe
+        cases vx with
+        | closure b cenv => exact absurd rfl (hc b (envToP cenv))
+        | data d0 => simp [MValue.toP, toData_toP] at hd
+    · cases x with
+      | closure b cap =>
+        obtain ⟨cenv, rfl, _⟩ := rv_closure hx.unf
+        exact .real rfl (.halted .wrong)
+      | _ => exact absurd (by intro b cap h; cases h) hc
+  | succ d ih =>
+    intro x hx
+    by_cases hc : ∀ b cap, x ≠ .closure b cap
+    · have hl := lPrim_name σ k e x n stk frs hc
+      cases hd : x.toData with
+      | some d0 =>
+        have := toP_data (toData_unf x hd hx.unf); subst this
+        exact .real (by show lPrim σ k e _ frs = _; rw [hl, hd])
+          (.running he (.cons (rv_data_mk _) hs) hf)
+      | none =>
+        obtain ⟨x', hh, hx'⟩ := UnfD.hyd x hx
+        exact .later (by show lPrim σ k e _ frs = _; rw [hl, hd]; simp only [hh]) (ih x' hx')
+    · cases x with
+      | closure b cap =>
+        obtain ⟨cenv, rfl, _⟩ := rv_closure hx.unf
+        exact .real rfl (.halted .wrong)
+      | _ => exact absurd (by intro b cap h; cases h) hc
+
 /-- The second entry of a `cons` is known to be data; the top is forced. -/
 theorem cons_top {k} {e : P R} {menv stk mstk frs mfrs} (he : REnv σ e menv)
     (hs : All2 (RValue σ) stk mstk) (hf : RFrames σ frs mfrs) {y : P R} {dy : Data}
     (hy : RValue σ y (.data dy))
-    (hshape : (∃ n, y = .nat n) ∨ y = .nil ∨ ∃ a b, y = .cons a b)
+    (hshape : (∃ n, y = .nat n) ∨ y = .nil ∨ (∃ a b, y = .cons a b) ∨ ∃ n, y = .name n)
     {x : P R} {vx : MValue} (hx : RValue σ x vx) :
     Reaches σ (.running (.cons k) e (x :: y :: stk) frs)
       (step (.running (.cons k) menv (vx :: .data dy :: mstk) mfrs)) := by
-  rcases hshape with ⟨n, rfl⟩ | rfl | ⟨a, b, rfl⟩ <;>
+  rcases hshape with ⟨n, rfl⟩ | rfl | ⟨a, b, rfl⟩ | ⟨n, rfl⟩ <;>
   · refine force (F := fun p => .running (.cons k) e (p :: _ :: stk) frs) (fun r => rfl) hx ?_
     intro p' hp hu
     cases p' with
     | ref r => exact absurd rfl (hp r)
     | nat m => have := rv_nat hu; subst this; exact .real rfl (.halted .wrong)
+    | name m => have := rv_name hu; subst this; exact .real rfl (.halted .wrong)
     | closure c e' =>
       obtain ⟨cenv, rfl, _⟩ := rv_closure hu
       exact .real rfl (.halted .wrong)
@@ -703,6 +827,7 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
         cases p' with
         | ref r => exact absurd rfl (hp r)
         | nat m => have := rv_nat hu; subst this; exact .real rfl (.halted .wrong)
+        | name m => have := rv_name hu; subst this; exact .real rfl (.halted .wrong)
         | nil => have := rv_nil hu; subst this; exact .real rfl (.halted .wrong)
         | cons a b => obtain ⟨z, zs, rfl, _, _⟩ := rv_cons hu; exact .real rfl (.halted .wrong)
         | closure c e' =>
@@ -717,6 +842,7 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
         cases p' with
         | ref r => exact absurd rfl (hp r)
         | nat m => have := rv_nat hu; subst this; exact .real rfl (.running he (.cons hu ht) hf)
+        | name m => have := rv_name hu; subst this; exact .real rfl (.running he (.cons hu ht) hf)
         | nil => have := rv_nil hu; subst this; exact .real rfl (.running he (.cons hu ht) hf)
         | cons a b =>
           obtain ⟨z, zs, rfl, _, _⟩ := rv_cons hu
@@ -735,6 +861,9 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
         | nat m =>
           have := rv_nat hu; subst this
           exact .real rfl (.running he (.cons rv_nat_mk ht) hf)
+        | name m =>
+          have := rv_name hu; subst this
+          exact .real rfl (.running he (.cons rv_nat_mk ht) hf)
         | nil => have := rv_nil hu; subst this; exact .real rfl (.halted .wrong)
         | cons a b => obtain ⟨z, zs, rfl, _, _⟩ := rv_cons hu; exact .real rfl (.halted .wrong)
         | closure c e' =>
@@ -750,6 +879,9 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
         | ref r => exact absurd rfl (hp r)
         | nat m =>
           have := rv_nat hu; subst this
+          exact .real rfl (.running he (.cons hu ht) hf)
+        | name m =>
+          have := rv_name hu; subst this
           exact .real rfl (.running he (.cons hu ht) hf)
         | nil => have := rv_nil hu; subst this; exact .real rfl (.halted .wrong)
         | cons a b => obtain ⟨z, zs, rfl, _, _⟩ := rv_cons hu; exact .real rfl (.halted .wrong)
@@ -767,6 +899,12 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
         | ref r => exact absurd rfl (hp r)
         | nat m =>
           have := rv_nat hu; subst this
+          cases m with
+          | zero => exact .real rfl (.running he ht (.cons ⟨rfl, he⟩ hf))
+          | succ m =>
+            exact .real rfl (.running (re_cons_mk rv_nat_mk he) ht (.cons ⟨rfl, he⟩ hf))
+        | name m =>
+          have := rv_name hu; subst this
           cases m with
           | zero => exact .real rfl (.running he ht (.cons ⟨rfl, he⟩ hf))
           | succ m =>
@@ -793,6 +931,7 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
           cases p' with
           | ref r => exact absurd rfl (hp r)
           | nat m => have := rv_nat hu; subst this; exact .real rfl .fault
+          | name m => have := rv_name hu; subst this; exact .real rfl .fault
           | nil => have := rv_nil hu; subst this; exact .real rfl .fault
           | cons a' b' => obtain ⟨z, zs, rfl, _, _⟩ := rv_cons hu; exact .real rfl .fault
           | closure c e' =>
@@ -818,7 +957,10 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
             exact cons_top he ht hf hu (.inr (.inl rfl)) hx
           | cons a' b' =>
             obtain ⟨z, zs, rfl, _, _⟩ := rv_cons hu
-            exact cons_top he ht hf hu (.inr (.inr ⟨a', b', rfl⟩)) hx
+            exact cons_top he ht hf hu (.inr (.inr (.inl ⟨a', b', rfl⟩))) hx
+          | name m =>
+            have := rv_name hu; subst this
+            exact cons_top he ht hf hu (.inr (.inr (.inr ⟨m, rfl⟩))) hx
           | closure c e' =>
             obtain ⟨cenv, rfl, _⟩ := rv_closure hu
             exact .real (by cases x <;> rfl) (by cases vx with | closure _ _ => exact .fault | data d => cases d <;> exact .fault)
@@ -838,6 +980,10 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
             have := rv_nat hu; subst this
             obtain ⟨d, hd⟩ := Unf.depth hx
             exact prim_top he ht hf d x hd
+          | name m =>
+            have := rv_name hu; subst this
+            obtain ⟨d, hd⟩ := Unf.depth hx
+            exact prim_top_name he ht hf d x hd
           | nil =>
             have := rv_nil hu; subst this
             exact .real (by cases x <;> rfl) (by cases vx <;> exact .fault)

@@ -81,10 +81,14 @@ macro "walk" : tactic => `(tactic| repeat' (first
   | exact Direct.varBound rfl
   | apply Direct.caseZero (Direct.varBound rfl)
   | apply Direct.caseSucc (Direct.varBound rfl)
+  | apply Direct.caseNameZero (Direct.varBound rfl)
+  | apply Direct.caseNameSucc (Direct.varBound rfl)
   | apply Direct.caseNil (Direct.varBound rfl)
   | apply Direct.caseCons (Direct.varBound rfl)
   | apply Direct.consArr
+  | apply Direct.succName (Direct.varBound rfl)
   | apply Direct.succNat
+  | refine Direct.primNameData (Direct.varBound rfl) ?_
   | apply Direct.primData
   | apply self_apply (Direct.varBound rfl)
   | apply Direct.appValue Direct.lam))
@@ -237,6 +241,33 @@ theorem fwd (γ : Env) {env : Env} {p : Term} {o : Outcome} (h : Direct env p o)
     unfold core
     simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
     cases k <;> walk
+  | @succName env t k h ih =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases k <;> walk
+  | @consTailName env a x b k ha hb iha ihb =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases k <;> walk
+  | @primNameArgError env c k x e hc hx he ihc ihx =>
+    cases e with
+    | value v => exact he.elim
+    | unbound j =>
+      unfold core
+      simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+      cases k <;> walk
+    | wrong =>
+      unfold core
+      simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+      cases k <;> walk
+  | @primNameArgClosure env c k x b cap hc hx ihc ihx =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases k <;> walk
+  | @primNameData env c k x d hc hx ihc ihx =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases k <;> walk
   | @primCodeError env c e x hc he ih =>
     cases e with
     | value v => exact he.elim
@@ -311,6 +342,27 @@ theorem stuck_case_succ {ρ : Env} {s z sc ni c : Term} {n k : Nat}
     rcases known n hs with h' | h' <;> rw [h']
     simpa using h
 
+theorem stuck_case_name_zero {ρ : Env} {s z sc ni c : Term} {n : Nat}
+    (hs : Direct ρ s (.value (.data (.name 0)))) (h : evalFuel (n - 1) ρ z = none) :
+    evalFuel n ρ (.dcase s z sc ni c) = none := by
+  cases n with
+  | zero => rfl
+  | succ n =>
+    simp only [evalFuel]
+    rcases known n hs with h' | h' <;> rw [h']
+    simpa using h
+
+theorem stuck_case_name_succ {ρ : Env} {s z sc ni c : Term} {n k : Nat}
+    (hs : Direct ρ s (.value (.data (.name (k + 1)))))
+    (h : evalFuel (n - 1) (.data (.nat k) :: ρ) sc = none) :
+    evalFuel n ρ (.dcase s z sc ni c) = none := by
+  cases n with
+  | zero => rfl
+  | succ n =>
+    simp only [evalFuel]
+    rcases known n hs with h' | h' <;> rw [h']
+    simpa using h
+
 theorem stuck_case_nil {ρ : Env} {s z sc ni c : Term} {n : Nat}
     (hs : Direct ρ s (.value (.data (.arr [])))) (h : evalFuel (n - 1) ρ ni = none) :
     evalFuel n ρ (.dcase s z sc ni c) = none := by
@@ -358,6 +410,8 @@ theorem stuck_app_body {ρ cap : Env} {f a b : Term} {v : Value} {n : Nat}
 macro "sdesc" : tactic => `(tactic| repeat (first
   | apply stuck_case_zero (Direct.varBound rfl)
   | apply stuck_case_succ (Direct.varBound rfl)
+  | apply stuck_case_name_zero (Direct.varBound rfl)
+  | apply stuck_case_name_succ (Direct.varBound rfl)
   | apply stuck_case_nil (Direct.varBound rfl)
   | apply stuck_case_cons (Direct.varBound rfl)))
 
@@ -478,6 +532,12 @@ theorem stuck_core (γ : Env) : ∀ (n : Nat) (env : Env) (p : Term),
               cases hx : evalFuel m env x with
               | none => cases k <;> (sdesc; scall_val Fc; sdesc; scall_stuck (ih _ _ hx))
               | some ox => rw [hx] at h; impossible h
+            | name k =>
+              simp only [] at h
+              simp only [reifyOutcome, reifyValue] at Fc
+              cases hx : evalFuel m env x with
+              | none => cases k <;> (sdesc; scall_val Fc; sdesc; scall_stuck (ih _ _ hx))
+              | some ox => rw [hx] at h; impossible h
     | dcase s z sc ni c =>
       simp only [evalFuel] at h
       unfold core
@@ -497,6 +557,17 @@ theorem stuck_core (γ : Env) : ∀ (n : Nat) (env : Env) (p : Term),
             simp only [reifyOutcome, reifyValue] at Fs
             cases d with
             | nat k =>
+              cases k with
+              | zero =>
+                simp only [] at h
+                have hb := ih _ _ h
+                sdesc; scall_val Fs; sdesc; stail hb
+              | succ k =>
+                simp only [] at h
+                have hb := ih _ _ h
+                simp only [reifyEnv, reifyValue] at hb
+                sdesc; scall_val Fs; sdesc; stail hb
+            | name k =>
               cases k with
               | zero =>
                 simp only [] at h

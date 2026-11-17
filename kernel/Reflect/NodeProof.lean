@@ -323,7 +323,7 @@ theorem step_plan {S : PSys C R} {cfg cfg' : Config C R} {ev : Event}
       Job.AllRun S jobs sts ∧ done sts = some cfg' := by
   cases h with
   | @fresh i n c p held st hi hq hn ht =>
-    have hp : ∃ done, plan cfg (.fresh i n) = some ([.turn c (.nat n)], done) ∧
+    have hp : ∃ done, plan cfg (.fresh i n) = some ([.turn c (.name n)], done) ∧
         done [st] = some ⟨cfg.procs.set i ⟨st, n :: held⟩, n :: cfg.names⟩ := by
       simp [plan, hi, hq, hn]
     obtain ⟨done, hp, hd⟩ := hp
@@ -339,7 +339,7 @@ theorem step_plan {S : PSys C R} {cfg cfg' : Config C R} {ev : Event}
   | @comm i j c p held c' p' held' ch v st st' hi hj hq hq' hh hh' ht ht' =>
     have hp : ∃ done, plan cfg (.comm i j) = some ([.turn c (.arr []), .turn c' v], done) ∧
         done [st, st'] = some ⟨(cfg.procs.set i ⟨st, held⟩).set j
-          ⟨st', grant held v ++ held'⟩, cfg.names⟩ := by
+          ⟨st', gain held' (grant held v)⟩, cfg.names⟩ := by
       simp [plan, hi, hj, hq, hq', hh, hh']
     obtain ⟨done, hp, hd⟩ := hp
     exact ⟨_, done, [st, st'], hp, ⟨ht, ht', trivial⟩, hd⟩
