@@ -59,7 +59,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store \
+for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece \
               Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Host; do
     name="$(echo "$module" | tr / -)"
@@ -168,7 +168,7 @@ printf '\030\027' > "$OUT/long-form.bytes"
 expect "bytes error: a number or length is not in its shortest form" --bytes "$OUT/long-form.bytes"
 printf '\200' > "$OUT/empty-array.bytes"
 expect "bytes error: the value is not a program" --bytes "$OUT/empty-array.bytes"
-expect "bytes error: a kind of value that is not a number or an array" --bytes "$EXAMPLES/append.hom"
+expect "bytes error: a kind of value that is not a number, an array, a text or a name" --bytes "$EXAMPLES/append.hom"
 refuse "$USAGE" --bytes
 refuse "run: cannot read the program file: FileNotFound" --bytes "$EXAMPLES/missing.hom"
 
@@ -211,29 +211,77 @@ quine="$("$OUT/run" "$EXAMPLES/quine.hom")"
 printf 'interpret %s\n' "$quine" > "$OUT/quine-again.hom"
 expect "[0, [1, $quine]]" "$OUT/quine-again.hom"
 sameThroughInterp "$EXAMPLES/quine.hom" 2
-# Strings: a string literal is the array of its code points and a character
-# literal is its number. `--text` writes a result that is such an array as the
-# text it spells, and any other result as it is written without the flag.
+# Strings: a string literal is a text and a character literal is a number. A
+# text prints in quotes with the reader's escapes, and what is printed reads
+# back as the same text. `--text` writes a result that is a text raw, with no
+# quotes and no escapes, and any other result as it is written without the
+# flag: an array of code points is not a text.
 printf '"h\\\\i\\n"\n' > "$OUT/string.hom"
-expect "[104, 92, 105, 10]" "$OUT/string.hom"
+expect '"h\\i\n"' "$OUT/string.hom"
+expect "$(printf 'h\\i\n')" --text "$OUT/string.hom"
+"$OUT/run" "$OUT/string.hom" > "$OUT/string-again.hom"
+expect '"h\\i\n"' "$OUT/string-again.hom"
+printf 'equal "h\\\\i\\n" [104, 92, 105, 10]\n' > "$OUT/string-equal.hom"
+expect "0" "$OUT/string-equal.hom"
+printf 'def count t =\n  case t\n    [] -> 0\n    [c, ...rest] ->\n      case equal c '"'i'"'\n        0 -> count rest\n        _ -> add 1 (count rest)\n\ncount "h\\\\i\\n"\n' > "$OUT/string-count.hom"
+expect "1" "$OUT/string-count.hom"
 printf "['a', '\\\\n', '\\\\'']\n" > "$OUT/chars.hom"
 expect "[97, 10, 39]" "$OUT/chars.hom"
 printf '"h\303\251 \342\206\222"\n' > "$OUT/utf8.hom"
-expect "[104, 233, 32, 8594]" "$OUT/utf8.hom"
+expect "$(printf '"h\303\251 \342\206\222"')" "$OUT/utf8.hom"
 expect "$(printf 'h\303\251 \342\206\222')" --text "$OUT/utf8.hom"
+expect "$(printf 'h\303\251 \342\206\222')" --text --interp "$OUT/utf8.hom"
+"$OUT/bytes" "$OUT/utf8.hom" > "$OUT/utf8.bytes"
+expect "$(printf 'h\303\251 \342\206\222')" --text --bytes "$OUT/utf8.bytes"
+# The byte form of a string literal: `[2, text]`, the text as a CBOR text
+# string of its UTF-8, here 7 bytes.
+if [ "$(od -An -tx1 "$OUT/utf8.bytes" | tr -d ' \n')" != "82026768c3a920e28692" ]; then
+    echo "bytes: a string literal is not 82 02 67 and its UTF-8" >&2
+    exit 1
+fi
+printf 'codes "h\303\251 \342\206\222"\n' > "$OUT/codes.hom"
+expect "[104, 233, 32, 8594]" "$OUT/codes.hom"
+expect "[104, 233, 32, 8594]" --text "$OUT/codes.hom"
+printf 'text [104, ...codes "i"]\n' > "$OUT/text.hom"
+expect '"hi"' "$OUT/text.hom"
+expect "hi" --text "$OUT/text.hom"
+expect "hi" --text --interp=2 "$OUT/text.hom"
+printf '[1, ..."hi"]\n' > "$OUT/cons-text.hom"
+expect "[1, 104, 105]" "$OUT/cons-text.hom"
+printf '"a" + 1\n' > "$OUT/succ-text.hom"
+expect "error: wrong" "$OUT/succ-text.hom"
+expect "error: wrong" --text --interp "$OUT/succ-text.hom"
 expect "[1, 2, 3, 4]" --text "$EXAMPLES/append.hom"
 expect "<function>" --text "$OUT/identity.hom"
 printf '"no end\n' > "$OUT/open-string.hom"
 expect "syntax error: line 1, column 1: a string that does not end on its line, or an escape other than \\n \\t \\\\ \\\" \\'" "$OUT/open-string.hom"
+# An array pattern on a text names code points, and the rest is a text.
+printf 'case "abcd"\n  [a, b, ...rest] -> [a, b, rest]\n' > "$OUT/text-pattern.hom"
+expect '[97, 98, "cd"]' "$OUT/text-pattern.hom"
+printf 'case "abc"\n  [a, b, c] -> [c, b, a]\n' > "$OUT/text-three.hom"
+expect "[99, 98, 97]" "$OUT/text-three.hom"
+for levels in 1 2; do
+    sameThroughInterp "$OUT/string.hom" "$levels"
+    sameThroughInterp "$OUT/text.hom" "$levels"
+    sameThroughInterp "$OUT/cons-text.hom" "$levels"
+    sameThroughInterp "$OUT/succ-text.hom" "$levels"
+    sameThroughInterp "$OUT/text-pattern.hom" "$levels"
+done
 # Programs that use them. A calculator reads an expression from text; words
 # are sorted under three orders passed as functions; a program builds the code
-# of a power function as data and runs it. Each prints the same through the
-# interpreter.
+# of a power function as data and runs it. The first two end in `text`, so
+# their result is a text: in quotes without the flag, raw with it. Each prints
+# the same through the interpreter.
+expect '"2 * (3 + 4) * 5 - 100 / (7 - 2) = 50"' "$EXAMPLES/calc.hom"
 expect "2 * (3 + 4) * 5 - 100 / (7 - 2) = 50" --text "$EXAMPLES/calc.hom"
 expect "2 * (3 + 4) * 5 - 100 / (7 - 2) = 50" --text --interp "$EXAMPLES/calc.hom"
+expect '"brown dog fox jumps lazy over quick the the\ndog fox the the lazy over brown jumps quick\nthe the quick over lazy jumps fox dog brown\n"' "$EXAMPLES/words.hom"
 expect "brown dog fox jumps lazy over quick the the
 dog fox the the lazy over brown jumps quick
 the the quick over lazy jumps fox dog brown" --text "$EXAMPLES/words.hom"
+expect "brown dog fox jumps lazy over quick the the
+dog fox the the lazy over brown jumps quick
+the the quick over lazy jumps fox dog brown" --text --interp "$EXAMPLES/words.hom"
 sameThroughInterp "$EXAMPLES/calc.hom" 1
 sameThroughInterp "$EXAMPLES/words.hom" 1
 sameThroughInterp "$EXAMPLES/power.hom" 1

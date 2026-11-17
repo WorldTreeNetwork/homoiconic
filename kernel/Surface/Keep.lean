@@ -237,6 +237,7 @@ def steps (σ : Store Ref) : Nat → PState Ref → LRun Ref × Nat
 partial def full (σ : Store Ref) : P Ref → Except Ref (Option Data)
   | .nat n => .ok (some (.nat n))
   | .name n => .ok (some (.name n))
+  | .text t => .ok (some (.text t))
   | .nil => .ok (some (.arr []))
   | .cons h t => do
       match ← full σ h, ← full σ t with

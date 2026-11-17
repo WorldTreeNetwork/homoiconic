@@ -6,9 +6,14 @@ import Reflect.Syntax
     larger number is tag 2 (a positive bignum) over its big-endian bytes with
     no leading zero. An array is a definite-length CBOR array. A name is tag 39
     (registered as "Identifier") over its number, in the form a number has. A
-    byte string, which is not data, is a definite-length CBOR byte string.
-    Tag 2 for large numbers and tag 39 for names are this project's rules, not
-    dCBOR's.
+    text is a definite-length CBOR text string: its length in bytes, then its
+    UTF-8. It is not normalised. A byte string, which is not data, is a
+    definite-length CBOR byte string. Tag 2 for large numbers, tag 39 for names
+    and text without normalisation are this project's rules, not dCBOR's.
+
+    A text is a list of characters everywhere but here. The writer makes its
+    bytes with `String.ofList` and `String.toUTF8`; the reader takes bytes that
+    are UTF-8 with `String.fromUTF8?` and keeps `String.toList` of them.
 
     The reader is strict: it accepts exactly the bytes the writer produces, so
     a value has one byte form. Nothing here is proved. It is tested
@@ -24,12 +29,14 @@ inductive Item where
   | nat : Nat → Item
   | arr : List Item → Item
   | name : Nat → Item
+  | text : List Char → Item
   | bytes : ByteArray → Item
 
 mutual
   def Item.ofData : Data → Item
     | .nat n => .nat n
     | .name n => .name n
+    | .text t => .text t
     | .arr xs => .arr (Item.ofDatas xs)
   def Item.ofDatas : List Data → List Item
     | [] => []
@@ -41,6 +48,7 @@ mutual
   def Item.toData : Item → Option Data
     | .nat n => some (.nat n)
     | .name n => some (.name n)
+    | .text t => some (.text t)
     | .arr xs => (Item.toDatas xs).map .arr
     | .bytes _ => none
   def Item.toDatas : List Item → Option (List Data)
@@ -81,6 +89,9 @@ mutual
   def writeTo : Item → ByteArray → ByteArray
     | .nat n, out => writeNat n out
     | .name n, out => writeNat n (pushHead 6 39 out)
+    | .text t, out =>
+        let b := (String.ofList t).toUTF8
+        pushHead 3 b.size out ++ b
     | .arr xs, out => writeAll xs (pushHead 4 xs.length out)
     | .bytes b, out => pushHead 2 b.size out ++ b
   def writeAll : List Item → ByteArray → ByteArray
@@ -91,8 +102,8 @@ end
 def writeItem (i : Item) : ByteArray := writeTo i ByteArray.empty
 
 /-- The byte form of a data value. A CBOR length is below 2^64, so an array of
-    2^64 items or more, or a number (a name's number among them) of 2^64 bytes
-    or more, has no byte form;
+    2^64 items or more, or a number (a name's number among them) or a text of
+    2^64 bytes or more, has no byte form;
     for those the bytes written are not read back. No such value fits in a
     machine. -/
 def write (d : Data) : ByteArray := writeItem (.ofData d)
@@ -150,7 +161,7 @@ def readBig (b : ByteArray) (pos : Nat) : Except String (Nat × Nat) := do
     if v < limit then .error "a bignum that fits an unsigned integer"
     else .ok (v, pos + k)
 
-def notData : String := "a kind of value that is not a number or an array"
+def notData : String := "a kind of value that is not a number, an array, a text or a name"
 
 /-- One value is read each turn and each turn takes at least one byte, so
     `fuel` above the number of bytes is never used up. Arrays are kept on a
@@ -172,6 +183,13 @@ def readGo (b : ByteArray) : Nat → Nat → List Frame → Except String Item
       else if major == 2 then
         if pos + n > b.size then .error "the bytes end inside a value"
         else next (.bytes (b.extract pos (pos + n))) (pos + n)
+      else if major == 3 then
+        -- A text: exactly `n` bytes that are UTF-8. Overlong forms, surrogates
+        -- and numbers past U+10FFFF are not UTF-8.
+        if pos + n > b.size then .error "the bytes end inside a value"
+        else match String.fromUTF8? (b.extract pos (pos + n)) with
+          | some s => next (.text s.toList) (pos + n)
+          | none => .error "a text that is not UTF-8"
       else if major == 6 then
         if n == 2 then do
           let (v, pos) ← readBig b pos

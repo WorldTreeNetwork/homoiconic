@@ -85,6 +85,9 @@ macro "walk" : tactic => `(tactic| repeat' (first
   | apply Direct.caseNameSucc (Direct.varBound rfl)
   | apply Direct.caseNil (Direct.varBound rfl)
   | apply Direct.caseCons (Direct.varBound rfl)
+  | apply Direct.caseTextNil (Direct.varBound rfl)
+  | apply Direct.caseTextCons (Direct.varBound rfl)
+  | refine Direct.consText ?_ (Direct.varBound rfl)
   | apply Direct.consArr
   | apply Direct.succName (Direct.varBound rfl)
   | apply Direct.succNat
@@ -268,6 +271,18 @@ theorem fwd (γ : Env) {env : Env} {p : Term} {o : Outcome} (h : Direct env p o)
     unfold core
     simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
     cases k <;> walk
+  | @succText env t cs h ih =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases cs <;> walk
+  | @consText env a x b cs ha hb iha ihb =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases cs <;> walk
+  | @primCodeText env c cs x hc ih =>
+    unfold core
+    simp only [reify, reifyOutcome, reifyValue, reifyEnv] at *
+    cases cs <;> walk
   | @primCodeError env c e x hc he ih =>
     cases e with
     | value v => exact he.elim
@@ -384,6 +399,27 @@ theorem stuck_case_cons {ρ : Env} {s z sc ni c : Term} {n : Nat} {x : Data} {xs
     rcases known n hs with h' | h' <;> rw [h']
     simpa using h
 
+theorem stuck_case_text_nil {ρ : Env} {s z sc ni c : Term} {n : Nat}
+    (hs : Direct ρ s (.value (.data (.text [])))) (h : evalFuel (n - 1) ρ ni = none) :
+    evalFuel n ρ (.dcase s z sc ni c) = none := by
+  cases n with
+  | zero => rfl
+  | succ n =>
+    simp only [evalFuel]
+    rcases known n hs with h' | h' <;> rw [h']
+    simpa using h
+
+theorem stuck_case_text_cons {ρ : Env} {s z sc ni c : Term} {n : Nat} {ch : Char}
+    {r : List Char} (hs : Direct ρ s (.value (.data (.text (ch :: r)))))
+    (h : evalFuel (n - 1) (.data (.text r) :: .data (.nat ch.toNat) :: ρ) c = none) :
+    evalFuel n ρ (.dcase s z sc ni c) = none := by
+  cases n with
+  | zero => rfl
+  | succ n =>
+    simp only [evalFuel]
+    rcases known n hs with h' | h' <;> rw [h']
+    simpa using h
+
 theorem stuck_app_arg {ρ cap : Env} {f a b : Term} {n : Nat}
     (hf : Direct ρ f (.value (.closure b cap))) (h : evalFuel (n - 1) ρ a = none) :
     evalFuel n ρ (.app f a) = none := by
@@ -413,7 +449,9 @@ macro "sdesc" : tactic => `(tactic| repeat (first
   | apply stuck_case_name_zero (Direct.varBound rfl)
   | apply stuck_case_name_succ (Direct.varBound rfl)
   | apply stuck_case_nil (Direct.varBound rfl)
-  | apply stuck_case_cons (Direct.varBound rfl)))
+  | apply stuck_case_cons (Direct.varBound rfl)
+  | apply stuck_case_text_nil (Direct.varBound rfl)
+  | apply stuck_case_text_cons (Direct.varBound rfl)))
 
 /-- A bound recursive call whose run is known. -/
 macro "scall_val " h:term : tactic => `(tactic|
@@ -526,6 +564,7 @@ theorem stuck_core (γ : Env) : ∀ (n : Nat) (env : Env) (p : Term),
           | data dc =>
             cases dc with
             | arr xs => cases h
+            | text cs => cases h
             | nat k =>
               simp only [] at h
               simp only [reifyOutcome, reifyValue] at Fc
@@ -585,6 +624,17 @@ theorem stuck_core (γ : Env) : ∀ (n : Nat) (env : Env) (p : Term),
                 have hb := ih _ _ h
                 sdesc; scall_val Fs; sdesc; stail hb
               | cons x xs =>
+                simp only [] at h
+                have hb := ih _ _ h
+                simp only [reifyEnv, reifyValue] at hb
+                sdesc; scall_val Fs; sdesc; stail hb
+            | text cs =>
+              cases cs with
+              | nil =>
+                simp only [] at h
+                have hb := ih _ _ h
+                sdesc; scall_val Fs; sdesc; stail hb
+              | cons ch r =>
                 simp only [] at h
                 have hb := ih _ _ h
                 simp only [reifyEnv, reifyValue] at hb

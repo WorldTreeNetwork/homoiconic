@@ -147,6 +147,7 @@ def handoffLog : List Op :=
 partial def whole (m : Pieces) : P Ref → Option (P Ref)
   | .nat n => some (.nat n)
   | .name n => some (.name n)
+  | .text t => some (.text t)
   | .nil => some .nil
   | .cons h t => do
       let h' ← whole m h

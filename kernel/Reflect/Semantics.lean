@@ -48,11 +48,15 @@ inductive Direct : Env → Term → Outcome → Prop where
   | succArr (h : Direct env t (.value (.data (.arr xs)))) : Direct env (.succ t) .wrong
   | succName (h : Direct env t (.value (.data (.name k)))) :
       Direct env (.succ t) (.value (.data (.nat (k + 1))))
+  | succText (h : Direct env t (.value (.data (.text cs)))) : Direct env (.succ t) .wrong
   | succClosure (h : Direct env t (.value (.closure b cap))) : Direct env (.succ t) .wrong
   | succError (h : Direct env t e) (he : e.IsError) : Direct env (.succ t) e
   | consArr (ha : Direct env a (.value (.data x)))
       (hb : Direct env b (.value (.data (.arr xs)))) :
       Direct env (.cons a b) (.value (.data (.arr (x :: xs))))
+  | consText (ha : Direct env a (.value (.data x)))
+      (hb : Direct env b (.value (.data (.text cs)))) :
+      Direct env (.cons a b) (.value (.data (.arr (x :: (Text.codes cs).map .nat))))
   | consHeadClosure (ha : Direct env a (.value (.closure c cap))) :
       Direct env (.cons a b) .wrong
   | consHeadError (ha : Direct env a e) (he : e.IsError) : Direct env (.cons a b) e
@@ -77,11 +81,17 @@ inductive Direct : Env → Term → Outcome → Prop where
   | caseCons (hs : Direct env s (.value (.data (.arr (x :: xs)))))
       (h : Direct (.data (.arr xs) :: .data x :: env) c o) :
       Direct env (.dcase s z sc n c) o
+  | caseTextNil (hs : Direct env s (.value (.data (.text [])))) (h : Direct env n o) :
+      Direct env (.dcase s z sc n c) o
+  | caseTextCons (hs : Direct env s (.value (.data (.text (ch :: r)))))
+      (h : Direct (.data (.text r) :: .data (.nat ch.toNat) :: env) c o) :
+      Direct env (.dcase s z sc n c) o
   | caseClosure (hs : Direct env s (.value (.closure b cap))) :
       Direct env (.dcase s z sc n c) .wrong
   | caseError (hs : Direct env s e) (he : e.IsError) : Direct env (.dcase s z sc n c) e
   | primCodeError (hc : Direct env c e) (he : e.IsError) : Direct env (.prim c x) e
   | primCodeArr (hc : Direct env c (.value (.data (.arr xs)))) : Direct env (.prim c x) .wrong
+  | primCodeText (hc : Direct env c (.value (.data (.text cs)))) : Direct env (.prim c x) .wrong
   | primCodeClosure (hc : Direct env c (.value (.closure b cap))) :
       Direct env (.prim c x) .wrong
   | primArgError (hc : Direct env c (.value (.data (.nat k))))
@@ -126,6 +136,7 @@ def evalFuel : Nat → Env → Term → Option Outcome
       | some (.value (.data (.nat k))) => some (.value (.data (.nat (k + 1))))
       | some (.value (.data (.arr _))) => some .wrong
       | some (.value (.data (.name k))) => some (.value (.data (.nat (k + 1))))
+      | some (.value (.data (.text _))) => some .wrong
       | some (.value (.closure _ _)) => some .wrong
       | some (.unbound i) => some (.unbound i)
       | some .wrong => some .wrong
@@ -138,6 +149,8 @@ def evalFuel : Nat → Env → Term → Option Outcome
           | some (.value (.data (.arr xs))) => some (.value (.data (.arr (x :: xs))))
           | some (.value (.data (.nat _))) => some .wrong
           | some (.value (.data (.name _))) => some .wrong
+          | some (.value (.data (.text cs))) =>
+              some (.value (.data (.arr (x :: (Text.codes cs).map .nat))))
           | some (.value (.closure _ _)) => some .wrong
           | some (.unbound i) => some (.unbound i)
           | some .wrong => some .wrong
@@ -154,6 +167,9 @@ def evalFuel : Nat → Env → Term → Option Outcome
       | some (.value (.data (.arr []))) => evalFuel n env ni
       | some (.value (.data (.arr (x :: xs)))) =>
           evalFuel n (.data (.arr xs) :: .data x :: env) c
+      | some (.value (.data (.text []))) => evalFuel n env ni
+      | some (.value (.data (.text (ch :: r)))) =>
+          evalFuel n (.data (.text r) :: .data (.nat ch.toNat) :: env) c
       | some (.value (.closure _ _)) => some .wrong
       | some (.unbound i) => some (.unbound i)
       | some .wrong => some .wrong
@@ -175,6 +191,7 @@ def evalFuel : Nat → Env → Term → Option Outcome
           | some (.unbound i) => some (.unbound i)
           | some .wrong => some .wrong
       | some (.value (.data (.arr _))) => some .wrong
+      | some (.value (.data (.text _))) => some .wrong
       | some (.value (.closure _ _)) => some .wrong
       | some (.unbound i) => some (.unbound i)
       | some .wrong => some .wrong

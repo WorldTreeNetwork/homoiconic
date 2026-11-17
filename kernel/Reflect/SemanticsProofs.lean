@@ -24,11 +24,15 @@ theorem direct_deterministic {env : Env} {t : Term} {o o' : Outcome}
     cases h' <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | succName _ ih =>
     cases h' <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | succText _ ih =>
+    cases h' <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | succClosure _ ih =>
     cases h' <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | succError _ he ih =>
     cases h' <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | consArr _ _ iha ihb =>
+    cases h' <;> (try cases iha ‹_›) <;> (try cases ihb ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | consText _ _ iha ihb =>
     cases h' <;> (try cases iha ‹_›) <;> (try cases ihb ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | consHeadClosure _ iha =>
     cases h' <;> (try cases iha ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
@@ -54,6 +58,10 @@ theorem direct_deterministic {env : Env} {t : Term} {o o' : Outcome}
     cases h' <;> (try cases ihs ‹_›) <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | caseCons _ _ ihs ih =>
     cases h' <;> (try cases ihs ‹_›) <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | caseTextNil _ _ ihs ih =>
+    cases h' <;> (try cases ihs ‹_›) <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | caseTextCons _ _ ihs ih =>
+    cases h' <;> (try cases ihs ‹_›) <;> (try cases ih ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | caseClosure _ ihs =>
     cases h' <;> (try cases ihs ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | caseError _ he ihs =>
@@ -61,6 +69,8 @@ theorem direct_deterministic {env : Env} {t : Term} {o o' : Outcome}
   | primCodeError _ he ihc =>
     cases h' <;> (try cases ihc ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | primCodeArr _ ihc =>
+    cases h' <;> (try cases ihc ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
+  | primCodeText _ ihc =>
     cases h' <;> (try cases ihc ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
   | primCodeClosure _ ihc =>
     cases h' <;> (try cases ihc ‹_›) <;> first | rfl | simp_all [Outcome.IsError]
@@ -108,6 +118,7 @@ theorem evalFuel_sound {n : Nat} {env : Env} {t : Term} {o : Outcome}
         | exact .succNat (ih ‹_›)
         | exact .succArr (ih ‹_›)
         | exact .succName (ih ‹_›)
+        | exact .succText (ih ‹_›)
         | exact .succClosure (ih ‹_›)
         | exact .succError (ih ‹_›) (by simp [Outcome.IsError])
     | cons a b =>
@@ -117,6 +128,7 @@ theorem evalFuel_sound {n : Nat} {env : Env} {t : Term} {o : Outcome}
       all_goals first
         | contradiction
         | exact .consArr (ih ‹_›) (ih ‹_›)
+        | exact .consText (ih ‹_›) (ih ‹_›)
         | exact .consHeadClosure (ih ‹_›)
         | exact .consHeadError (ih ‹_›) (by simp [Outcome.IsError])
         | exact .consTailNat (ih ‹_›) (ih ‹_›)
@@ -135,6 +147,8 @@ theorem evalFuel_sound {n : Nat} {env : Env} {t : Term} {o : Outcome}
         | exact .caseNameSucc (ih ‹_›) (ih h)
         | exact .caseNil (ih ‹_›) (ih h)
         | exact .caseCons (ih ‹_›) (ih h)
+        | exact .caseTextNil (ih ‹_›) (ih h)
+        | exact .caseTextCons (ih ‹_›) (ih h)
         | exact .caseClosure (ih ‹_›)
         | exact .caseError (ih ‹_›) (by simp [Outcome.IsError])
     | prim c x =>
@@ -150,6 +164,7 @@ theorem evalFuel_sound {n : Nat} {env : Env} {t : Term} {o : Outcome}
         | exact .primNameArgClosure (ih ‹_›) (ih ‹_›)
         | exact .primNameArgError (ih ‹_›) (ih ‹_›) (by simp [Outcome.IsError])
         | exact .primCodeArr (ih ‹_›)
+        | exact .primCodeText (ih ‹_›)
         | exact .primCodeClosure (ih ‹_›)
         | exact .primCodeError (ih ‹_›) (by simp [Outcome.IsError])
 theorem evalFuel_mono {n m : Nat} {env : Env} {t : Term} {o : Outcome}
@@ -229,6 +244,9 @@ theorem evalFuel_complete {env : Env} {t : Term} {o : Outcome}
   | succName _ ih =>
     obtain ⟨n, hn⟩ := ih
     exact ⟨n + 1, by simp [evalFuel, hn]⟩
+  | succText _ ih =>
+    obtain ⟨n, hn⟩ := ih
+    exact ⟨n + 1, by simp [evalFuel, hn]⟩
   | succClosure _ ih =>
     obtain ⟨n, hn⟩ := ih
     exact ⟨n + 1, by simp [evalFuel, hn]⟩
@@ -237,6 +255,12 @@ theorem evalFuel_complete {env : Env} {t : Term} {o : Outcome}
     refine ⟨n + 1, ?_⟩
     cases e <;> simp_all [evalFuel, Outcome.IsError]
   | consArr _ _ iha ihb =>
+    obtain ⟨n1, h1⟩ := iha
+    obtain ⟨n2, h2⟩ := ihb
+    have h1' := evalFuel_mono h1 (m := n1 + n2) (by omega)
+    have h2' := evalFuel_mono h2 (m := n1 + n2) (by omega)
+    exact ⟨n1 + n2 + 1, by simp [evalFuel, h1', h2']⟩
+  | consText _ _ iha ihb =>
     obtain ⟨n1, h1⟩ := iha
     obtain ⟨n2, h2⟩ := ihb
     have h1' := evalFuel_mono h1 (m := n1 + n2) (by omega)
@@ -310,6 +334,18 @@ theorem evalFuel_complete {env : Env} {t : Term} {o : Outcome}
     have h1' := evalFuel_mono h1 (m := n1 + n2) (by omega)
     have h2' := evalFuel_mono h2 (m := n1 + n2) (by omega)
     exact ⟨n1 + n2 + 1, by simp [evalFuel, h1', h2']⟩
+  | caseTextNil _ _ ihs ih =>
+    obtain ⟨n1, h1⟩ := ihs
+    obtain ⟨n2, h2⟩ := ih
+    have h1' := evalFuel_mono h1 (m := n1 + n2) (by omega)
+    have h2' := evalFuel_mono h2 (m := n1 + n2) (by omega)
+    exact ⟨n1 + n2 + 1, by simp [evalFuel, h1', h2']⟩
+  | caseTextCons _ _ ihs ih =>
+    obtain ⟨n1, h1⟩ := ihs
+    obtain ⟨n2, h2⟩ := ih
+    have h1' := evalFuel_mono h1 (m := n1 + n2) (by omega)
+    have h2' := evalFuel_mono h2 (m := n1 + n2) (by omega)
+    exact ⟨n1 + n2 + 1, by simp [evalFuel, h1', h2']⟩
   | caseClosure _ ih =>
     obtain ⟨n, hn⟩ := ih
     exact ⟨n + 1, by simp [evalFuel, hn]⟩
@@ -322,6 +358,9 @@ theorem evalFuel_complete {env : Env} {t : Term} {o : Outcome}
     refine ⟨n + 1, ?_⟩
     cases e <;> simp_all [evalFuel, Outcome.IsError]
   | primCodeArr _ ih =>
+    obtain ⟨n, hn⟩ := ih
+    exact ⟨n + 1, by simp [evalFuel, hn]⟩
+  | primCodeText _ ih =>
     obtain ⟨n, hn⟩ := ih
     exact ⟨n + 1, by simp [evalFuel, hn]⟩
   | primCodeClosure _ ih =>

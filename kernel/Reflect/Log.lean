@@ -26,6 +26,14 @@ mutual
     | .arr _, .name _ => isFalse nofun
     | .name _, .nat _ => isFalse nofun
     | .name _, .arr _ => isFalse nofun
+    | .text s, .text t =>
+      if h : s = t then isTrue (h ▸ rfl) else isFalse (fun e => h (Data.text.inj e))
+    | .nat _, .text _ => isFalse nofun
+    | .arr _, .text _ => isFalse nofun
+    | .name _, .text _ => isFalse nofun
+    | .text _, .nat _ => isFalse nofun
+    | .text _, .arr _ => isFalse nofun
+    | .text _, .name _ => isFalse nofun
     | .arr xs, .arr ys =>
       match Data.decEqList xs ys with
       | isTrue h => isTrue (h ▸ rfl)

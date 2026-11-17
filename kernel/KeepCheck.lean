@@ -121,6 +121,7 @@ def go (σ : Store Ref) : Nat → PState Ref → LRun Ref
 partial def resolve (σ : Store Ref) : P Ref → Option (P Ref)
   | .nat n => some (.nat n)
   | .name n => some (.name n)
+  | .text t => some (.text t)
   | .nil => some .nil
   | .cons h t => do
       let h' ← resolve σ h
@@ -277,3 +278,99 @@ def keptName (size : Nat) : String :=
 
 #eval IO.println (keptName 0)
 #eval IO.println (keptName Surface.Keep.pieceSize)
+
+/-! Text is one piece. Saving compares its whole byte form, the head and the
+    UTF-8 together, with the size, and keeps it in place or stores it whole. -/
+
+def isRef : P Ref → Bool
+  | .ref _ => true
+  | _ => false
+
+-- 24 ASCII characters are 26 bytes: `78 18` and the 24. At 25 the text is
+-- stored; at 26 it stays in place.
+#eval do
+  let t24 : List Char := List.replicate 24 'x'
+  let bytes := (pieceBytes (.text t24 : P Ref)).elim 0 (·.size)
+  let at25 := match (cut 25 (.text t24 : P Ref)).run #[] with
+    | some (top, stored) => isRef top && stored.size == 1 && (stored.all fun rb => rb.2.size == 26 &&
+        (hex rb.2).startsWith "7818" && hex (Blake3.hash rb.2) == hex rb.1 &&
+        (match readPiece rb.2 with | .ok (.text t) => t == t24 | _ => false))
+    | none => false
+  let at26 := match (cut 26 (.text t24 : P Ref)).run #[] with
+    | some (.text t, stored) => t == t24 && stored.size == 0
+    | _ => false
+  -- 23 characters are 24 bytes, a one-byte head: in place at 24, stored at 23.
+  let t23 : List Char := List.replicate 23 'x'
+  let at23 := match (cut 23 (.text t23 : P Ref)).run #[], (cut 24 (.text t23 : P Ref)).run #[] with
+    | some (a, one), some (.text _, none') => isRef a && one.size == 1 && none'.size == 0
+    | _, _ => false
+  -- Characters of more than one byte count as their bytes: 12 of `é` are 24
+  -- bytes of UTF-8, 26 with the head.
+  let wide : List Char := List.replicate 12 'é'
+  let atWide := match (cut 25 (.text wide : P Ref)).run #[], (cut 26 (.text wide : P Ref)).run #[] with
+    | some (a, one), some (.text _, none') => isRef a && one.size == 1 && none'.size == 0
+    | _, _ => false
+  -- In a pair, the text is in place at 26 and the pair around it is stored.
+  let inPair := match (cut 26 (.cons (.text t24) .nil : P Ref)).run #[] with
+    | some (top, stored) => isRef top && stored.size == 1 && (stored.all fun rb =>
+        match readPiece rb.2 with | .ok (.cons (.text t) .nil) => t == t24 | _ => false)
+    | none => false
+  IO.println (line (bytes == 26 && at25 && at26 && at23 && atWide && inPair)
+    s!"a text of 24 characters is {bytes} bytes: stored when cut at 25 ({at25}), in place when cut at 26 ({at26})")
+
+/-- A session's turn against a store, with the first piece it needs and the
+    store lacks, if any. -/
+def serveOr (m : Pieces) : Nat → Surface.Keep.Session → Except (Option Ref) (Pieces × String)
+  | 0, _ => .error none
+  | fuel + 1, s =>
+      match s.need with
+      | some r =>
+          match m[r]? with
+          | some b => serveOr m fuel (Surface.Keep.give s b)
+          | none => .error (some r)
+      | none => .ok (s.written.foldl (fun m rb => m.insert rb.1 rb.2) m, s.text)
+
+def longText : List Char := (List.range 1000).map fun i => Char.ofNat (97 + i % 26)
+
+def textSource : String :=
+  "def main big =\n  ask [1] (fn a ->\n    ask [2, a] (fn b ->\n" ++
+  "      case big\n        [] -> 0\n        [c, ...rest] -> [c, add a b, equal rest big]))\n\n" ++
+  "main \"" ++ String.ofList longText ++ "\"\n"
+
+/-- A waiting program that holds a text of 1,000 characters, saved at the
+    session's size. Exactly one stored piece is that text, whole. The second
+    turn does not look at the text and runs without its piece. The third takes
+    the text apart by `case`: without the piece it stops needing exactly that
+    reference, and with it gives what one run gives. -/
+def keptText : String :=
+  let whole := Surface.converseText textSource.toUTF8 "[20, 22]".toUTF8 1000000
+  match serveOr {} 10000 (Surface.Keep.start textSource.toUTF8 1000000) with
+  | .error _ => "FAIL the first turn lacked a piece"
+  | .ok (m1, t1) =>
+      let texts := m1.toList.filter fun rb =>
+        match readPiece rb.2 with | .ok (.text _) => true | _ => false
+      let isIt := texts.all fun rb =>
+        (match readPiece rb.2 with | .ok (.text t) => t == longText | _ => false) &&
+          rb.2.size == 1003 && (hex rb.2).startsWith "7903e8"
+      match texts, rootOf t1 with
+      | [(textRef, _)], some r1 =>
+          let lacking := m1.erase textRef
+          match serveOr lacking 10000 (Surface.Keep.answer r1 "20".toUTF8 1000000) with
+          | .error _ => "FAIL the second turn, which does not look at the text, needed a piece it was not given"
+          | .ok (m2, t2) =>
+              match rootOf t2 with
+              | none => s!"FAIL the second turn did not wait: {t2}"
+              | some r2 =>
+                  let third := Surface.Keep.answer r2 "22".toUTF8 1000000
+                  let pausedOnIt := match serveOr m2 10000 third with
+                    | .error (some r) => hex r == hex textRef
+                    | _ => false
+                  match serveOr (m2.insert textRef (m1.getD textRef ByteArray.empty)) 10000 third with
+                  | .error _ => "FAIL the third turn lacked a piece with the whole store"
+                  | .ok (_, t3) =>
+                      let joined := firstLine t1 ++ "\n" ++ firstLine t2 ++ "\n" ++ firstLine t3
+                      line (isIt && pausedOnIt && joined == whole && firstLine t3 == "[97, 42, 0]")
+                        s!"a waiting program that holds a text of 1000 characters: one piece of {m1.size} is the text, the second turn runs without it, the third pauses on its reference ({pausedOnIt}) and with it gives {firstLine t3}"
+      | _, _ => s!"FAIL {texts.length} stored pieces are text, or the first turn did not wait: {firstLine t1}"
+
+#eval IO.println keptText

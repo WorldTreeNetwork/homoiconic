@@ -26,6 +26,8 @@ def readsAs (b : ByteArray) (d : Data) : Bool :=
   | .error _ => false
 
 def nums (ns : List Nat) : Data := .arr (ns.map .nat)
+def txt (s : String) : Data := .text s.toList
+def rep (k : Nat) (h : String) : String := String.join (List.replicate k h)
 
 def vectors : List (Data × String) :=
   [ (.nat 0, "00"), (.nat 1, "01"), (.nat 10, "0a"), (.nat 23, "17"), (.nat 24, "1818"),
@@ -48,7 +50,25 @@ def vectors : List (Data × String) :=
     (.name 18446744073709551616, "d827c249010000000000000000"),
     (.arr [.nat 1, .name 3], "8201d82703"), (.arr [.arr [.arr [.nat 2, .name 3]]], "81818202d82703"),
     -- The code of a literal of a name, and a send on it.
-    (reify (.lit (.name 3)), "8202d82703"), (.arr [.nat 1, .name 0, .nat 7], "8301d8270007") ]
+    (reify (.lit (.name 3)), "8202d82703"), (.arr [.nat 1, .name 0, .nat 7], "8301d8270007"),
+    -- Text: the text strings of RFC 8949, appendix A. The length is in bytes.
+    (txt "", "60"), (txt "a", "6161"), (txt "IETF", "6449455446"), (txt "\"\\", "62225c"),
+    (txt "ü", "62c3bc"), (txt "水", "63e6b0b4"), (txt "𐅑", "64f0908591"),
+    -- An array of them, and text beside the other kinds.
+    (.arr [txt "a", txt "ü", txt ""], "83616162c3bc60"),
+    (.arr [.nat 1, txt "a", .name 3, .arr [txt "水"]], "84016161d8270381" ++ "63e6b0b4"),
+    -- The head at its edges: 23 and 24 bytes, and 256.
+    (txt (String.ofList (List.replicate 23 'x')), "77" ++ rep 23 "78"),
+    (txt (String.ofList (List.replicate 24 'x')), "7818" ++ rep 24 "78"),
+    (txt (String.ofList (List.replicate 256 'x')), "790100" ++ rep 256 "78"),
+    -- Not normalised: é as one scalar value and as e with a combining accent
+    -- are two texts with two byte forms.
+    (txt "\u00e9", "62c3a9"), (txt "e\u0301", "6365cc81"),
+    -- The first and last scalar values, and the ones on each side of the surrogates.
+    (.text [Char.ofNat 0], "6100"), (.text [Char.ofNat 0xd7ff], "63ed9fbf"),
+    (.text [Char.ofNat 0xe000], "63ee8080"), (.text [Char.ofNat 0x10ffff], "64f48fbfbf"),
+    -- The code of a string literal.
+    (reify (.lit (txt "a")), "82026161") ]
 
 #eval do
   for (d, h) in vectors do
@@ -84,7 +104,20 @@ def refused : List (String × String) :=
     ("a negative bignum", "c349010000000000000000"),
     ("a negative number", "20"),
     ("a byte string", "4101"),
-    ("a text string", "6161"),
+    ("a text of one byte that is not UTF-8", "61ff"),
+    ("a text with an overlong form", "62c080"),
+    ("a text with a surrogate", "63eda080"),
+    ("a text with a low surrogate", "63edb080"),
+    ("a text past U+10FFFF", "64f4908080"),
+    ("a text that is a lone continuation byte", "6180"),
+    ("a text whose last character is cut short", "6261c3"),
+    ("a text with an overlong three-byte form", "63e08080"),
+    ("an indefinite-length text", "7f6161ff"),
+    ("an indefinite-length text, empty", "7fff"),
+    ("a text length in a longer form", "780161"),
+    ("a text cut short", "6261"),
+    ("a text length with no bytes", "7bffffffffffffffff"),
+    ("a text, then more bytes", "616100"),
     ("a map", "a0"),
     ("a date tag", "c100"),
     ("tag 39 over an empty array", "d82780"),
@@ -157,6 +190,10 @@ def programs : List (String × Term) :=
     ("asks twice", askTwice),
     ("a name in the program and in the result", .cons (.lit (.name 3)) (.cons (.succ (.lit (.name 3))) emptyArr)),
     ("a function that captured a name", .app (.lam (.lam (.cons (.var 1) emptyArr))) (.lit (.name 18446744073709551616))),
+    ("a string literal taken apart", .dcase (.lit (txt "hé")) (n 0) (n 0) (n 0) (.cons (.var 1) (.cons (.var 0) emptyArr))),
+    ("a string literal under the interpreter", level 1 (.dcase (.lit (txt "hé")) (n 0) (n 0) (n 0) (.cons (.var 1) (.cons (.var 0) emptyArr)))),
+    ("text made from code points", .prim (n 7) (.cons (n 104) (.prim (n 8) (.lit (txt "i 水"))))),
+    ("a function that captured a text", .app (.lam (.lam (.cons (.var 1) emptyArr))) (.lit (txt "h\\i\n"))),
     ("interpreter twice", level 2 (.succ (.succ (n 5)))) ]
 
 def budget : Nat := 4000000
@@ -227,13 +264,38 @@ def keptRun : String :=
     | none => false
   IO.println (line (leaf == some "d82703" && back) s!"the name piece is {leaf.getD "none"}, and a pair that holds it reads back")
 
+-- The text piece: a text is written as the text. One of 32 bytes is not read
+-- as a reference, and a byte string of 32 bytes is.
+#eval do
+  let t32 : List Char := List.replicate 32 'r'
+  let b := pieceBytes (.text t32 : P Ref)
+  let leaf := (pieceBytes (.text "hé".toList : P Ref)).map hex
+  let back := match b with
+    | some b => (match readPiece b with
+        | .ok (.text t) => t == t32 && (hex b).take 4 == "7820".toSlice && b.size == 34
+        | _ => false)
+    | none => false
+  let asRef := match readPiece (unhex ("5820" ++ rep 32 "72")) with
+    | .ok (.ref r) => r.size == 32
+    | _ => false
+  let pair := match pieceBytes (.cons (.text "a".toList) (.cons (.nat 97) .nil) : P Ref) with
+    | some b => (match readPiece b with
+        | .ok (.cons (.text ['a']) (.cons (.nat 97) .nil)) => hex b == "83006161830018618" ++ "0"
+        | _ => false)
+    | none => false
+  IO.println (line (leaf == some "6368c3a9" && back && asRef && pair)
+    s!"the text piece is {leaf.getD "none"}; a text of 32 bytes begins 7820 and reads back as the text, and 32 bytes in a byte string as a reference")
+
 /-- Data that is no program's form is refused, not guessed at. -/
 def notPrograms : List (String × Data) :=
   [ ("an empty array", .arr []), ("an unknown tag", .arr [.nat 7, .nat 0]),
     ("an application with one part", .arr [.nat 0, .nat 0]),
     ("a tag that is an array", .arr [.arr [], .nat 0]),
     ("a name", .name 0), ("a name where a variable's index goes", .arr [.name 0, .nat 0]),
-    ("a name as a tag", .arr [.name 2, .nat 0]) ]
+    ("a name as a tag", .arr [.name 2, .nat 0]),
+    ("a text", txt "a"), ("the empty text", txt ""),
+    ("a text where a variable's index goes", .arr [txt "", .nat 0]),
+    ("a text as a tag", .arr [txt "\u0002", .nat 0]) ]
 
 #eval do
   for (what, d) in notPrograms do

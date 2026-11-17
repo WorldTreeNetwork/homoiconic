@@ -37,6 +37,7 @@ mutual
   def Data.mentions : Data → Nat → Bool
     | .name k, n => k == n
     | .nat _, _ => false
+    | .text _, _ => false
     | .arr xs, n => mentionsAny xs n
   def mentionsAny : List Data → Nat → Bool
     | [], _ => false

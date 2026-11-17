@@ -55,7 +55,7 @@ unsafe def reflectRunBytes (program length out capacity : USize) (budget : UInt6
     interpreters: the closed term `interp` on the program as data, on the
     machine. Level 0 runs the program itself. `flags` bit 0 is set when the
     program is given in its byte form, not as source. Bit 1 is set to write a
-    result that is an array of code points as the text it spells. -/
+    result that is a text raw, with no quotes and no escapes. -/
 @[export reflect_interp]
 unsafe def reflectInterp (program length out capacity : USize) (budget : UInt64)
     (levels : UInt32) (flags : UInt8) : USize :=

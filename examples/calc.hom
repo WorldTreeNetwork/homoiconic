@@ -94,5 +94,8 @@ def append xs ys =
     [] -> ys
     [h, ...t] -> [h, ...append t ys]
 
+; A string is a text, and `case` takes it apart as it takes an array apart:
+; a head is a code point, a number. What is built by consing is an array of
+; code points, so the answer is made a text again at the end.
 let question = "2 * (3 + 4) * 5 - 100 / (7 - 2)"
-append question (append " = " (digits (first (expr question)) []))
+text (append question (append " = " (digits (first (expr question)) [])))

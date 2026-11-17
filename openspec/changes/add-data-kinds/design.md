@@ -597,3 +597,34 @@ overrule any of them; a reviewer should say where one is wrong.
   name in a log through the proved fold, not through the session.
 - `Surface/Check.lean` was edited in step 1, not step 2, so the new
   expectations run.
+
+### Found while building step 2 (2026-11-17)
+
+- `stuck_core` did not need splitting: `Proof.lean` builds in about 24 s with
+  the limit of 4000000 unchanged.
+- `Machine.step` and the lazy machine needed fewer lines than the wildcard list
+  suggests. `succ` of a text and a text under `checkNat` fall to the `_ :: _`
+  lines, which are `wrong`, the right answer; so only `.cons` (one line) and
+  `.dcase` (two) gain cases, and `lCons` and `lCase` likewise.
+- `cons_top` uses a new lemma `rv_list_mk` for the array of code points, not
+  `rv_data_mk`; its `hshape` gains text as D9 says.
+- `Data.mentions` in `Channel.lean` gains the line D6 already shows for text.
+- `Text.ofCodes?` is `List.mapM` over `Nat.isValidChar` and `Char.ofNatAux`,
+  and `Text.codes` is `List.map Char.toNat`: both run in a loop, not on the
+  call stack.
+- `Wire.notData` now names all four kinds of data, and the line of
+  `host/check.sh` that expects it follows.
+- `String.fromUTF8?` in Lean 4.35.0 refuses overlong forms, surrogates and
+  numbers past U+10FFFF; `WireCheck.lean` has each.
+- `host/check.sh` lists the modules compiled into the host, so it gains
+  `Reflect/Text`. `unikernel/build.sh` finds its modules by `lean --deps` and
+  needs no edit; it was not run here.
+- `host/run.zig`: the comment on `--text` is the only edit.
+- Array patterns on a text follow from their reading as nested `case`: an arm
+  of a fixed length takes a text of that many characters and names its code
+  points; an arm of a least length names the code points it lists and the
+  rest, a text, the empty text when there is no more.
+- `Bench.lean` holds the two walks of the measurement task; the numbers are in
+  `tasks.md`.
+- `ReflectRun.lean` takes about 105 s to check where it took about 55 s.
+

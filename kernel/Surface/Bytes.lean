@@ -32,8 +32,8 @@ def unlift : Nat → MOutcome → Option MOutcome
 /-- Run `t` through `k` interpreters, `level k t`, on the machine for `budget`
     steps, and render what the program itself gave. `Reflect.tower` and the
     machine theorems say the text is the text of the direct run when both
-    finish. With `asText` a result that is an array of code points is written
-    as the text it spells. An answer that is not an outcome's data form cannot happen and
+    finish. With `asText` a result that is a text is written raw, with no
+    quotes and no escapes. An answer that is not an outcome's data form cannot happen and
     renders as an internal error. -/
 def renderInterpreted (k budget : Nat) (asText : Bool) (t : Term) : String :=
   match runUntil budget (load (compile (level k t))) with

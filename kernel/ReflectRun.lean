@@ -117,3 +117,99 @@ def nameScenarios : List (String × Term × Outcome) :=
 #eval do
   for (name, p, want) in nameScenarios do
     IO.println (checkIs name p want)
+
+/-! Text. A text is seen by `case` and `cons` as the list of its code points;
+    `succ` of one and one as an operation number are wrong. Equality tells a
+    text from the array of its code points, and `text` (7) and `codes` (8) go
+    between the two. Each scenario states its outcome, as the name scenarios do. -/
+
+def tx (s : String) : Term := .lit (.text s.toList)
+def txd (s : String) : Data := .text s.toList
+def arrOf (ks : List Nat) : Data := .arr (ks.map .nat)
+def dataIs (d : Data) : Outcome := .value (.data d)
+
+/-- The code points of a text by `case` alone: a recursive walk that conses
+    each head, a number, onto the walk of the rest, a text. -/
+def caseWalk : Term :=
+  .app fixT (.lam (.lam
+    (.dcase (.var 0) (n 0) (n 0) emptyArr (.cons (.var 1) (.app (.var 3) (.var 0))))))
+
+def textScenarios : List (String × Term × Outcome) :=
+  [ ("text: case on \"\" takes the empty branch",
+      .dcase (tx "") (n 7) (n 8) (n 9) (n 10), dataIs (.nat 9)),
+    ("text: case on \"hé\" binds the number 104 and the text \"é\"",
+      .dcase (tx "hé") (n 0) (n 0) (n 0) (.cons (.var 1) (.cons (.var 0) emptyArr)),
+      dataIs (.arr [.nat 104, txd "é"])),
+    ("text: the rest of a text of one character is the empty text",
+      .dcase (tx "a") (n 0) (n 0) (n 0) (.var 0), dataIs (txd "")),
+    ("text: cons 1 \"a\" is the array [1, 97]", .cons (n 1) (tx "a"), dataIs (arrOf [1, 97])),
+    ("text: cons 1 \"\" is the array [1]", .cons (n 1) (tx ""), dataIs (arrOf [1])),
+    ("text: cons of head and rest is an array, not the text",
+      .dcase (tx "hé") (n 0) (n 0) (n 0) (.cons (.var 1) (.var 0)), dataIs (arrOf [104, 233])),
+    ("text: successor of \"a\" is wrong", .succ (tx "a"), .wrong),
+    ("text: successor of \"\" is wrong", .succ (tx ""), .wrong),
+    ("text: a text as an operation number is wrong before the argument",
+      .prim (tx "a") omega, .wrong),
+    ("text: the empty text as an operation number is wrong before the argument",
+      .prim (tx "") omega, .wrong),
+    ("text: applying a text is wrong", .app (tx "a") omega, .wrong),
+    ("text: a literal text is itself", tx "hé →", dataIs (txd "hé →")),
+    ("text: a text as the head of an array", .cons (tx "a") emptyArr, dataIs (.arr [txd "a"])),
+    ("text: equal of \"a\" and [97] is 0",
+      .prim (n 5) (.lit (.arr [txd "a", arrOf [97]])), dataIs (.nat 0)),
+    ("text: equal of \"\" and [] is 0",
+      .prim (n 5) (.lit (.arr [txd "", .arr []])), dataIs (.nat 0)),
+    ("text: equal of \"hé\" and \"hé\" is 1",
+      .prim (n 5) (.lit (.arr [txd "hé", txd "hé"])), dataIs (.nat 1)),
+    ("text: equal of \"a\" and \"b\" is 0",
+      .prim (n 5) (.lit (.arr [txd "a", txd "b"])), dataIs (.nat 0)),
+    ("text: add of [\"a\", 0] is []",
+      .prim (n 0) (.lit (.arr [txd "a", .nat 0])), dataIs (.arr [])),
+    ("text: text of [104, 233] is \"hé\"", .prim (n 7) (.lit (arrOf [104, 233])), dataIs (txd "hé")),
+    ("text: text of a text is that text", .prim (n 7) (tx "hé"), dataIs (txd "hé")),
+    ("text: text of [] is the empty text", .prim (n 7) emptyArr, dataIs (txd "")),
+    ("text: text of a surrogate is []", .prim (n 7) (.lit (arrOf [55296])), dataIs (.arr [])),
+    ("text: text of a number past U+10FFFF is []",
+      .prim (n 7) (.lit (arrOf [104, 1114112])), dataIs (.arr [])),
+    ("text: text of an array with an array in it is []",
+      .prim (n 7) (.lit (.arr [.nat 104, .arr [.nat 105]])), dataIs (.arr [])),
+    ("text: text of an array with a text in it is []",
+      .prim (n 7) (.lit (.arr [.nat 104, txd "i"])), dataIs (.arr [])),
+    ("text: text of a number is []", .prim (n 7) (n 104), dataIs (.arr [])),
+    ("text: text of a name is []", .prim (n 7) (.lit (.name 104)), dataIs (.arr [])),
+    ("text: codes of \"hé\" is [104, 233]", .prim (n 8) (tx "hé"), dataIs (arrOf [104, 233])),
+    ("text: codes of \"\" is []", .prim (n 8) (tx ""), dataIs (.arr [])),
+    ("text: codes of an array of code points is that array",
+      .prim (n 8) (.lit (arrOf [104, 233])), dataIs (arrOf [104, 233])),
+    ("text: codes of a surrogate is []", .prim (n 8) (.lit (arrOf [55296])), dataIs (.arr [])),
+    ("text: codes of a number is []", .prim (n 8) (n 104), dataIs (.arr [])),
+    ("text: text of codes of a text is the text",
+      .prim (n 7) (.prim (n 8) (tx "h𐅑水")), dataIs (txd "h𐅑水")),
+    ("text: a case walk gives the code points",
+      .app caseWalk (tx "hé𐅑"), dataIs (arrOf [104, 233, 65873])),
+    ("text: codes agrees with a case walk",
+      .prim (n 5) (.cons (.app caseWalk (tx "h\\i\n é水𐅑")) (.cons (.prim (n 8) (tx "h\\i\n é水𐅑")) emptyArr)),
+      dataIs (.nat 1)) ]
+
+#eval do
+  for (name, p, want) in textScenarios do
+    IO.println (checkIs name p want)
+
+/-- The three functions of `Reflect.Text` agree: taking a text apart with
+    `uncons?` gives the list `codes` gives, and `ofCodes?` of it is the text. -/
+def unconsWalk : Nat → List Char → List Nat
+  | 0, _ => []
+  | f + 1, t =>
+    match Text.uncons? t with
+    | none => []
+    | some (c, r) => c :: unconsWalk f r
+
+#eval do
+  let texts : List String := ["", "a", "hé", "h\\i\n", "水𐅑 →", String.ofList (List.replicate 1000 'x')]
+  for s in texts do
+    let t : List Char := String.toList s
+    let ok := unconsWalk (t.length + 1) t == Text.codes t && Text.ofCodes? (Text.codes t) == some t
+    IO.println s!"{if ok then "ok  " else "FAIL"} text: uncons?, codes and ofCodes? agree on a text of {t.length} characters"
+  let bad := [[55296], [57343], [1114112], [97, 55296]].all fun ks => Text.ofCodes? ks == none
+  let good := Text.ofCodes? [55295, 57344, 1114111] |>.isSome
+  IO.println s!"{if bad && good then "ok  " else "FAIL"} text: ofCodes? refuses surrogates and numbers past U+10FFFF, and takes their neighbours"

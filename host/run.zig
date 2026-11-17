@@ -22,8 +22,8 @@ fn fail(comptime format: []const u8, args: anytype) noreturn {
 /// With `--interp` the program runs through the metacircular interpreter, the
 /// closed term `interp` given the program as data (`reflect_interp`), and with
 /// `--interp=k` through `k` interpreters, each running the next. With `--text`
-/// the kernel writes a result that is an array of code points as the text it
-/// spells. Zig does not
+/// the kernel writes a result that is a text raw, with no quotes and no
+/// escapes. Zig does not
 /// read the program, and it does not look at the answer:
 /// a syntax error, an error outcome and a value are all text the kernel wrote,
 /// and all of them exit 0. Exit 2 means this command could not ask the kernel

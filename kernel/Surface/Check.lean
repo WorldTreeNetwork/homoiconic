@@ -1,12 +1,13 @@
 import Reflect.Arith
 import Surface.Expect
 import Surface.Run
+import Surface.Bytes
 import Surface.Chan
 
 /-!
 Run with `lake env lean Surface/Check.lean` from `kernel/`. Checks every entry
-of `reads`, `refused`, `prints`, `converses`, `renders`, `channels` and
-`channelFiles`, that rendered data with no name in it reads back as a program
+of `reads`, `refused`, `prints`, `converses`, `renders`, `asTexts`, `channels`
+and `channelFiles`, that rendered data with no name in it reads back as a program
 with the same data as its outcome, and that rendered data with a name in it
 does not read. Prints each failing entry
 and throws, so `lean` exits non-zero, if any check fails.
@@ -39,6 +40,7 @@ mutual
   def hasName : Data → Bool
     | .name _ => true
     | .nat _ => false
+    | .text _ => false
     | .arr xs => anyName xs
   def anyName : List Data → Bool
     | [] => false
@@ -60,7 +62,10 @@ def sieveHeld (cfg : MConfig) : Bool :=
 
 def extraData : List Data := [
   .nat 0, .nat 18446744073709551616, .arr [], .arr [.arr []], .arr [.nat 1, .arr [.nat 2, .arr []], .nat 3],
-  .arr [.arr [.arr [.nat 7]], .arr [], .nat 0]]
+  .arr [.arr [.arr [.nat 7]], .arr [], .nat 0],
+  .text [], .text "plain".toList, .text "\"\\\n\t' é →𐅑".toList,
+  .arr [.nat 1, .text "a\"b".toList, .arr [.text [], .nat 34]],
+  .text ((List.range 300).map fun i => Char.ofNat (32 + i))]
 
 def main : IO UInt32 := do
   let mut fails := 0
@@ -124,6 +129,12 @@ def main : IO UInt32 := do
         IO.println s!"FAIL roundtrip {repr d}: `{renderData d}` does not read back, or holds a name and reads"
         fails := fails + 1
     | _ => pure ()
+  for (text, levels, out) in asTexts do
+    total := total + 1
+    let got := interpText text.toUTF8 levels 10000000 true
+    if got != out then
+      IO.println s!"FAIL --text {show1 text} at level {levels}: wrote `{show1 got}`, expected `{show1 out}`"
+      fails := fails + 1
   for (text, schedule, out) in channels do
     total := total + 1
     let got := channelsText text.toUTF8 schedule.toUTF8 1000000 100

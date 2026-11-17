@@ -8,12 +8,25 @@ Tested against examples; not proved.
 namespace Surface
 open Reflect
 
+/-- A text between double quotes, as the reader takes a string literal: a line
+    feed, a tab, a backslash and a double quote are written `\n`, `\t`, `\\`
+    and `\"`, and every other character as itself. -/
+def renderText (t : List Char) : String :=
+  String.ofList ('"' :: t.foldr (fun c acc =>
+    if c == '\n' then '\\' :: 'n' :: acc
+    else if c == '\t' then '\\' :: 't' :: acc
+    else if c == '\\' then '\\' :: '\\' :: acc
+    else if c == '"' then '\\' :: '"' :: acc
+    else c :: acc) ['"'])
+
 mutual
   /-- Numbers in decimal; arrays in brackets, items separated by a comma and a
-      space; a name as `#` and its number, which the reader does not read. -/
+      space; a text in quotes with the reader's escapes; a name as `#` and its
+      number, which the reader does not read. -/
   def renderData : Data → String
     | .nat n => toString n
     | .name n => "#" ++ toString n
+    | .text t => renderText t
     | .arr xs => "[" ++ ", ".intercalate (renderItems xs) ++ "]"
 
   def renderItems : List Data → List String
@@ -43,27 +56,11 @@ def renderState (budget : Nat) : State → String
   | .running .. => s!"no result within {budget} steps"
   | .fault => "error: machine fault"
 
-/-- The text an array spells, when every item is the code point of a tab, a
-    line feed, or a character from the space up other than delete. Smaller
-    numbers are control characters, and an array of them is not taken for text. -/
-def textOf : List Data → Option (List Char)
-  | [] => some []
-  | .nat n :: rest =>
-    if h : n.isValidChar then
-      if n == 9 || n == 10 || (32 ≤ n && n != 127) then
-        (textOf rest).map (Char.ofNatAux n h :: ·)
-      else none
-    else none
-  | _ :: _ => none
-
-/-- As `renderMOutcome`, but an array of code points is written as the text it
-    spells. Every other outcome is written as `renderMOutcome` writes it, so the
-    empty array is the empty text. -/
+/-- As `renderMOutcome`, but a result that is a text is written raw: its
+    characters, with no quotes and no escapes. Every other outcome is written
+    as `renderMOutcome` writes it; an array of code points is not a text. -/
 def renderMOutcomeText : MOutcome → String
-  | .value (.data (.arr xs)) =>
-    match textOf xs with
-    | some cs => String.ofList cs
-    | none => renderData (.arr xs)
+  | .value (.data (.text t)) => String.ofList t
   | o => renderMOutcome o
 
 def renderSyntaxError (msg : String) : String := "syntax error: " ++ msg

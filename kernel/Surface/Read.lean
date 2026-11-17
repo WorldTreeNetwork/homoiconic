@@ -29,8 +29,9 @@ def wrongTerm : Term := .app (.lit (.nat 0)) (.lit (.nat 0))
 
 inductive Tk where
   | num (n : Nat)
-  /-- A string literal, as its code points. -/
-  | str (cs : List Nat)
+  /-- A string literal: the characters of the text it denotes. The source is
+      UTF-8 bytes, decoded once in the lexer. -/
+  | str (cs : List Char)
   | name (s : String)
   | lparen | rparen | lbrack | rbrack
   | comma | dots | arrow | eq | plus | pipe | tilde
@@ -141,7 +142,7 @@ def lexGo : Nat → List UInt8 → Nat → Nat → Bool → Array Tok →
         match lexString (cs.length + 1) cs #[] 1 with
         | some (bytes, len, rest) =>
           match String.fromUTF8? (ByteArray.mk bytes) with
-          | some text => push (.str (text.toList.map Char.toNat)) len rest
+          | some text => push (.str text.toList) len rest
           | none => .error (msgAt line col "a string that is not UTF-8")
         | none => .error (msgAt line col
             "a string that does not end on its line, or an escape other than \\n \\t \\\\ \\\" \\'")
@@ -184,6 +185,8 @@ def fmtPos (p : Pos) (msg : String) : String := msgAt p.1 p.2 msg
 
 inductive Expr where
   | num : Nat → Expr
+  /-- A string literal: a text, not the array of its code points. -/
+  | text : List Char → Expr
   | nil : Expr
   | ref : Pos → String → Expr
   | lam : String → Expr → Expr
@@ -466,7 +469,7 @@ mutual
         let pos : Pos := (t.line, t.col)
         match t.kind with
         | .num n => do advance; pure (.num n)
-        | .str cs => do advance; pure (cs.foldr (fun c e => .cons (.num c) e) .nil)
+        | .str cs => do advance; pure (.text cs)
         | .name "fn" => do
           advance
           setGuard l
@@ -906,6 +909,10 @@ def Scope.push (sc : Scope) (x : String) : Scope := { sc with ctx := x :: sc.ctx
 /-- `op n x`: operation number `n` on the argument `x`. -/
 def opTerm : Term := .lam (.lam (.prim (.var 1) (.var 0)))
 
+/-- A named operation of one operand, as a function of that argument. The
+    operation is handed the argument itself, not an array of it. -/
+def unaryOp (n : Nat) : Term := .lam (.prim (.lit (.nat n)) (.var 0))
+
 /-- A named operation of two operands, as a function of two arguments. -/
 def binaryOp (n : Nat) : Term :=
   .lam (.lam (.prim (.lit (.nat n)) (.cons (.var 1) (.cons (.var 0) (.lit (.arr []))))))
@@ -919,7 +926,8 @@ def lookup (sc : Scope) (p : Pos) (x : String) : Except String TT :=
   else if x == "op" then .ok (.term opTerm)
   else if x == "ask" then .ok (.term askTerm)
   else match arithNames.lookup x with
-    | some n => .ok (.term (binaryOp n))
+    | some (n, 1) => .ok (.term (unaryOp n))
+    | some (n, _) => .ok (.term (binaryOp n))
     | none =>
       let j := sc.later.idxOf x
       if j < sc.later.length then .ok (.var (sc.ctx.length + j))
@@ -930,6 +938,7 @@ def lookup (sc : Scope) (p : Pos) (x : String) : Except String TT :=
 mutual
   def tr : Scope → Expr → Except String TT
     | _, .num n => .ok (.lit (.nat n))
+    | _, .text cs => .ok (.lit (.text cs))
     | _, .nil => .ok (.lit (.arr []))
     | sc, .ref p x => lookup sc p x
     | sc, .lam x b => do

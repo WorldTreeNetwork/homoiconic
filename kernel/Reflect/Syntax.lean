@@ -1,3 +1,5 @@
+import Reflect.Text
+
 namespace Reflect
 
 /-- First-order data. This is the abstract type; a wire format is elsewhere. -/
@@ -7,6 +9,9 @@ inductive Data where
   /-- A channel name. `succ`, `case` and the operation number of `prim` see it
       as its number; nothing in the language makes one. -/
   | name : Nat → Data
+  /-- A text: Unicode scalar values in order. `case` and `cons` see it as the
+      list of its code points (`Reflect.Text`). -/
+  | text : List Char → Data
   deriving Repr, BEq
 
 /-- De Bruijn index zero is the nearest binder. `lit d` denotes `d` and is

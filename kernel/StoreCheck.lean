@@ -15,6 +15,7 @@ def put (p : P Nat) : Cut (P Nat) := modifyGet fun a => (.ref a.size, a.push p)
 def cutP : P Nat → Cut (P Nat)
   | .nat n => put (.nat n)
   | .name n => put (.name n)
+  | .text t => put (.text t)
   | .nil => put .nil
   | .cons h t => do
       let h' ← cutP h
@@ -56,6 +57,7 @@ def go (σ : Store Nat) : Nat → PState Nat → LRun Nat
 partial def resolve (σ : Store Nat) : P Nat → Option (P Nat)
   | .nat n => some (.nat n)
   | .name n => some (.name n)
+  | .text t => some (.text t)
   | .nil => some .nil
   | .cons h t => do
       let h' ← resolve σ h
@@ -187,3 +189,63 @@ def nameRules : List (String × Term × String) :=
       IO.println (snapshot name p k).1
     for k in [0, 7, 40, 300] do
       IO.println (snapshot (name ++ ", interpreted") (level 1 p) k).1
+
+/-! Text on the lazy machine. Each of the five text rules, the program itself
+    and the program under `interp`, stopped at several points and cut at every
+    value, as the name rules are above. A text is a leaf: one piece, taken apart
+    by `case` with no fetch beyond the piece itself. -/
+
+def tx (s : String) : Term := .lit (.text s.toList)
+def codesP (ks : List Nat) : P Nat := ks.foldr (fun k acc => .cons (.nat k) acc) .nil
+
+def textRules : List (String × Term × String) :=
+  [ ("text: successor of \"a\"", .succ (tx "a"), "wrong"),
+    ("text: cons 1 onto \"hé\"", .cons (n 1) (tx "hé"), "value " ++ reprStr (codesP [1, 104, 233])),
+    ("text: cons 1 onto \"\"", .cons (n 1) (tx ""), "value " ++ reprStr (codesP [1])),
+    ("text: case on \"\"", .dcase (tx "") (n 7) (n 8) (n 9) (n 10), "value " ++ reprStr (P.nat 9 : P Nat)),
+    ("text: case on \"hé\"",
+      .dcase (tx "hé") (n 0) (n 0) (n 0) (.cons (.var 1) (.cons (.var 0) emptyArr)),
+      "value " ++ reprStr (P.cons (.nat 104) (.cons (.text "é".toList) .nil) : P Nat)),
+    ("text: a text as an operation number", .prim (tx "a") omega, "wrong"),
+    ("text: text of [104, 233]", .prim (n 7) (.lit (.arr [.nat 104, .nat 233])),
+      "value " ++ reprStr (P.text "hé".toList : P Nat)),
+    ("text: codes of \"hé\"", .prim (n 8) (tx "hé"), "value " ++ reprStr (codesP [104, 233])),
+    ("text: equal of \"a\" and [97]",
+      .prim (n 5) (.cons (tx "a") (.cons (.lit (.arr [.nat 97])) emptyArr)),
+      "value " ++ reprStr (P.nat 0 : P Nat)),
+    ("text: a text is kept as a text", .cons (tx "a") emptyArr,
+      "value " ++ reprStr (P.cons (.text "a".toList) .nil : P Nat)) ]
+
+#eval do
+  for (name, p, want) in textRules do
+    let s := load (compile p)
+    let (ps, pieces) := (cutState s.toP).run #[]
+    let got := match go (storeOf pieces) budget ps with
+      | .at t => shown (storeOf pieces) t
+      | .paused _ _ => "paused"
+    IO.println s!"{if got == want && plain (runUntil budget s) == want then "ok  " else "FAIL"} {name} on the lazy machine: {got}"
+    for k in [0, 2, 5] do
+      IO.println (snapshot name p k).1
+    for k in [0, 7, 40, 300] do
+      IO.println (snapshot (name ++ ", interpreted") (level 1 p) k).1
+
+-- A stored text is one piece. `case` on a reference to it fetches that piece
+-- and no other; with the piece withheld the run pauses needing its reference,
+-- and continues once it is there. The same for `cons` onto it.
+#eval do
+  let pieces : Array (P Nat) := #[.text "hé".toList]
+  let onCase : PState Nat :=
+    .running (.dcase .done .done .done (.access 1 (.access 0 (.cons .done))) .done) .nil [.ref 0] []
+  let onCons : PState Nat := .running (.cons .done) .nil [.ref 0, .nat 1] []
+  let paused (s : PState Nat) : Bool := match go (fun _ => none) budget s with
+    | .paused r mid => r == 0 && (match go (storeOf pieces) budget mid with
+        | .at (.halted (.value _)) => true
+        | _ => false)
+    | .at _ => false
+  let ends (s : PState Nat) (want : P Nat) : Bool := match go (storeOf pieces) budget s with
+    | .at t => shown (storeOf pieces) t == "value " ++ reprStr want
+    | .paused _ _ => false
+  -- `case` binds the head at 1 and the rest at 0; the code conses the head onto the rest.
+  let ok := paused onCase && paused onCons && ends onCase (codesP [104, 233]) &&
+    ends onCons (codesP [1, 104, 233])
+  IO.println s!"{if ok then "ok  " else "FAIL"} a stored text: case and cons fetch its one piece, pause on its reference when it is withheld, and go on when it is supplied"

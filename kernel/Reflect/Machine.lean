@@ -125,6 +125,8 @@ def step : State → State
   | .running (.succ _) _ [] _ => .fault
   | .running (.cons k) env (.data (.arr xs) :: .data x :: stk) frs =>
       .running k env (.data (.arr (x :: xs)) :: stk) frs
+  | .running (.cons k) env (.data (.text cs) :: .data x :: stk) frs =>
+      .running k env (.data (.arr (x :: (Text.codes cs).map .nat)) :: stk) frs
   | .running (.cons _) _ (_ :: .data _ :: _) _ => .halted .wrong
   | .running (.cons _) _ _ _ => .fault
   | .running (.dcase z _ _ _ k) env (.data (.nat 0) :: stk) frs =>
@@ -139,6 +141,10 @@ def step : State → State
       .running n env stk (⟨k, env⟩ :: frs)
   | .running (.dcase _ _ _ c k) env (.data (.arr (x :: xs)) :: stk) frs =>
       .running c (.data (.arr xs) :: .data x :: env) stk (⟨k, env⟩ :: frs)
+  | .running (.dcase _ _ n _ k) env (.data (.text []) :: stk) frs =>
+      .running n env stk (⟨k, env⟩ :: frs)
+  | .running (.dcase _ _ _ c k) env (.data (.text (ch :: r)) :: stk) frs =>
+      .running c (.data (.text r) :: .data (.nat ch.toNat) :: env) stk (⟨k, env⟩ :: frs)
   | .running (.dcase _ _ _ _ _) _ (.closure _ _ :: _) _ => .halted .wrong
   | .running (.dcase _ _ _ _ _) _ [] _ => .fault
   | .running (.checkNat k) env (.data (.nat n) :: stk) frs =>

@@ -234,7 +234,25 @@ def reads : List (String × Term) := [
       (.lit (reify (.lam (.var 0))))),
   ("let a = quote 7\nquote ((fn x -> x) ~a)",
     .app (.lam (.cons (num 0) (.cons (.lit (reify (.lam (.var 0)))) (.cons (.var 0) nil))))
-      (.lit (reify (num 7))))
+      (.lit (reify (num 7)))),
+  -- A string is the literal of a text; a character is a number.
+  ("\"hi\"", .lit (.text ['h', 'i'])),
+  ("\"\"", .lit (.text [])),
+  ("\"h\\\\i\\n\\t\\\"\\'\"", .lit (.text ['h', '\\', 'i', '\n', '\t', '"', '\''])),
+  ("\"hé →\"", .lit (.text ['h', 'é', ' ', '→'])),
+  ("'a'", num 97),
+  ("['a', \"a\"]", arr2 (num 97) (.lit (.text ['a']))),
+  ("[1, ...\"a\"]", .cons (num 1) (.lit (.text ['a']))),
+  -- `text` and `codes` are functions of one argument: the operation is handed
+  -- the argument itself.
+  ("text", .lam (.prim (num 7) (.var 0))),
+  ("codes", .lam (.prim (num 8) (.var 0))),
+  ("fn text -> text", .lam (.var 0)),
+  -- In a quotation a string is the code of its literal, and `codes` the code
+  -- of its function.
+  ("quote \"a\"", .lit (reify (.lit (.text ['a'])))),
+  ("quote (codes \"a\")",
+    .lit (reify (.app (.lam (.prim (num 8) (.var 0))) (.lit (.text ['a'])))))
 ]
 
 /-- Text the reader must refuse, with a word the message must contain. -/
@@ -274,7 +292,13 @@ def refused : List (String × String) := [
   ("def f x = quote (g 1)\ndef g x = x\nf 1", "quotation"),
   -- A name renders as `#3`, and that is not program text.
   ("#3", "unexpected character"),
-  ("[1, #3]", "unexpected character")
+  ("[1, #3]", "unexpected character"),
+  -- A string ends on its line, and takes five escapes.
+  ("\"no end", "does not end"),
+  ("\"two\nlines\"", "does not end"),
+  ("\"a\\qb\"", "escape"),
+  ("'ab'", "one ASCII character"),
+  ("'é'", "one ASCII character")
 ]
 
 /-- Program text, step budget, and the text the host must print. -/
@@ -343,7 +367,59 @@ def prints : List (String × Nat × String) := [
   ("def f xs =\n  case xs\n    [a, b] -> 2\n    [x, ...r] -> [x, r]\n    y -> [y]\n[f [], f [5], f [5, 6], f [5, 6, 7], f 3]",
     10000, "[[[]], [5, []], 2, [5, [6, 7]], [3]]"),
   -- A name written twice is the later one, as in `fn x x -> x`.
-  ("case [1, 2]\n  [a, a] -> a", 1000, "2")
+  ("case [1, 2]\n  [a, a] -> a", 1000, "2"),
+  -- A string is a text. It prints in quotes with the reader's escapes.
+  ("\"h\\\\i\\n\"", 1000, "\"h\\\\i\\n\""),
+  ("\"\"", 1000, "\"\""),
+  ("\"hé →\"", 1000, "\"hé →\""),
+  ("\"tab\\t quote\\\" single\\'\"", 1000, "\"tab\\t quote\\\" single'\""),
+  ("[\"a\", 'a', \"\", [\"b\"]]", 1000, "[\"a\", 97, \"\", [\"b\"]]"),
+  -- Equality tells it from the array of its code points.
+  ("equal \"h\\\\i\\n\" [104, 92, 105, 10]", 1000, "0"),
+  ("equal \"\" []", 1000, "0"),
+  ("equal \"hi\" \"hi\"", 1000, "1"),
+  ("equal \"hi\" \"ha\"", 1000, "0"),
+  -- `case` takes it apart as it takes that array apart: a head is a number,
+  -- the rest a text.
+  ("def count t =\n  case t\n    [] -> 0\n    [c, ...rest] ->\n      case equal c 'i'\n        0 -> count rest\n        _ -> add 1 (count rest)\ncount \"h\\\\i\\n\"",
+    100000, "1"),
+  ("case \"hi\"\n  [c, ...rest] -> [c, rest]", 1000, "[104, \"i\"]"),
+  ("case \"\"\n  [] -> 7\n  [c, ...rest] -> 8", 1000, "7"),
+  ("case \"hi\"\n  0 -> 1\n  m + 1 -> 2", 1000, "error: wrong"),
+  ("case \"hi\"\n  0 -> 1\n  m + 1 -> 2\n  t -> [t]", 1000, "[\"hi\"]"),
+  -- Consing onto a text gives an array; the successor of one is wrong.
+  ("[1, ...\"hi\"]", 1000, "[1, 104, 105]"),
+  ("[1, ...\"\"]", 1000, "[1]"),
+  ("\"a\" + 1", 1000, "error: wrong"),
+  ("op \"a\" 1", 1000, "error: wrong"),
+  ("add \"a\" 1", 1000, "[]"),
+  -- `text` and `codes` go between a text and the array of its code points.
+  ("text [104, ...codes \"i\"]", 1000, "\"hi\""),
+  ("codes \"hé\"", 1000, "[104, 233]"),
+  ("codes \"\"", 1000, "[]"),
+  ("text []", 1000, "\"\""),
+  ("text \"hi\"", 1000, "\"hi\""),
+  ("codes [104, 105]", 1000, "[104, 105]"),
+  ("text [55296]", 1000, "[]"),
+  ("text [104, [105]]", 1000, "[]"),
+  ("text 104", 1000, "[]"),
+  ("codes 104", 1000, "[]"),
+  ("text", 1000, "<function>"),
+  ("let text = fn a -> 7\ntext [104]", 1000, "7"),
+  ("interpret (quote (text [104, ...codes \"i\"]))", 10000000, "[0, [1, \"hi\"]]"),
+  ("interpret (quote (\"a\" + 1))", 10000000, "[2]"),
+  -- Array patterns on a text. An arm of a fixed length takes a text of that
+  -- many characters and names its code points. An arm of a least length names
+  -- the code points it lists and the rest, which is a text, empty when there
+  -- is no more. Any other length goes to the catch-all, which names the text.
+  ("case \"abc\"\n  [a, b, c] -> [c, b, a]", 1000, "[99, 98, 97]"),
+  ("case \"ab\"\n  [a, b, c] -> [c, b, a]", 1000, "error: wrong"),
+  ("case \"abcd\"\n  [a, b, c] -> [c, b, a]\n  other -> other", 1000, "\"abcd\""),
+  ("case \"abcd\"\n  [a, b, ...rest] -> [a, b, rest]", 1000, "[97, 98, \"cd\"]"),
+  ("case \"ab\"\n  [a, b, ...rest] -> [a, b, rest]", 1000, "[97, 98, \"\"]"),
+  ("case \"a\"\n  [a, b, ...rest] -> [a, b, rest]\n  other -> [9, other]", 1000, "[9, \"a\"]"),
+  ("def f xs =\n  case xs\n    [a, b] -> 2\n    [x, ...r] -> [x, r]\n    y -> [y]\n[f \"\", f \"a\", f \"ab\", f \"abc\"]",
+    10000, "[[\"\"], [97, \"\"], 2, [97, \"bc\"]]")
 ]
 
 def askTwiceText : String :=
@@ -415,7 +491,42 @@ def renders : List (Outcome × String) := [
   (.value (.data (.name 3)), "#3"),
   (.value (.data (.name 0)), "#0"),
   (.value (.data (.name 18446744073709551616)), "#18446744073709551616"),
-  (.value (.data (.arr [.nat 1, .name 0, .arr [.name 7]])), "[1, #0, [#7]]")
+  (.value (.data (.arr [.nat 1, .name 0, .arr [.name 7]])), "[1, #0, [#7]]"),
+  -- A text is in double quotes, with a line feed, a tab, a backslash and a
+  -- double quote as the reader's escapes and every other character as itself.
+  (.value (.data (.text [])), "\"\""),
+  (.value (.data (.text ['h', 'i'])), "\"hi\""),
+  (.value (.data (.arr [.nat 1, .text ['"', '\\', '\n', 'é']])), "[1, \"\\\"\\\\\\né\"]"),
+  (.value (.data (.text ['\t', '\'', ' ', '→', '𐅑'])), "\"\\t' →𐅑\""),
+  (.value (.data (.arr [.text [], .arr [.text ['a']], .nat 97])), "[\"\", [\"a\"], 97]"),
+  -- A carriage return and other control characters are written as themselves,
+  -- and the reader takes them inside quotes.
+  (.value (.data (.text ['a', '\r', Char.ofNat 1, 'b'])), "\"a\r\x01b\""),
+  (.value (.data (.arr [.text ['a'], .name 3])), "[\"a\", #3]")
+]
+
+/-- Program text, how many interpreters it runs through, and what `run --text`
+    writes: a result that is a text raw, and every other result as it is
+    written without the flag. An array of code points is not a text. -/
+def asTexts : List (String × Nat × String) := [
+  ("\"h\\\\i\\n\"", 0, "h\\i\n"),
+  ("\"hé →\"", 0, "hé →"),
+  ("\"hé →\"", 1, "hé →"),
+  ("\"\"", 0, ""),
+  ("\"say \\\"hi\\\"\"", 0, "say \"hi\""),
+  ("text [104, 105]", 0, "hi"),
+  ("text [104, 105]", 2, "hi"),
+  -- Not a text: as without the flag.
+  ("[104, 105]", 0, "[104, 105]"),
+  ("[104, 105]", 1, "[104, 105]"),
+  ("[]", 0, "[]"),
+  ("[\"hi\"]", 0, "[\"hi\"]"),
+  ("104", 0, "104"),
+  ("fn x -> x", 0, "<function>"),
+  ("fn x -> x", 1, "<function>"),
+  ("\"a\" + 1", 0, "error: wrong"),
+  ("\"a\" + 1", 1, "error: wrong"),
+  ("\"no end", 0, "syntax error: line 1, column 1: a string that does not end on its line, or an escape other than \\n \\t \\\\ \\\" \\'")
 ]
 
 /-- A name in hand is not a name held: `examples/guess.hom`. The name is

@@ -10,6 +10,8 @@ inductive P (R : Type) where
   | nat : Nat → P R
   /-- A channel name: a leaf, as a number is. -/
   | name : Nat → P R
+  /-- A text: one piece with no parts, so it is never cut. -/
+  | text : List Char → P R
   | nil : P R
   | cons : P R → P R → P R
   | closure : Code → P R → P R
@@ -38,6 +40,7 @@ mutual
   def Data.toP : Data → P R
     | .nat n => .nat n
     | .name n => .name n
+    | .text t => .text t
     | .arr xs => Data.listToP xs
   def Data.listToP : List Data → P R
     | [] => .nil
@@ -60,6 +63,7 @@ end
 inductive Unf (σ : Store R) : P R → P R → Prop where
   | nat {n} : Unf σ (.nat n) (.nat n)
   | name {n} : Unf σ (.name n) (.name n)
+  | text {t} : Unf σ (.text t) (.text t)
   | nil : Unf σ .nil .nil
   | cons {h t h' t'} (hh : Unf σ h h') (ht : Unf σ t t') : Unf σ (.cons h t) (.cons h' t')
   | closure {c e e'} (he : Unf σ e e') : Unf σ (.closure c e) (.closure c e')
@@ -69,6 +73,7 @@ inductive Unf (σ : Store R) : P R → P R → Prop where
 inductive UnfD (σ : Store R) : Nat → P R → P R → Prop where
   | nat {d n} : UnfD σ d (.nat n) (.nat n)
   | name {d n} : UnfD σ d (.name n) (.name n)
+  | text {d t} : UnfD σ d (.text t) (.text t)
   | nil {d} : UnfD σ d .nil .nil
   | cons {d h t h' t'} (hh : UnfD σ d h h') (ht : UnfD σ d t t') :
       UnfD σ d (.cons h t) (.cons h' t')
@@ -112,6 +117,7 @@ def fetch (σ : Store R) (r : R) (f : P R → PState R) : LStep R :=
 def P.hyd (σ : Store R) : P R → Except R (P R)
   | .nat n => .ok (.nat n)
   | .name n => .ok (.name n)
+  | .text t => .ok (.text t)
   | .nil => .ok .nil
   | .cons h t =>
       match h.hyd σ, t.hyd σ with
@@ -131,6 +137,7 @@ def P.hyd (σ : Store R) : P R → Except R (P R)
 def P.toData : P R → Option Data
   | .nat n => some (.nat n)
   | .name n => some (.name n)
+  | .text t => some (.text t)
   | .nil => some (.arr [])
   | .cons h t =>
       match h.toData, t.toData with
@@ -194,6 +201,8 @@ def lCons (σ : Store R) (k : Code) (env : P R) (stk : List (P R))
   | .ref r :: h :: stk => fetch σ r (fun p => .running (.cons k) env (p :: h :: stk) frs)
   | .nil :: h :: stk => .next (.running k env (.cons h .nil :: stk) frs)
   | .cons a b :: h :: stk => .next (.running k env (.cons h (.cons a b) :: stk) frs)
+  | .text t :: h :: stk =>
+      .next (.running k env (.cons h (Data.listToP ((Text.codes t).map .nat)) :: stk) frs)
   | _ :: _ :: _ => .next (.halted .wrong)
   | _ => .next .fault
 
@@ -206,6 +215,9 @@ def lCase (σ : Store R) (z sc n c k : Code) (env : P R) (stk : List (P R))
   | .name (m + 1) :: stk => .next (.running sc (.cons (.nat m) env) stk (⟨k, env⟩ :: frs))
   | .nil :: stk => .next (.running n env stk (⟨k, env⟩ :: frs))
   | .cons h t :: stk => .next (.running c (.cons t (.cons h env)) stk (⟨k, env⟩ :: frs))
+  | .text [] :: stk => .next (.running n env stk (⟨k, env⟩ :: frs))
+  | .text (ch :: r) :: stk =>
+      .next (.running c (.cons (.text r) (.cons (.nat ch.toNat) env)) stk (⟨k, env⟩ :: frs))
   | .ref r :: stk => fetch σ r (fun p => .running (.dcase z sc n c k) env (p :: stk) frs)
   | .closure _ _ :: _ => .next (.halted .wrong)
   | [] => .next .fault

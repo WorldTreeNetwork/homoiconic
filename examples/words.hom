@@ -86,6 +86,8 @@ def append xs ys =
 ; handed to `line` in turn.
 let sentence = words "the quick brown fox jumps over the lazy dog" []
 def line order = append (join (sort order sentence)) "\n"
-append (line before)
+; The lines are arrays of code points, built by consing; `text` makes the
+; result a text.
+text (append (line before)
   (append (line (shortest before))
-    (line (fn a b -> before b a)))
+    (line (fn a b -> before b a))))

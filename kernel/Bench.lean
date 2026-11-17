@@ -15,6 +15,28 @@ def countdown (k : Nat) : Term :=
     (.dcase (B.v "n") (B.num 0) "m" (.app (B.v "go") (B.v "m")) B.W "_" "_" B.W))))
     (.lit (.nat k))
 
+/-- Count the items of a list by `case`: `go xs acc`. On a text each step of
+    `case` hands over the first code point and the rest, a text. -/
+def walk : Term :=
+  .app (B.compile [] B.fix) (.lam (.lam (.lam
+    (.dcase (.var 1) (.app (.lit (.nat 0)) (.lit (.nat 0))) (.app (.lit (.nat 0)) (.lit (.nat 0)))
+      (.var 0) (.app (.app (.var 4) (.var 0)) (.succ (.var 2)))))))
+
+/-- A text of `k` characters. -/
+def sample (k : Nat) : Data := .text ((List.range k).map fun i => Char.ofNat (97 + i % 26))
+
+/-- The walk over the text itself. -/
+def caseWalk (k : Nat) : Term := .app (.app walk (.lit (sample k))) (.lit (.nat 0))
+
+/-- The walk over the array `codes` (operation 8) makes of the text. -/
+def codesWalk (k : Nat) : Term :=
+  .app (.app walk (.prim (.lit (.nat 8)) (.lit (sample k)))) (.lit (.nat 0))
+
+/-- `codes` alone: one step of the machine, linear in the text. -/
+def codesOnly (k : Nat) : Term :=
+  .dcase (.prim (.lit (.nat 8)) (.lit (sample k))) (.lit (.nat 0)) (.lit (.nat 0)) (.lit (.nat 0))
+    (.var 1)
+
 def describe : State → String
   | .halted (.value (.data (.nat k))) => s!"halted with {k}"
   | .halted _ => "halted"
@@ -34,3 +56,6 @@ def main : IO Unit := do
   bench "countdown 1000000, direct" (countdown 1000000)
   bench "countdown 20000, interpreted" (level 1 (countdown 20000))
   bench "countdown 300, interpreted twice" (level 2 (countdown 300))
+  bench "case walk over a text of 100000 characters" (caseWalk 100000)
+  bench "codes, then a walk over its array, 100000 characters" (codesWalk 100000)
+  bench "codes alone, 100000 characters" (codesOnly 100000)
