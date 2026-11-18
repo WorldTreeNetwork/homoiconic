@@ -22,6 +22,16 @@ structure Op where
   id : Data
   event : Event
 
+/-- The op made of a mark and an event as it is written, `d`, which `read`
+    takes for the event `ev`: its identifier is the name `key` gives to the
+    mark and `d` together. -/
+def Op.seal (key : Data → Data) (mark d : Data) (ev : Event) : Op :=
+  ⟨key (.arr [mark, d]), ev⟩
+
+/-- `o` is the seal of some mark and some writing of its event. -/
+def Op.Sealed (key : Data → Data) (read : Data → Option Event) (o : Op) : Prop :=
+  ∃ mark d, read d = some o.event ∧ o = Op.seal key mark d o.event
+
 /-- Processes, and the identifiers of the ops acted on, newest first. -/
 structure Node (C R : Type) where
   cfg : Config C R

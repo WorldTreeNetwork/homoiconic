@@ -749,18 +749,28 @@ rm -rf "$VMSTORE"
 mkdir -p "$VMSTORE"
 vm start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log"
 wantVm "$STATE" "$WHOLE"
-# Entries delivered again change nothing, whatever answer they carry.
+# Entries delivered again change nothing.
 vm start "$EXAMPLES/ask.hom" "$EXAMPLES/ask-again.log"
 wantVm "$ENTRIES" "5 given, 2 acted on"
 wantVm "$STATE" "$WHOLE"
+# An entry is named by the hash of all of it: the mark of another entry with a
+# different answer is a different entry, and is acted on.
+printf '[[1, 20], [1, 22]]\n' > "$OUT/one-mark.log"
+vm start "$EXAMPLES/ask.hom" "$OUT/one-mark.log"
+wantVm "$STANDS" "42"
+wantVm "$ENTRIES" "2 given, 2 acted on"
+if [ "$STATE" = "$WHOLE" ]; then
+    echo "vm: another entry under the same mark gave the same state" >&2
+    exit 1
+fi
 # A finished VM given the log again is the same state, and nothing is written.
 vm from "$WHOLE" "$EXAMPLES/ask-again.log"
 wantVm "$STANDS" "42"
 wantVm "$ENTRIES" "5 given, 0 acted on"
 wantVm "$STATE" "$WHOLE"
 wantVm "$(sed -n 's/^store: fetched [0-9]*, wrote //p' "$OUT/vm.txt")" "0"
-# The same entries in the other order are another state: the identifiers are
-# recorded in the order they were acted on.
+# The same entries in the other order are another state: the names of the
+# entries are recorded in the order they were acted on.
 printf '[[2, 22], [1, 20]]\n' > "$OUT/other.log"
 vm start "$EXAMPLES/ask.hom" "$OUT/other.log"
 if [ "$STATE" = "$WHOLE" ]; then
@@ -787,7 +797,7 @@ vm start "$EXAMPLES/append.hom" "$EXAMPLES/ask.log"
 wantVm "$STANDS" "[1, 2, 3, 4]"
 wantVm "$ENTRIES" "2 given, 0 acted on"
 # The kernel's text for a bad log, a bad root, and a turn that does not end.
-wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.answers")" "log: entry 0 is not an identifier and an answer"
+wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.answers")" "log: entry 0 is not a mark and an answer"
 wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/factorial.hom")" "log: not an array"
 wantVm "$("$OUT/vm" "$VMSTORE" from nothex "$EXAMPLES/ask.log")" "store error: a root is 64 hex digits"
 wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/forever.hom" "$EXAMPLES/ask.log" 5000 | sed -n 1p)" "no result within 5000 steps of a turn"
@@ -878,7 +888,7 @@ wantNode "$(sed -n 1,3p "$OUT/node.out")" "$("$OUT/chan" "$EXAMPLES/race.hom" "$
 printf '[[1, [0, 0, 0]], [2, [1, 0]], [3, [2, 0, 1]], [4, [0, 0, 1]]]\n' > "$OUT/guess.log"
 node start "$EXAMPLES/guess.hom" "$OUT/guess.log"
 wantNode "$(sed -n 3,4p "$OUT/node.out")" "entries: 4 given, 2 acted on
-refused: [3, [2, 0, 1]] cannot happen"
+refused: entry 2, [2, 0, 1], cannot happen"
 REFUSED="$STATE"
 printf '[[1, [0, 0, 0]], [2, [1, 0]]]\n' > "$OUT/guess-two.log"
 node start "$EXAMPLES/guess.hom" "$OUT/guess-two.log"
@@ -891,7 +901,7 @@ node start "$EXAMPLES/number.hom" "$OUT/guess.log"
 wantNode "$(sed -n 1,4p "$OUT/node.out")" "process 0: waiting on [1, #0, 7]; holds [#0]
 process 1: waiting on [2, 0]; holds []
 entries: 4 given, 2 acted on
-refused: [3, [2, 0, 1]] cannot happen"
+refused: entry 2, [2, 0, 1], cannot happen"
 # A logged node and a name. The log makes two channels, starts a second process
 # on the first, hands it the second name in a message, and then hands it both
 # names again. It holds each once. An op delivered a second time changes
@@ -933,7 +943,7 @@ wantNode "$(sed -n 's/^state: //p' "$OUT/handoff.out")" "$HANDED"
 echo "node: a name handed over twice is held once, and the logged node restarts to the same root"
 # The kernel's text for a bad log, a bad root, a root that is another kind of
 # state, and a run that does not end.
-wantNode "$("$OUT/node" "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/ask.log")" "log: entry 0 is not an identifier and an event"
+wantNode "$("$OUT/node" "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/ask.log")" "log: entry 0 is not a mark and an event"
 wantNode "$("$OUT/node" "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/factorial.hom")" "log: not an array"
 wantNode "$("$OUT/node" "$NODESTORE" from nothex "$EXAMPLES/ping.log")" "store error: a root is 64 hex digits"
 wantNode "$("$OUT/node" "$NODESTORE" start "$EXAMPLES/forever.hom" "$EXAMPLES/ping.log" 5000 | sed -n 1p)" "no result within 5000 steps of a turn"

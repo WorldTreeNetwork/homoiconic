@@ -8,9 +8,16 @@ entry answers the request the VM is waiting on, unless the VM has acted on that
 identifier before or has finished; then the entry changes nothing. The state of
 a VM is what handling its log, entry by entry from the start, leads to.
 
-Nothing is added to the language, and nothing here says where an identifier
-comes from. It is data, and two entries are the same delivery when their
-identifiers are equal. Who makes an identifier, and how, is the host's.
+Nothing is added to the language. An identifier is data, and two entries are
+the same delivery when their identifiers are equal. The theorems on handling a
+log hold whatever the identifiers are.
+
+A log that is read is *sealed*: an entry arrives as a mark and an answer, and
+its identifier is the name `key` gives to the two together. When `key` gives
+different names to different data, two sealed entries with one identifier are
+one entry (`sealed_same`). The `key` the kernel uses is the Blake3 hash of the
+entry's bytes (`Surface.Keep.entryName`); that it gives different names to
+different data is assumed, as it is for every stored piece.
 -/
 namespace Reflect
 
@@ -62,6 +69,16 @@ structure Entry where
   id : Data
   /-- The answer to the request the VM is waiting on. -/
   answer : Data
+
+/-- The entry made of a mark and an answer: its identifier is the name `key`
+    gives to the pair. The mark is not read; it tells apart two entries with
+    one answer. -/
+def Entry.seal (key : Data → Data) (mark answer : Data) : Entry :=
+  ⟨key (.arr [mark, answer]), answer⟩
+
+/-- `e` is the seal of some mark and its answer. -/
+def Entry.Sealed (key : Data → Data) (e : Entry) : Prop :=
+  ∃ mark, e = Entry.seal key mark e.answer
 
 /-- A VM between entries: where its program stands, and the identifiers of the
     entries it has acted on, newest first. -/

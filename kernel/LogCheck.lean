@@ -36,7 +36,9 @@ def foldState (src : String) (log : List Entry) : String :=
   match Surface.read src.toUTF8 with
   | .error _ => "syntax error"
   | .ok t =>
-      match vmRun 100000000 t log with
+      -- The entries here are written as a mark and an answer; the session
+      -- seals each as it reads the log, so the fold is given the same seals.
+      match vmRun 100000000 t (log.map fun e => Entry.seal entryName e.id e.answer) with
       | none => "unfinished"
       | some v =>
           let status : Option (P Ref) :=
@@ -125,13 +127,20 @@ def budget : Nat := 100000000
     let (again, _) := finish m2 100000 (vmFrom ((part "state: " done).drop 7).toString (logText [e3]) budget)
     IO.println (line (part "state: " again == part "state: " done && (done.splitOn "\n").head? == (again.splitOn "\n").head?)
       s!"{name}: a finished VM stays as it is: {(again.splitOn "\n").headD ""}")
+    -- An identifier is the hash of the whole entry: an entry with the mark of
+    -- another and a different answer is a different entry, and is acted on.
+    let (twice, _) := start [e1, ⟨e1.id, .nat 22⟩]
+    IO.println (line (part "entries: " twice == "entries: 2 given, 2 acted on"
+        && part "state: " twice == foldState src [e1, ⟨e1.id, .nat 22⟩]
+        && part "state: " twice != state [e1, e2])
+      s!"{name}: two answers under one mark are two entries")
     -- The order of first deliveries matters.
     IO.println (line (state [e2, e1] != state [e1, e2])
       s!"{name}: another order is another state")
 
 -- An identifier that is a name is not the identifier that is its number
 -- (`Data.decEq`): both are acted on, and each delivered again is not. This is
--- the proved fold; a log file is text, and no text reads as a name.
+-- the proved fold on identifiers given directly, not sealed ones.
 #eval do
   let src ← IO.FS.readFile "../examples/ask.hom"
   match Surface.read src.toUTF8 with
@@ -150,3 +159,15 @@ def budget : Nat := 100000000
           | _ => "not a result")
       | none => "unfinished"
     IO.println (line (result == "[]") s!"add of an answer that is the name #20 and 22: {result}")
+
+-- The name of an entry is the Blake3 hash of its bytes as one number: below
+-- 2^256, different for the entries here, and the same whenever it is asked.
+#eval do
+  let name (d : Data) : Nat := match entryName d with | .nat n => n | _ => 0
+  let a := name (.arr [.nat 1, .nat 20])
+  let b := name (.arr [.nat 1, .nat 22])
+  let c := name (.arr [.nat 2, .nat 20])
+  let bytes := Blake3.hash (write (.arr [.nat 1, .nat 20]))
+  IO.println (line (a / 2 ^ 256 == 0 && a != b && a != c && b != c && a == name (.arr [.nat 1, .nat 20])
+      && a / 2 ^ 248 == (bytes.get! 0).toNat && a % 256 == (bytes.get! 31).toNat)
+    "an entry's name is its hash as a number, first byte highest")

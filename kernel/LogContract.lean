@@ -46,6 +46,24 @@ example : ∀ [Ops] {p : Term} {log : List Entry} {v : Vm Value Outcome},
     ∃ asked, Interact p ((firsts [] log).map (·.answer)) asked v.status.ending :=
   Reflect.log_interact
 
+-- Two sealed entries with one identifier are one entry, for every `key` that
+-- gives different names to different data. That the kernel's `key`, a Blake3
+-- hash, is such a function is not proved: it is the hypothesis here.
+example : ∀ {key : Data → Data}, Function.Injective key → ∀ {e e' : Entry},
+    e.Sealed key → e'.Sealed key → e.id = e'.id → e = e' :=
+  Reflect.sealed_same
+
+-- So in a sealed log no entry is passed over for a different one: every entry
+-- is among the first deliveries.
+example : ∀ {key : Data → Data}, Function.Injective key → ∀ {log : List Entry},
+    (∀ e ∈ log, e.Sealed key) → ∀ {e : Entry}, e ∈ log → e ∈ firsts [] log :=
+  Reflect.sealed_first
+
+-- An entry is sealed by its construction.
+example : ∀ (key : Data → Data) (mark answer : Data),
+    (Entry.seal key mark answer).Sealed key :=
+  fun _ mark _ => ⟨mark, rfl⟩
+
 -- The machine handles a log as direct evaluation does.
 example : ∀ [Ops] {p : Term} {log : List Entry} {v : Vm Value Outcome},
     Logged sourceP p log v → Logged machineP p log (v.map MP.injO MP.injV) :=
@@ -76,3 +94,5 @@ example : ∀ [Ops] {budget : Nat} {p : Term} {log : List Entry} {w : MVm},
 #print axioms Reflect.log_machine
 #print axioms Reflect.log_machine_exact
 #print axioms Reflect.vm_true
+#print axioms Reflect.sealed_same
+#print axioms Reflect.sealed_first

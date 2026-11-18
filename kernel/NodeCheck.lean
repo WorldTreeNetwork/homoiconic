@@ -37,6 +37,10 @@ def provedState (t : Term) (os : List Op) : String :=
   match beginRun budget t with
   | none => "unfinished"
   | some c₀ =>
+      -- The ops here are written as a mark and an event; the session seals
+      -- each as it reads the log, so `nodeRun` is given the same seals.
+      let os := os.map fun (o : Op) =>
+        Op.seal entryName o.id (Surface.eventData o.event) o.event
       let n := (nodeRun budget ⟨c₀, []⟩ os).2.1
       let status : Status MValue MOutcome → Option (P Ref)
         | .waiting c p => some (plist [.nat 0, c.toP, p.toP])
@@ -91,7 +95,7 @@ def chosen (t : Term) : List Op :=
       let bad : Op := ⟨.nat 999, .comm 7 8⟩
       let (text, _) := start (log.take 1 ++ [bad] ++ log.drop 1)
       IO.println (line (part "state: " text == state (log.take 1) &&
-          part "refused: " text == "refused: [999, [2, 7, 8]] cannot happen")
+          part "refused: " text == "refused: entry 1, [2, 7, 8], cannot happen")
         s!"{name}: {part "refused: " text}")
 
 /-- A piece saved as the session saves a node, in a store of its own. -/

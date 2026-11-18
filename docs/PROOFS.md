@@ -165,7 +165,9 @@ configuration is every process, the names each holds, and the names made.
 ### The log
 
 A VM is a program and the identifiers of the log entries it has acted on. A
-log is a list of entries, each an identifier and an answer.
+log is a list of entries, each an identifier and an answer. An entry that is
+read is sealed: its identifier is the name `key` gives to its mark and its
+answer together. The kernel's `key` is a Blake3 hash.
 
 | Theorem | Says |
 |---|---|
@@ -176,6 +178,7 @@ log is a list of entries, each an identifier and an answer.
 | `log_restart` | A state reached by a first part of the log, given the whole log, reaches what the whole log reaches from the start |
 | `log_interact` | A VM's run is a run of its program by the request driver, against the answers of the first deliveries |
 | `log_machine`, `log_machine_exact`, `vm_true` | The machine handles a log exactly as direct evaluation does, and a state the executable fold reports is the program's |
+| `sealed_same`, `sealed_first` | When `key` gives different names to different data: two sealed entries with one identifier are one entry, so no entry of a sealed log is passed over for a different one |
 
 ### Nodes
 
@@ -189,6 +192,7 @@ op is an event with an identifier.
 | `node_restart` | A node reached by a first part of the log, given the whole log, reaches what the whole log reaches from the start |
 | `node_network` | A node's processes are where the schedule of the log's first deliveries leads the program, so the channel theorems hold of them |
 | `node_machine`, `node_machine_exact`, `node_true` | The machine applies a log exactly as direct evaluation does, and what the executable node reports is true however it stopped |
+| `sealed_op_same`, `sealed_op_first` | The same two statements for ops, whose identifier is the name of the mark and the event as written |
 | `plan_step`, `step_plan` | An event happens exactly when the runs of its plan end somewhere and the plan gives the next configuration from there |
 
 ### Stored state
@@ -393,8 +397,11 @@ theorems; `advance` is tested against it.
   value held in two places is stored twice. Storing by hash removes the
   duplicates: the interpreter-twice state after 40 steps, cut at every value,
   is 168,796 saves and 774 distinct pieces.
-- **The log.** An identifier is whatever the log says: it is not a hash of the
-  entry and nothing is signed. An entry does not say which request it
+- **The log.** An entry's identifier is the Blake3 hash of the entry. That
+  two different entries do not share a hash is assumed, not proved: it is the
+  hypothesis of `sealed_same`, and nothing proves it of Blake3. Reading a log
+  and sealing its entries is tested, not proved. Nothing is signed, and an
+  entry does not name the one before it. An entry does not say which request it
   answers. Nothing says a state is the same under another order of
   deliveries. That a state reached by two routes is saved under one root is
   tested, not proved, and so is the session that handles a log against a

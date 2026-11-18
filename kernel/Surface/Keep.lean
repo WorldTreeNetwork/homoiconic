@@ -193,7 +193,7 @@ def renderNodeProcs : Nat → List (Proc (P Ref) Final) → String
 
 /-- The log is applied, or an op of it cannot happen: save the node as it
     stands and say where each process is. -/
-def Session.keepNode (s : Session) (part : NodePart) (refused : Option Op) : Session :=
+def Session.keepNode (s : Session) (part : NodePart) (refused : Option (Nat × Op)) : Session :=
   let procs := plist (part.cfg.procs.map fun q =>
     plist [Data.toP (.arr (q.held.map .nat)), statusPiece q.status])
   let state := plist [Data.toP (.arr part.seen), Data.toP (.arr (part.cfg.names.map .nat)), procs]
@@ -202,7 +202,7 @@ def Session.keepNode (s : Session) (part : NodePart) (refused : Option Op) : Ses
   | some (root, pieces) =>
       let fresh := s.fresh pieces
       let stop := match refused with
-        | some o => "refused: " ++ renderData (.arr [o.id, eventData o.event]) ++ " cannot happen\n"
+        | some (k, o) => s!"refused: entry {k}, {renderData (eventData o.event)}, cannot happen\n"
         | none => ""
       { s with phase := .done, written := fresh,
                text := renderNodeProcs 0 part.cfg.procs ++
@@ -529,7 +529,8 @@ def advance : Nat → Session → Session
                   | [] => s.keepNode { part with todo := [] } none
                   | o :: rest =>
                       match plan part.cfg o.event with
-                      | none => s.keepNode { part with todo := [] } (some o)
+                      | none => s.keepNode { part with todo := [] }
+                          (some (part.given - (rest.length + 1), o))
                       | some (jobs, done) =>
                           let part := { part with todo := rest,
                                                   doing := some { op := some o, jobs, done } }
@@ -585,14 +586,22 @@ def give (s : Session) (bytes : ByteArray) : Session :=
                               fetched := s.fetched + 1 }
             advance s.fuel s
 
-/-- The entries of a log given as data, or the place of the first that is not
-    an identifier and an answer. -/
+/-- The name of an entry: the Blake3 hash of its bytes, read as one number,
+    first byte highest. That two different entries do not share a name is
+    assumed of the hash (D5); `Wire.write` gives different data different
+    bytes. -/
+def entryName (d : Data) : Data :=
+  .nat ((Blake3.hash (write d)).foldl (fun n b => n * 256 + b.toNat) 0)
+
+/-- The entries of a log given as data, each sealed under `entryName`, or the
+    place of the first that is not a mark and an answer. -/
 def dataEntries : Nat → List Data → Except Nat (List Entry)
   | _, [] => .ok []
-  | k, .arr [id, answer] :: ds => (dataEntries (k + 1) ds).map (⟨id, answer⟩ :: ·)
+  | k, .arr [mark, answer] :: ds =>
+      (dataEntries (k + 1) ds).map (Entry.seal entryName mark answer :: ·)
   | k, _ :: _ => .error k
 
-/-- Read a log: a program whose result is an array of `[identifier, answer]`. -/
+/-- Read a log: a program whose result is an array of `[mark, answer]`. -/
 def readLog (src : ByteArray) (budget : Nat) : Except String (List Entry) :=
   match Surface.read src with
   | .error msg => .error ("log: " ++ renderSyntaxError msg)
@@ -600,7 +609,7 @@ def readLog (src : ByteArray) (budget : Nat) : Except String (List Entry) :=
       match runUntil budget (load (compile t)) with
       | .halted (.value (.data (.arr ds))) =>
           match dataEntries 0 ds with
-          | .error k => .error s!"log: entry {k} is not an identifier and an answer"
+          | .error k => .error s!"log: entry {k} is not a mark and an answer"
           | .ok es => .ok es
       | _ => .error "log: not an array"
 
@@ -628,18 +637,18 @@ def vmFrom (root : String) (log : ByteArray) (budget : Nat) : Session :=
                                vm := some { todo := es, given := es.length } }
           advance s.fuel s
 
-/-- The ops of a log given as data, or the place of the first that is not an
-    identifier and an event. -/
+/-- The ops of a log given as data, each sealed under `entryName`, or the
+    place of the first that is not a mark and an event. -/
 def dataOps : Nat → List Data → Except Nat (List Op)
   | _, [] => .ok []
-  | k, .arr [id, ev] :: ds =>
+  | k, .arr [mark, ev] :: ds =>
       match dataEvent ev with
-      | some e => (dataOps (k + 1) ds).map (⟨id, e⟩ :: ·)
+      | some e => (dataOps (k + 1) ds).map (Op.seal entryName mark ev e :: ·)
       | none => .error k
   | k, _ :: _ => .error k
 
 /-- Read a node's log: a program whose result is an array of
-    `[identifier, event]`. -/
+    `[mark, event]`. -/
 def readOps (src : ByteArray) (budget : Nat) : Except String (List Op) :=
   match Surface.read src with
   | .error msg => .error ("log: " ++ renderSyntaxError msg)
@@ -647,7 +656,7 @@ def readOps (src : ByteArray) (budget : Nat) : Except String (List Op) :=
       match runUntil budget (load (compile t)) with
       | .halted (.value (.data (.arr ds))) =>
           match dataOps 0 ds with
-          | .error k => .error s!"log: entry {k} is not an identifier and an event"
+          | .error k => .error s!"log: entry {k} is not a mark and an event"
           | .ok os => .ok os
       | _ => .error "log: not an array"
 

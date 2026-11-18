@@ -40,6 +40,19 @@ example : ∀ [Ops] {p : Term} {ops : List Op} {n : Node Value Outcome},
     Ran sourceP p ops n → Network sourceP p ((firstOps [] ops).map (·.event)) n.cfg :=
   Reflect.node_network
 
+-- Two sealed ops with one identifier are one op, for every `key` that gives
+-- different names to different data and every way of reading an event.
+example : ∀ {key : Data → Data}, Function.Injective key →
+    ∀ {read : Data → Option Event} {o o' : Op},
+    o.Sealed key read → o'.Sealed key read → o.id = o'.id → o = o' :=
+  Reflect.sealed_op_same
+
+-- So in a sealed log no op is passed over for a different one.
+example : ∀ {key : Data → Data}, Function.Injective key →
+    ∀ {read : Data → Option Event} {ops : List Op},
+    (∀ o ∈ ops, o.Sealed key read) → ∀ {o : Op}, o ∈ ops → o ∈ firstOps [] ops :=
+  Reflect.sealed_op_first
+
 -- The machine applies a log as direct evaluation does.
 example : ∀ [Ops] {p : Term} {ops : List Op} {n : Node Value Outcome},
     Ran sourceP p ops n → Ran machineP p ops (n.map MP.injO MP.injV) :=
@@ -80,5 +93,7 @@ example : ∀ {C R : Type} {S : PSys C R} {cfg cfg' : Config C R} {ev : Event},
 #print axioms Reflect.node_machine
 #print axioms Reflect.node_machine_exact
 #print axioms Reflect.node_true
+#print axioms Reflect.sealed_op_same
+#print axioms Reflect.sealed_op_first
 #print axioms Reflect.plan_step
 #print axioms Reflect.step_plan

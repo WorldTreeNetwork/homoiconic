@@ -14,6 +14,10 @@ What is proved about a log.
   whole log reaches from the start (`log_restart`).
 * A VM's run is a run of its program against the answers of the first
   deliveries (`log_interact`).
+* In a sealed log, two entries with one identifier are one entry
+  (`sealed_same`), so no entry is passed over for a different one
+  (`sealed_first`). This needs `key` to give different names to different
+  data, which is a hypothesis of both.
 * The machine handles a log as direct evaluation does (`log_machine`,
   `log_machine_exact`), and what the executable fold reports is true of the
   program (`vm_true`).
@@ -359,6 +363,72 @@ theorem PSim.logged_backward {S₁ : PSys C₁ R₁} {S₂ : PSys C₂ R₂} {f 
   exact ⟨v, ⟨_, ⟨r₁, st₁, hr₁, hs₁, rfl⟩, hd₁⟩, he⟩
 
 end Generic
+
+/-! Sealed logs. -/
+
+/-- Two sealed entries with one identifier are one entry, when `key` gives
+    different names to different data. -/
+theorem sealed_same {key : Data → Data} (inj : Function.Injective key) {e e' : Entry}
+    (h : e.Sealed key) (h' : e'.Sealed key) (hid : e.id = e'.id) : e = e' := by
+  cases e with | mk i a
+  cases e' with | mk i' a'
+  obtain ⟨m, hm⟩ := h
+  obtain ⟨m', hm'⟩ := h'
+  simp only [Entry.seal, Entry.mk.injEq, and_true] at hm hm'
+  subst hm hm'
+  have hk := inj hid
+  simp only [Data.arr.injEq, List.cons.injEq, and_true] at hk
+  simp [hk.1, hk.2]
+
+theorem firsts_sub {log : List Entry} : ∀ {seen : List Data} {e : Entry},
+    e ∈ firsts seen log → e ∈ log := by
+  induction log with
+  | nil => intro _ _ h; simp [firsts] at h
+  | cons x xs ih =>
+    intro seen e h
+    by_cases hx : x.id ∈ seen
+    · simp only [firsts, hx, ite_true] at h
+      exact List.mem_cons_of_mem _ (ih h)
+    · simp only [firsts, hx, ite_false, List.mem_cons] at h
+      rcases h with h | h
+      · exact h ▸ List.mem_cons_self
+      · exact List.mem_cons_of_mem _ (ih h)
+
+/-- Every identifier of a log that was not seen before it is the identifier of
+    one of its first deliveries. -/
+theorem firsts_has {log : List Entry} : ∀ {seen : List Data} {e : Entry},
+    e ∈ log → e.id ∉ seen → ∃ e', e' ∈ firsts seen log ∧ e'.id = e.id := by
+  induction log with
+  | nil => intro _ _ h; simp at h
+  | cons x xs ih =>
+    intro seen e he hn
+    by_cases hx : x.id ∈ seen
+    · have hf : firsts seen (x :: xs) = firsts seen xs := by simp [firsts, hx]
+      rw [hf]
+      rcases List.mem_cons.mp he with h | h
+      · exact absurd (h ▸ hx) hn
+      · exact ih h hn
+    · have hf : firsts seen (x :: xs) = x :: firsts (x.id :: seen) xs := by simp [firsts, hx]
+      rw [hf]
+      by_cases hid : x.id = e.id
+      · exact ⟨x, List.mem_cons_self, hid⟩
+      · rcases List.mem_cons.mp he with h | h
+        · exact absurd (h ▸ rfl) hid
+        · have hn' : e.id ∉ x.id :: seen := by
+            intro hm
+            rcases List.mem_cons.mp hm with hm | hm
+            · exact hid hm.symm
+            · exact hn hm
+          obtain ⟨e', hm, he'⟩ := ih h hn'
+          exact ⟨e', List.mem_cons_of_mem _ hm, he'⟩
+
+/-- In a sealed log no entry is passed over for a different one: every entry
+    is among the first deliveries. -/
+theorem sealed_first {key : Data → Data} (inj : Function.Injective key) {log : List Entry}
+    (hs : ∀ e ∈ log, e.Sealed key) {e : Entry} (he : e ∈ log) : e ∈ firsts [] log := by
+  obtain ⟨e', hm, hid⟩ := firsts_has (seen := []) he (by simp)
+  have := sealed_same inj (hs e' (firsts_sub hm)) (hs e he) hid
+  exact this ▸ hm
 
 variable [Ops]
 open MP

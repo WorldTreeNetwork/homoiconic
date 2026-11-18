@@ -196,8 +196,14 @@ each an identifier and an answer. Handling an entry answers the request the VM
 is waiting on, runs the program to its next request or its end, and records
 the identifier. An entry whose identifier the VM has acted on changes nothing,
 and neither does any entry once the program has finished. The state of a VM is
-what handling its log from the program's first request leads to. An
-identifier is data; where it comes from is the host's.
+what handling its log from the program's first request leads to.
+
+The theorems on handling hold whatever the identifiers are. A log that is
+read is *sealed*: an entry is written `[mark, answer]`, and its identifier is
+the name a function `key` gives to that pair (`Entry.seal`). The kernel's
+`key` is `Surface.Keep.entryName`: the Blake3 hash of the pair's bytes, as one
+number. The mark is not read. It tells apart two entries with one answer, and
+a count, a link to the entry before or a signature can go there.
 
 `LogContract.lean` states `log_deterministic` and `log_prefix` (the state is
 fixed by the program and the log, and a state part way is a prefix),
@@ -205,7 +211,12 @@ fixed by the program and the log, and a state part way is a prefix),
 changes nothing), `log_restart` (a state reached by a first part of the log,
 given the whole log, reaches what the whole log reaches), `log_interact` (the
 run is the request driver's on the answers of the first deliveries),
-`log_machine`, `log_machine_exact` and `vm_true`. `vmRun` is
+`log_machine`, `log_machine_exact` and `vm_true`. It also states
+`sealed_same` (two sealed entries with one identifier are one entry) and
+`sealed_first` (so no entry of a sealed log is passed over for a different
+one). Both take as a hypothesis that `key` gives different names to different
+data. For Blake3 that is assumed, not proved, as it is for stored pieces.
+`vmRun` is
 `List.foldl handleRun` over the log, on the machine, with a step budget for
 each machine run; it reports no state when a run does not halt. `Log.lean`
 also decides equality of data by a definition of its own, because nothing is
@@ -219,7 +230,9 @@ together with the identifiers of the ops it has acted on. Applying an op the
 node has acted on changes nothing; otherwise the event happens as `Step` says
 and the identifier is recorded. An op whose event cannot happen has no next
 node. `plan` splits an event into the machine runs it needs and the
-configuration once they have ended.
+configuration once they have ended. An op that is read is sealed as an entry
+is: written `[mark, event]`, with the hash of that pair as its identifier
+(`Op.seal`, `sealed_op_same`, `sealed_op_first`).
 
 `NodeContract.lean` states `node_deterministic`, `node_prefix`, `node_again`,
 `node_redeliver`, `node_restart`, `node_network` (a node's processes are where
@@ -246,7 +259,8 @@ proved.
 A session can also be a VM handling a log. `vmStart` begins from source and a
 log; `vmFrom` begins from the root of a kept state and a log. The session goes
 from one entry to the next as `Reflect.vmRun` does, and at the end saves the
-state as the piece `[seen, status]`: the identifiers acted on, and `[0,
+state as the piece `[seen, status]`: the identifiers acted on (each the hash
+of its entry, a number below 2^256), and `[0,
 function]`, `[1, data]`, `[2, i]` or `[3]` for a waiting program, a result, an
 unbound variable or `wrong`. `LogCheck.lean` compares it with `vmRun`: the
 root the session saves is the root of the fold's state saved the same way,

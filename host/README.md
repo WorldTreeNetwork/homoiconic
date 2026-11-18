@@ -198,13 +198,15 @@ void *reflect_vm_from(const uint8_t *root, size_t root_length,
 ```
 
 Both give a session, served as a `keep` session is (`session.zig`). The
-program is a VM: it handles a log, a list of entries, each an identifier and
-an answer (`kernel/README.md`, The log). A log file is a program whose result
-is an array of `[identifier, answer]`:
+program is a VM: it handles a log, a list of entries (`kernel/README.md`, The
+log). A log file is a program whose result is an array of `[mark, answer]`.
+The kernel names each entry by the Blake3 hash of the pair, and that name is
+what makes two deliveries the same delivery. The mark is not read; it is
+there to tell apart two entries with one answer:
 
 ```
 cat examples/ask.log
-; a log: each entry is an identifier and an answer
+; a log: each entry is a mark and an answer
 [[1, 20], [2, 22]]
 ```
 
@@ -215,13 +217,13 @@ mkdir -p /tmp/vm
 host/out/vm /tmp/vm start examples/ask.hom examples/ask-one.log
 waiting on [2, 20]
 entries: 1 given, 1 acted on
-state: 0ea59a7a...
+state: 56b9da7d...
 store: fetched 0, wrote 1
 
-host/out/vm /tmp/vm from 0ea59a7a... examples/ask.log
+host/out/vm /tmp/vm from 56b9da7d... examples/ask.log
 42
 entries: 2 given, 1 acted on
-state: 088eeb2e...
+state: 5caf09f4...
 store: fetched 1, wrote 1
 ```
 
@@ -229,12 +231,12 @@ store: fetched 1, wrote 1
 hands the log to the state kept under a root. The first line is where the
 program stands: `waiting on` a payload, a result, or an error. Then how many
 entries the log held and how many the VM acted on, the root of the state, and
-the store line. An entry whose identifier the VM has acted on is passed over,
+the store line. An entry the VM has acted on is passed over,
 so a kept state can be handed the whole log again: above, the second call is
 given both entries and acts on one. The state it reaches has the root that
 `start` on `examples/ask.log` prints, and that the same start prints after
 the directory is emptied. `examples/ask-again.log` delivers the two entries
-five times, once with another answer, and reaches that root too. The same
+five times and reaches that root too. The same
 answers in the other order reach another.
 
 The roots agreeing is what `check.sh` and `kernel/LogCheck.lean` test. It is
@@ -255,9 +257,10 @@ the proved fold runs on, so the two do not run out at the same number.
 exactly, with a result that is data or a waiting program that is a function.
 It does not walk a function's environment.
 
-The command is handed a log; it does not keep one or add to one. An
-identifier is whatever the log says, and of two entries with one identifier
-the first is acted on.
+The command is handed a log; it does not keep one or add to one. Two entries
+are the same delivery only when mark and answer are both the same: `[1, 20]`
+and `[1, 22]` are two entries and both are acted on. The host does not hash
+an entry or compare two; the kernel does. Nothing is signed.
 
 ## Processes driven by a log
 
@@ -270,12 +273,12 @@ void *reflect_node_from(const uint8_t *root, size_t root_length,
 
 Both give a session, served as a `keep` session is. The program is the first
 process of a node (`kernel/README.md`, Nodes), and the log is a list of ops:
-each an identifier and an event, the event written as a schedule file writes
-it.
+each written `[mark, event]`, the event as a schedule file writes it. The
+kernel names an op by the hash of the pair, as it names an entry.
 
 ```
 cat examples/ping.log
-; a node's log for ping.hom: each op is an identifier and an event
+; a node's log for ping.hom: each op is a mark and an event
 [[1, [0, 0, 0]], [2, [1, 0]], [3, [0, 0, 1]], [4, [2, 0, 1]], [5, [2, 0, 1]], [6, [2, 1, 0]]]
 ```
 
@@ -284,34 +287,35 @@ cat examples/ping.log
 ```
 mkdir -p /tmp/node
 host/out/node /tmp/node start examples/ping.hom examples/ping-part.log
-process 0: waiting on [1, 0, 1]; holds [1, 0]
-process 1: waiting on [2, 0]; holds [0]
+process 0: waiting on [1, #0, #1]; holds [#1, #0]
+process 1: waiting on [2, #0]; holds [#0]
 entries: 3 given, 3 acted on
-state: d45db38c...
-store: fetched 0, wrote 1
+state: 94c49eb3...
+store: fetched 0, wrote 3
 
-host/out/node /tmp/node from d45db38c... examples/ping.log
-process 0: 42; holds [1, 0]
-process 1: [41]; holds [1, 0]
+host/out/node /tmp/node from 94c49eb3... examples/ping.log
+process 0: 42; holds [#1, #0]
+process 1: [41]; holds [#1, #0]
 entries: 6 given, 3 acted on
-state: 5b3e3af4...
-store: fetched 1, wrote 1
+state: 6c77bcc7...
+store: fetched 2, wrote 1
 ```
 
 `start` runs the program as the first process and applies the log. `from`
-applies the log to the node kept under a root. An op whose identifier the
-node has acted on is passed over, so a kept node can be handed the whole log
+applies the log to the node kept under a root. An op the node has acted on
+is passed over, so a kept node can be handed the whole log
 again. The root reached is the one `start` on `examples/ping.log` prints, with
 or without anything in the directory, and the one `examples/ping-again.log`
 reaches with its ten deliveries of the six ops. The process lines are the
 ones `chan` prints for the same events.
 
 An op whose event cannot happen stops the log. The command prints `refused:
-<op> cannot happen` before the state line, keeps the node as it stood before
+entry K, <event>, cannot happen` before the state line, K counting the log's
+entries from 0, keeps the node as it stood before
 that op, and applies none after it.
 
-The command does not choose events or make identifiers; `chan` chooses a
-schedule, and a log is that schedule with an identifier on each event.
+The command does not choose events or name ops; `chan` chooses a schedule,
+and a log is that schedule with a mark on each event.
 `node.zig` reads the files and serves the session, and exits as `vm` does.
 What is proved and what is tested is in `kernel/README.md`: the roots
 agreeing is tested, by `check.sh` and `kernel/NodeCheck.lean`.

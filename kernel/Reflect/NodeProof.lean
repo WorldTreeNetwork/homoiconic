@@ -352,6 +352,75 @@ theorem step_plan {S : PSys C R} {cfg cfg' : Config C R} {ev : Event}
 
 end Generic
 
+/-! Sealed logs. -/
+
+/-- Two sealed ops with one identifier are one op, when `key` gives different
+    names to different data. -/
+theorem sealed_op_same {key : Data → Data} (inj : Function.Injective key)
+    {read : Data → Option Event} {o o' : Op}
+    (h : o.Sealed key read) (h' : o'.Sealed key read) (hid : o.id = o'.id) : o = o' := by
+  cases o with | mk i ev
+  cases o' with | mk i' ev'
+  obtain ⟨m, d, hr, hm⟩ := h
+  obtain ⟨m', d', hr', hm'⟩ := h'
+  simp only [Op.seal, Op.mk.injEq, and_true] at hm hm'
+  subst hm hm'
+  have hk := inj hid
+  simp only [Data.arr.injEq, List.cons.injEq, and_true] at hk
+  simp only at hr hr'
+  rw [hk.2] at hr
+  have : ev = ev' := Option.some.inj (hr.symm.trans hr')
+  simp [this, hk]
+
+theorem firstOps_sub {ops : List Op} : ∀ {seen : List Data} {o : Op},
+    o ∈ firstOps seen ops → o ∈ ops := by
+  induction ops with
+  | nil => intro _ _ h; simp [firstOps] at h
+  | cons x xs ih =>
+    intro seen o h
+    by_cases hx : x.id ∈ seen
+    · simp only [firstOps, hx, ite_true] at h
+      exact List.mem_cons_of_mem _ (ih h)
+    · simp only [firstOps, hx, ite_false, List.mem_cons] at h
+      rcases h with h | h
+      · exact h ▸ List.mem_cons_self
+      · exact List.mem_cons_of_mem _ (ih h)
+
+theorem firstOps_has {ops : List Op} : ∀ {seen : List Data} {o : Op},
+    o ∈ ops → o.id ∉ seen → ∃ o', o' ∈ firstOps seen ops ∧ o'.id = o.id := by
+  induction ops with
+  | nil => intro _ _ h; simp at h
+  | cons x xs ih =>
+    intro seen o ho hn
+    by_cases hx : x.id ∈ seen
+    · have hf : firstOps seen (x :: xs) = firstOps seen xs := by simp [firstOps, hx]
+      rw [hf]
+      rcases List.mem_cons.mp ho with h | h
+      · exact absurd (h ▸ hx) hn
+      · exact ih h hn
+    · have hf : firstOps seen (x :: xs) = x :: firstOps (x.id :: seen) xs := by
+        simp [firstOps, hx]
+      rw [hf]
+      by_cases hid : x.id = o.id
+      · exact ⟨x, List.mem_cons_self, hid⟩
+      · rcases List.mem_cons.mp ho with h | h
+        · exact absurd (h ▸ rfl) hid
+        · have hn' : o.id ∉ x.id :: seen := by
+            intro hm
+            rcases List.mem_cons.mp hm with hm | hm
+            · exact hid hm.symm
+            · exact hn hm
+          obtain ⟨o', hm, ho'⟩ := ih h hn'
+          exact ⟨o', List.mem_cons_of_mem _ hm, ho'⟩
+
+/-- In a sealed log no op is passed over for a different one. -/
+theorem sealed_op_first {key : Data → Data} (inj : Function.Injective key)
+    {read : Data → Option Event} {ops : List Op}
+    (hs : ∀ o ∈ ops, o.Sealed key read) {o : Op} (ho : o ∈ ops) : o ∈ firstOps [] ops := by
+  obtain ⟨o', hm, hid⟩ := firstOps_has (seen := []) ho (by simp)
+  have := sealed_op_same inj (hs o' (firstOps_sub hm)) (hs o ho) hid
+  exact this ▸ hm
+
 variable [Ops]
 open MP
 
