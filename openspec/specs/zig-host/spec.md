@@ -214,7 +214,7 @@ The host SHALL provide a command that takes a program file, an optional schedule
 
 ### Requirement: A command runs a program against a log with its state in a directory
 
-The host SHALL provide a command that takes a store directory and either `start` with a program file and a log file, or `from` with a root and a log file, and an optional step budget. It SHALL pass the bytes to the Lean export `reflect_vm_start` or `reflect_vm_from`, and SHALL then serve the session exactly as the command that runs one turn does: read the file named by each piece the kernel asks for, write each piece the kernel hands back under the name the kernel gives before printing, and print the kernel's text and a newline. A log file SHALL be a program whose result is an array of `[identifier, answer]`. The text SHALL be where the program stands, then `entries: N given, K acted on`, then `state: ` and the root, then the store line. The host SHALL NOT read the log, decide what an entry does, or name the state. It SHALL exit 0 whenever the kernel answered, 3 with one line on standard error and nothing written when the directory lacks a piece that is needed, and 2 with a message on standard error for a wrong call, a file or directory it cannot read, or a file it cannot write.
+The host SHALL provide a command that takes a store directory and either `start` with a program file and a log file, or `from` with a root and a log file, and an optional step budget. It SHALL pass the bytes to the Lean export `reflect_vm_start` or `reflect_vm_from`, and SHALL then serve the session exactly as the command that runs one turn does: read the file named by each piece the kernel asks for, write each piece the kernel hands back under the name the kernel gives before printing, and print the kernel's text and a newline. A log file SHALL be a program whose result is an array of `[mark, answer]`; the kernel names each entry by the hash of the pair. The text SHALL be where the program stands, then `entries: N given, K acted on`, then `state: ` and the root, then the store line. The host SHALL NOT read the log, hash or compare an entry, decide what an entry does, or name the state. It SHALL exit 0 whenever the kernel answered, 3 with one line on standard error and nothing written when the directory lacks a piece that is needed, and 2 with a message on standard error for a wrong call, a file or directory it cannot read, or a file it cannot write.
 
 #### Scenario: Stop, restart, same state
 
@@ -238,11 +238,11 @@ The host SHALL provide a command that takes a store directory and either `start`
 
 - GIVEN `examples/ask.answers` as the log file
 - WHEN the command runs
-- THEN it prints `log: entry 0 is not an identifier and an answer` and exits 0
+- THEN it prints `log: entry 0 is not a mark and an answer` and exits 0
 
 ### Requirement: A command applies a log to processes kept in a directory
 
-The host SHALL provide a command that takes a store directory and either `start` with a program file and a log file, or `from` with a root and a log file, and an optional step budget. It SHALL pass the bytes to the Lean export `reflect_node_start` or `reflect_node_from` and SHALL then serve the session as the command that runs one turn does. A log file SHALL be a program whose result is an array of `[identifier, event]`, an event written as a schedule file writes it. The text SHALL be one line for each process, then `entries: N given, K acted on`, then a `refused:` line when an op could not happen, then `state: ` and the root, then the store line. The host SHALL NOT read the log, decide what an op does, choose an event, or name the node. It SHALL exit 0 whenever the kernel answered, 3 with one line on standard error and nothing written when the directory lacks a piece that is needed, and 2 with a message on standard error for a wrong call, a file or directory it cannot read, or a file it cannot write.
+The host SHALL provide a command that takes a store directory and either `start` with a program file and a log file, or `from` with a root and a log file, and an optional step budget. It SHALL pass the bytes to the Lean export `reflect_node_start` or `reflect_node_from` and SHALL then serve the session as the command that runs one turn does. A log file SHALL be a program whose result is an array of `[mark, event]`, an event written as a schedule file writes it; the kernel names each op by the hash of the pair. The text SHALL be one line for each process, then `entries: N given, K acted on`, then the line `refused: entry K, <event>, cannot happen` when the op at place K of the log, counted from 0, could not happen, then `state: ` and the root, then the store line. The host SHALL NOT read the log, hash or compare an op, decide what an op does, choose an event, or name the node. It SHALL exit 0 whenever the kernel answered, 3 with one line on standard error and nothing written when the directory lacks a piece that is needed, and 2 with a message on standard error for a wrong call, a file or directory it cannot read, or a file it cannot write.
 
 #### Scenario: Stop, restart, same node
 
@@ -254,7 +254,7 @@ The host SHALL provide a command that takes a store directory and either `start`
 
 - GIVEN `examples/guess.hom` and a log whose third op is `[3, [2, 0, 1]]`
 - WHEN the command runs
-- THEN it prints `entries: 4 given, 2 acted on` and `refused: [3, [2, 0, 1]] cannot happen`, exits 0, and its root is the one the first two ops alone give
+- THEN it prints `entries: 4 given, 2 acted on` and `refused: entry 2, [2, 0, 1], cannot happen`, exits 0, and its root is the one the first two ops alone give
 
 #### Scenario: The wrong kind of root
 

@@ -890,6 +890,12 @@ node start "$EXAMPLES/guess.hom" "$OUT/guess.log"
 wantNode "$(sed -n 3,4p "$OUT/node.out")" "entries: 4 given, 2 acted on
 refused: entry 2, [2, 0, 1], cannot happen"
 REFUSED="$STATE"
+# The place in a refusal counts every delivery before it, repeats too.
+printf '[[1, [0, 0, 0]], [1, [0, 0, 0]], [2, [1, 0]], [1, [0, 0, 0]], [3, [2, 0, 1]]]\n' > "$OUT/guess-again.log"
+node start "$EXAMPLES/guess.hom" "$OUT/guess-again.log"
+wantNode "$(sed -n 3,4p "$OUT/node.out")" "entries: 5 given, 2 acted on
+refused: entry 4, [2, 0, 1], cannot happen"
+wantNode "$STATE" "$REFUSED"
 printf '[[1, [0, 0, 0]], [2, [1, 0]]]\n' > "$OUT/guess-two.log"
 node start "$EXAMPLES/guess.hom" "$OUT/guess-two.log"
 wantNode "$STATE" "$REFUSED"

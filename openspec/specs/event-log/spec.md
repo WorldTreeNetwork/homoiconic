@@ -4,7 +4,7 @@ What is built: a program run by the request driver, together with the identifier
 
 ## Purpose
 
-State what a log entry does to a VM and what is proved about the state a log leads to. This spec does not say where an identifier comes from, who may add to a log, or how a log is stored.
+State what a log entry does to a VM and what is proved about the state a log leads to. An entry that is read is named by its hash. This spec does not say who may add to a log, what order its entries stand in, or how a log is stored.
 
 ## Requirements
 
@@ -46,7 +46,7 @@ For every operation table, handling an entry that is in the log a state was reac
 
 #### Scenario: Delivered again
 
-- GIVEN `examples/ask.hom` and `examples/ask-again.log`, which holds five entries with two identifiers, one of the repeats carrying another answer
+- GIVEN `examples/ask.hom` and `examples/ask-again.log`, which holds five deliveries of two entries
 - WHEN the VM handles the log
 - THEN it acts on two entries and its state has the root that `examples/ask.log` gives
 
@@ -111,3 +111,25 @@ For every operation table and every program, the state the machine reaches by a 
 - GIVEN the built kernel
 - WHEN `lake env lean LogContract.lean` runs
 - THEN it exits 0 and prints no axiom outside those three
+
+### Requirement: An entry that is read is named by its hash
+
+An entry of a log that is read SHALL be written as a mark and an answer, both data, and its identifier SHALL be the name of that pair: `Reflect.Entry.seal key mark answer`, with `key` being `Surface.Keep.entryName`, the Blake3 hash of the bytes `Wire.write` gives the pair, as one number with the first byte highest. The kernel SHALL compute the name; a log SHALL NOT supply it. The mark SHALL NOT be read for anything else. For every function `key` that gives different names to different data, two sealed entries with one identifier SHALL be one entry (`sealed_same`), and every entry of a log whose entries are all sealed SHALL be among the log's first deliveries (`sealed_first`). That Blake3 gives different names to different data SHALL be a stated assumption, not a theorem and not an axiom of any proof. Reading a log and sealing its entries SHALL be tested, not proved.
+
+#### Scenario: Two answers under one mark
+
+- GIVEN `examples/ask.hom` and the log `[[1, 20], [1, 22]]`
+- WHEN the VM handles the log
+- THEN it acts on both entries, finishes with 42, and its state has another root than `examples/ask.log` gives
+
+#### Scenario: The statement
+
+- GIVEN `Function.Injective key`, two entries sealed under `key`, and equal identifiers
+- WHEN `kernel/LogContract.lean` is checked
+- THEN the entries are equal, and the axioms printed for `sealed_same` and `sealed_first` are among `propext`, `Classical.choice` and `Quot.sound`
+
+#### Scenario: The name is the hash
+
+- GIVEN the entry `[1, 20]`
+- WHEN `kernel/LogCheck.lean` runs
+- THEN its name is below 2^256, its highest byte is the first byte of the Blake3 hash of the entry's bytes and its lowest the last, and the fold given sealed entries saves the root the session saves

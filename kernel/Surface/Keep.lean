@@ -588,8 +588,8 @@ def give (s : Session) (bytes : ByteArray) : Session :=
 
 /-- The name of an entry: the Blake3 hash of its bytes, read as one number,
     first byte highest. That two different entries do not share a name is
-    assumed of the hash (D5); `Wire.write` gives different data different
-    bytes. -/
+    assumed of the hash (D5), and needs `Wire.write` to give different data
+    different bytes, which is tested and not proved. -/
 def entryName (d : Data) : Data :=
   .nat ((Blake3.hash (write d)).foldl (fun n b => n * 256 + b.toNat) 0)
 

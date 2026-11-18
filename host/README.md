@@ -259,7 +259,8 @@ It does not walk a function's environment.
 
 The command is handed a log; it does not keep one or add to one. Two entries
 are the same delivery only when mark and answer are both the same: `[1, 20]`
-and `[1, 22]` are two entries and both are acted on. The host does not hash
+and `[1, 22]` are two entries, and each answers a request while the program
+is still asking. The host does not hash
 an entry or compare two; the kernel does. Nothing is signed.
 
 ## Processes driven by a log

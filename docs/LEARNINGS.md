@@ -110,3 +110,10 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - The machine and the lazy machine needed fewer new lines than the wildcard list predicted: `succ` and `checkNat` on a text, and `cons` onto a name, already fall to lines that answer `wrong`, which is the right answer. `stuck_core` took the new cases within its old heartbeat limit, and `Proof.lean` builds in about 24 s.
 - Checking `ReflectRun.lean` went from about 55 s to about 105 s with the text and name scenarios at interpreter levels 1 and 2.
 - Review of the implementation by another model family accepted it with no required fix, after two design reads had sent it back with three fixes and then one; the fixes were all made in the documents before any code was written.
+
+## 2026-11-17 — entries named by their hash
+
+- "Should the kernel check that the identifier is the hash of the entry?" had a simpler answer than a check: the kernel computes the identifier, so a log has no way to supply one. No definition of handling changed, and every earlier log theorem stands as it was.
+- A single "last entry" in place of the list of entries acted on would need the hash to have no cycles to prove that an old entry is passed over. That does not follow from "different data, different names", so the list stays.
+- Printing a refused op with its identifier would have printed a 77-digit number. The line now gives the op's place in the log.
+- Review (gpt-6.1-sol) found the proofs sound and two sentences too strong: `sealed_first` says which entries count as deliveries, not that each is used, and the step from the abstract theorem to `entryName` also rests on the byte form telling data apart, which is tested only.

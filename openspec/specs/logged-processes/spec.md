@@ -4,7 +4,7 @@ What is built: several processes that talk over channels (`openspec/specs/channe
 
 ## Purpose
 
-State what an op does to a node and what is proved about the node a log leads to. This spec does not say where an identifier comes from, how events are chosen, or anything about two nodes.
+State what an op does to a node and what is proved about the node a log leads to. An op that is read is named by its hash. This spec does not say how events are chosen, or anything about two nodes.
 
 ## Requirements
 
@@ -87,3 +87,19 @@ For every operation table and every program, the node the machine reaches by a l
 - GIVEN the built kernel
 - WHEN `lake env lean NodeContract.lean` runs
 - THEN it exits 0 and prints no axiom outside those three
+
+### Requirement: An op that is read is named by its hash
+
+An op of a log that is read SHALL be written as a mark and an event, and its identifier SHALL be the name `Surface.Keep.entryName` gives to that pair as written (`Reflect.Op.seal`). The kernel SHALL compute the name. For every function `key` that gives different names to different data and every way of reading an event from data, two sealed ops with one identifier SHALL be one op (`sealed_op_same`), and every op of a log whose ops are all sealed SHALL be among the log's first deliveries (`sealed_op_first`). An op that cannot happen SHALL be reported by its place in the log, counted from 0, and its event.
+
+#### Scenario: The statement
+
+- GIVEN `Function.Injective key`, two ops sealed under `key` and one `read`, and equal identifiers
+- WHEN `kernel/NodeContract.lean` is checked
+- THEN the ops are equal
+
+#### Scenario: The session and nodeRun agree on sealed ops
+
+- GIVEN the logs of `kernel/NodeCheck.lean`, each op sealed for `nodeRun` as the session seals it
+- WHEN `kernel/NodeCheck.lean` runs
+- THEN every line starts with `ok`

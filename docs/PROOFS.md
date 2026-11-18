@@ -399,7 +399,8 @@ theorems; `advance` is tested against it.
   is 168,796 saves and 774 distinct pieces.
 - **The log.** An entry's identifier is the Blake3 hash of the entry. That
   two different entries do not share a hash is assumed, not proved: it is the
-  hypothesis of `sealed_same`, and nothing proves it of Blake3. Reading a log
+  hypothesis of `sealed_same`, and nothing proves it of Blake3. It also needs
+  the byte form to tell different data apart, which is tested, not proved. Reading a log
   and sealing its entries is tested, not proved. Nothing is signed, and an
   entry does not name the one before it. An entry does not say which request it
   answers. Nothing says a state is the same under another order of

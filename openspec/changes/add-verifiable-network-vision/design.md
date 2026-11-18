@@ -196,6 +196,8 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 
 > **2026-11-12, `add-event-log`:** P13 and P14 are met for one program. A VM is a program run by the request driver plus the identifiers of the log entries it has acted on, and its state is the fold of a handler over a log of `[identifier, answer]` entries (`log_deterministic`, `log_prefix`; the executable `vmRun` is `List.foldl`). An entry already in the log changes nothing (`log_again`, `log_redeliver`, `log_once`), and a kept state handed its whole log reaches what the log reaches from the start (`log_restart`). P14 was planned to need P5; it does not, because an identifier is data the log supplies, not a hash made here. That is the open part: identifiers are not content hashes, nothing is signed, and the entry is not an identikey-log op. A VM is one program, not a set of processes. That a restarted state has the same root is tested, not proved. The statements are in `openspec/specs/event-log/spec.md`.
 
+> **2026-11-17, `seal-log-entries`:** an entry's identifier is now the Blake3 hash of the entry, computed by the kernel; a log supplies a mark and an answer. Two sealed entries with one identifier are one entry (`sealed_same`, `sealed_op_same`), under the hypothesis that the naming function gives different names to different data. Nothing is signed and an entry does not name the one before it; the mark is where both will go.
+
 | | Statement | Why | Needs |
 |---|---|---|---|
 | **P13** | `state log = foldl handle init log`, and the running VM's state equals it after any prefix | The log is the truth. A snapshot is a prefix. | P10 |
