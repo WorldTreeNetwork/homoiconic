@@ -85,3 +85,8 @@ failed preservation after removing vector restore or red-zone skipping,
 rejected stale provenance and a corrupt object, and the final restored
 factorial boot. The Framework laptop was unreachable in the earlier session;
 these results are from morphie, not the Framework.
+
+2026-11-18: morphie is the build and check host (confirmed after homoiconic-q59.40).
+`CLOUD_HYPERVISOR=~/ch54/cloud-hypervisor sh unikernel/check.sh` on morphie,
+Linux x86_64/KVM, Cloud Hypervisor 54.0. The Framework laptop still times out
+over SSH; do not wait on it for an image rebuild.

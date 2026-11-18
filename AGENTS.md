@@ -139,3 +139,7 @@ Tracker is beads (`bd`; DAG nodes are `--type node`). Living specs are
 - Forgejo (mimir): `ssh://git@mimir.worldtree.network/WorldTreeNetwork/homoiconic.git` (private). CLI: `fj -H mimir.worldtree.network`.
 - `origin` fetches from GitHub and pushes to both, so `git push` updates GitHub and Forgejo. The `forgejo` remote is the mimir URL alone.
 - Radicle: set up by the user in another session (reported 2026-11-12). This checkout has no Radicle remote and no `rad` command; how the Radicle copy is fed is not recorded here.
+
+## Unikernel host
+
+Build and check the image on **morphie** (Linux x86_64, KVM, Cloud Hypervisor 54.0 at `~/ch54/cloud-hypervisor`). Confirmed 2026-11-18. The Framework laptop times out over SSH; do not use it for an image rebuild.
