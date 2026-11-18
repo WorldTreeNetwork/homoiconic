@@ -3,9 +3,9 @@
 ## MODIFIED Requirements
 
 ### Requirement: The host returns the kernel's result
-<!-- base: d5070aae7ac67c342adc029f97343535f047af6d openspec/specs/zig-host/spec.md -->
+<!-- base: 06289ae62e478a859fde3b592bcdeb76796131d5 openspec/specs/zig-host/spec.md -->
 
-The Zig host SHALL pass one program's bytes, an output buffer, and a step budget to the Lean export `reflect_run`. That export SHALL read the surface syntax, compile the term, and run the machine for at most the budget. It SHALL write the plain text rendering of the outcome and SHALL return the number of bytes that rendering needs. The Zig sources SHALL pass and print bytes. They SHALL NOT read the syntax and SHALL NOT case-split on terms to produce an outcome. `reflect_run` SHALL NOT answer with a numeric result code. The exports that evaluate SHALL be `reflect_run`, `reflect_converse`, `reflect_run_bytes`, `reflect_keep_start`, `reflect_keep_answer`, `reflect_keep_give`, `reflect_channels` and `reflect_reply_bytes`, and each SHALL be a Lean definition.
+The Zig host SHALL pass one program's bytes, an output buffer, and a step budget to the Lean export `reflect_run`. That export SHALL read the surface syntax, compile the term, and run the machine for at most the budget. It SHALL write the plain text rendering of the outcome and SHALL return the number of bytes that rendering needs. The Zig sources SHALL pass and print bytes. They SHALL NOT read the syntax and SHALL NOT case-split on terms to produce an outcome. `reflect_run` SHALL NOT answer with a numeric result code. The exports that evaluate SHALL be `reflect_run`, `reflect_converse`, `reflect_run_bytes`, `reflect_interp`, `reflect_keep_start`, `reflect_keep_answer`, `reflect_keep_give`, `reflect_channels`, `reflect_vm_start`, `reflect_vm_from`, `reflect_node_start`, `reflect_node_from` and `reflect_reply_bytes`, and each SHALL be a Lean definition.
 
 #### Scenario: Identity
 
