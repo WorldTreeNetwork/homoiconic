@@ -71,7 +71,19 @@ done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
 lake env leanc -c -o "$OUT/runtime.o" "$HOST/runtime.c"
 for program in check run ask bytes keep chan vm node; do
-    zig build-obj "$HOST/$program.zig" -femit-bin="$OUT/zig-$program.o" \
+    # Without -lc, Zig's object defines _start. leanc also links glibc's
+    # Scrt1.o, and the two _start symbols fail the link. -lc makes the object
+    # export main and leave startup to glibc, which the C++ runtime needs
+    # (locale is set up before static constructors). The version is the oldest
+    # glibc the Lean toolchain's bundled libc still matches; a newer target
+    # references symbols that libc does not have. macOS objects already export
+    # main, so this is Linux only.
+    ZIG_FLAGS=""
+    if [ "$(uname -s)" = "Linux" ]; then
+        ZIG_FLAGS="-lc -target $(uname -m)-linux-gnu.2.17"
+    fi
+    # shellcheck disable=SC2086
+    zig build-obj $ZIG_FLAGS "$HOST/$program.zig" -femit-bin="$OUT/zig-$program.o" \
         --cache-dir "$OUT/zig-cache" --global-cache-dir "$OUT/zig-global-cache"
     # shellcheck disable=SC2086
     lake env leanc -o "$OUT/$program" "$OUT/zig-$program.o" "$OUT/runtime.o" \

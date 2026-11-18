@@ -8,7 +8,10 @@ the package, checks `ReflectContract.lean`, `MachineContract.lean`,
 `ReflectRun.lean`, `WireCheck.lean`, `KeepCheck.lean`, `LogCheck.lean`, `NodeCheck.lean` and `StoreCheck.lean`
 and fails on a line that starts with `FAIL`, writes the
 programs to run, compiles Lean to C and C to objects, compiles the Zig check to
-an object, and links with `leanc`. Generated C, objects, the generated
+an object, and links with `leanc`. On Linux the Zig object is built
+with `-lc -target <arch>-linux-gnu.2.17`, so it exports `main` and glibc's
+startup runs first. Without that, the object defines `_start` as well as
+`Scrt1.o`, and the link fails. macOS objects already export `main`. Generated C, objects, the generated
 `cases.zig`, the executable and Zig caches stay in ignored `out/`.
 
 The host first calls `initialize_circularKernel_Surface_Host`, the symbol
