@@ -2,34 +2,40 @@
 spike_id: unikernel-net-device
 hypothesis_id: virtio-mmio
 source_synthesis: openspec/changes/add-unikernel-net/design.md
-run_at: 2026-11-13T01:51:33Z
-verdict: inconclusive
-validation_scope: host-access-preflight-only
-version-pinned: Cloud Hypervisor 54.0, Lean 4.35.0, Zig 0.16.0
+run_at: 2026-11-18T19:20:00Z
+verdict: go
+validation_scope: one-arp-and-one-udp-datagram
+version-pinned: Cloud Hypervisor 54.0, Zig 0.16.0
 ---
 
-# Device spike: blocked before hardware execution
+# Device spike: the hardware contract held
 
-## Claim to test
+## Claim tested
 
-The image can discover Cloud Hypervisor 54.0's modern PCI virtio-net device, map its BARs (including above the existing first-4-GiB boot map), initialize split queues and exchange ARP and a UDP datagram without interrupts.
+A minimal guest can discover Cloud Hypervisor 54.0's modern PCI virtio-net device, map its BAR above 4 GiB, accept only VERSION_1 and MAC, set up split queues, and exchange one ARP reply and one UDP datagram with the KVM host. No interrupts. This is not the Lean image and not factorial-over-the-wire.
 
-## Minimum distinguishing test
+## Host
 
-On Linux x86_64 with usable KVM and CH54, boot an isolated minimal guest with an owned TAP. Record PCI BAR ranges, mapped register addresses, accepted feature bits, queue setup and DMA buffer bounds. Receive an ARP request and exchange one UDP payload with the host. Require bounded startup failure and cleanup of only the test-owned guest/TAP. An ELF build or native packet-parser test cannot establish this claim.
+morphie, `Linux archbox 7.2.6-arch2-1 x86_64`, `/dev/kvm` writable by the login user. `cloud-hypervisor v54.0` at `~/ch54/cloud-hypervisor`. Zig `0.16.0` at `~/zig-0.16.0/zig`. Tap `ukspike0`, host `10.99.0.1/24`, guest `10.99.0.2`, UDP port 9000, payload `spike-udp`.
 
 ## Evidence
 
-[access.log](access.log) records two read-only SSH access attempts, each exiting 255 with Operation timed out. Neither reached Linux, so no device test ran. [repro-command.sh](repro-command.sh) is a read-only prerequisite check to run after connectivity returns; it is not the hardware spike itself.
+PCI via CF8/CFC: `00:01.0` vendor `1af4` device `1041`.
 
-## Verdict: inconclusive
+One memory BAR: address `0x3fffff800000`, length `0x80000`. That is above 4 GiB and outside the 512 MiB guest RAM. The guest installed an uncached 2 MiB page for it. Common, notify, and device config came from virtio PCI capabilities on that BAR. Notify multiplier `4`.
 
-This is an unavailable test environment, not evidence against the architecture. The device hypothesis remains unverified, its confidence is unchanged, and no network production implementation is admitted. The accepted contract is in `openspec/changes/add-unikernel-net/reviews/2026-11-12-advise-2.md`.
+Offered feature bits: low word `0x20630028` (3 MTU, 5 MAC, 16 STATUS, 17 CTRL_VQ, 21 GUEST_ANNOUNCE, 22 MQ, and bit 29), high word `0x00000001` (bit 32 VERSION_1). Bit 33 ACCESS_PLATFORM was not offered. The driver wrote only MAC and VERSION_1. FEATURES_OK stayed set. MAC read back `02:00:00:00:00:02`.
 
-## What blocked validation
+Three queues exist. The guest enabled queue 0 (RX) and queue 1 (TX) at size 8; the device maximum is `0x100`. RX buffers are 2048 bytes with a 12-byte modern header. No interrupt, no packed ring, no extra feature bit.
 
-Neither configured Linux/KVM host is reachable over SSH. The Framework environment-link request remains pending. The Mac cannot supply the required Linux/KVM acceptance environment.
+The host sent one ARP request and one UDP datagram. The guest's serial log says `arp: replied`, `udp: echoed`, and `spike: ok`. The host log says the ARP reply MAC was `020000000002` and the UDP echo was the same 9 bytes. Cloud Hypervisor exited 0.
 
-## Next action
+Logs: `openspec/changes/add-unikernel-net/spike/serial.log` and `exchange.log`. Reproducer: `docs/spikes/unikernel-net-device/run.sh` with `guest/boot.S` and `guest/spike.zig`.
 
-Use the approved Framework link when connected, or restore access to Framework/morphie. Pass the read-only preflight and perform the actual minimal guest/TAP exchange above before reporting go. A finding that contradicts the hardware contract requires amendment and fresh architecture advise, as the accepted change requires. Do not close `homoiconic-q59.15` or `homoiconic-q59.17` from this preflight record.
+## Verdict: go
+
+The reviewed contract matches this boot: CF8/CFC discovery, a BAR above 4 GiB that had to be mapped, split queues, polling, and exactly VERSION_1 plus MAC. No amendment and no fresh advise. Production implementation is still not started.
+
+## What this does not show
+
+No Lean reply, no server, no Mjolnir guest, no QUIC, and no factorial program on the wire. The earlier 2026-11-13 note in this file was an SSH preflight only; morphie is reachable now.

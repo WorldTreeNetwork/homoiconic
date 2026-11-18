@@ -73,8 +73,8 @@ The real-guest check uses a build-only allocation-failure hook armed only after 
 
 ## Unverified hypotheses
 
-- virtio-mmio: claim: the image can discover CH54's modern PCI NIC, map its BARs (including above 4 GiB), initialize split queues and exchange ARP/one UDP datagram without interrupts. confidence: medium. verification: no KVM host currently reachable; requires a real minimal guest/TAP exchange with bounded startup failure. synthesis path: docs/spikes/unikernel-net-device/finding.md, then unikernel network layer.
+- virtio-mmio: claim: the image can discover CH54's modern PCI NIC, map its BARs (including above 4 GiB), initialize split queues and exchange ARP/one UDP datagram without interrupts. confidence: high. verification: passed 2026-11-18 on morphie, recorded in `spike/` and `docs/spikes/unikernel-net-device/finding.md`. The guest was a minimal PVH image, not the Lean image. BAR `0x3fffff800000` length `0x80000`. Offered features `0x20630028` and `0x00000001`; the driver kept only MAC and VERSION_1. One ARP reply and one UDP echo.
 
-Do not treat native parser tests or a cross-compiled ELF as go for this hypothesis. Host access is an external prerequisite, not permission to mark the spike passed.
+Do not treat a native parser test as this result. The passing spike does not by itself implement the Lean reply path.
 
 If the device spike contradicts CF8/CFC discovery, MMIO placement or attributes, negotiated features or queue behavior, amend this contract to the evidenced behavior and reopen Fresh advise after preparation. Obtain fresh acceptance before production implementation; do not quietly change the driver to an unreviewed architecture. A passing spike records the matching contract and proceeds.

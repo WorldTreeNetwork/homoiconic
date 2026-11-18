@@ -1,0 +1,6 @@
+guest ready
+sent arp
+arp reply mac 020000000002
+sent udp
+udp echo 9 bytes
+exchange ok

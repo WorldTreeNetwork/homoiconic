@@ -1,0 +1,16 @@
+spike: boot
+pci: 00 01 00 vendor 1af4 device 1041
+bar 00: 00003fffff800000 len 0000000000080000
+features0: 20630028
+features1: 00000001
+negotiated: MAC VERSION_1
+mac: 02:00:00:00:00:02
+num_queues: 0003
+rx_size: 0100
+rx_notify: 0000 mul 00000004
+tx_size: 0100
+tx_notify: 0001 mul 00000004
+ready
+arp: replied
+udp: echoed
+spike: ok
