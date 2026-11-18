@@ -80,6 +80,9 @@ mkdir -p "$OUT"
 image factorial "$EXAMPLES/factorial.hom"; boot factorial; same factorial "$HERE/expected/factorial.txt"
 image forever "$EXAMPLES/forever.hom" 5000; boot forever; same forever "$HERE/expected/forever.txt"
 image not-syntax "$HERE/expected/not-syntax.hom"; boot not-syntax; same not-syntax "$HERE/expected/not-syntax.txt"
+# Text is its own kind of data: quoted, escaped, UTF-8 on the serial port, and the
+# two text operations. (A name cannot reach this image: reflect_run answers no request.)
+image text "$HERE/expected/text.hom"; boot text; same text "$HERE/expected/text.txt"
 
 # A source with a zero byte in it: the bytes are passed by address and length.
 printf 'quote 1\0 2\n' > "$OUT/zero.hom"

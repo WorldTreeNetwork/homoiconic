@@ -2,6 +2,7 @@ with cloud-hypervisor v54.0
 ok   factorial
 ok   forever
 ok   not-syntax
+ok   text
 ok   a zero byte in the source
 ok   an answer of 128911 bytes
 ok   the clock stopped

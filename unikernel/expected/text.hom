@@ -1,0 +1,3 @@
+; text: escapes, a character outside ASCII, and the two text operations
+let s = "tab\there, \"quoted\", héllo\n"
+[s, codes "ab", text [104, 105], quote "x"]
