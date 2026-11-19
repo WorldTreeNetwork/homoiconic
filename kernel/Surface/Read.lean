@@ -4,10 +4,12 @@ import Reflect.Arith
 
 /-!
 The reader: program text to a `Reflect.Term`, or an error message with line and
-column. Hand-written and total; recursion is bounded by fuel proportional to
-the number of tokens, or goes down the syntax tree, never by `partial`. The
-reader is tested against `Surface.reads` and `Surface.refused`; it is not
-proved.
+column. Hand-written. The parsing group and the name-to-index group are
+`partial`: an array is read in a loop (`readArray`, `trCons`), because one
+call per item overflowed the stack at about 66,000 items, and Lean will not
+check a loop beside the other recursive calls. The fuel arguments are still
+there and still refuse an input that exceeds them. The reader is tested
+against `Surface.reads` and `Surface.refused`; it is not proved.
 
 Pipeline: bytes → tokens (`lex`) → syntax tree with names (`parse`) → terms
 with de Bruijn indices (`tr`). Layout is handled in the parser: a token that
@@ -405,13 +407,51 @@ def closer : Tk → Bool
   | _ => false
 
 mutual
-  def parseExpr : Nat → Lim → P Expr
+  /-- The items of an array, then the tail after `...`, or `[]` when the array
+      ends at `]`. A loop, not one call per item: about 66,000 items overflowed
+      the stack. `fuel` is the bound the recursive reader already used. The
+      whole parsing group is `partial` because this loop calls back into it,
+      which is not a structural recursion. -/
+  partial def readArray (fuel : Nat) (first : Expr) : P Expr := do
+    let mut fuel := fuel
+    let mut items : Array Expr := #[]
+    let mut cur := first
+    let mut tail : Expr := .nil
+    repeat
+      if fuel = 0 then failHere "the input is too large to read"
+      fuel := fuel - 1
+      items := items.push cur
+      match ← peekRaw with
+      | some ⟨.rbrack, _, _, _⟩ =>
+        advance
+        break
+      | some ⟨.comma, _, _, _⟩ =>
+        advance
+        match ← peekRaw with
+        | some ⟨.dots, _, _, _⟩ =>
+          advance
+          tail ← parseExpr fuel .none
+          expectTok .rbrack
+          break
+        | _ =>
+          cur ← parseExpr fuel .none
+      | t => failAt t "expected `,` or `]`"
+    let mut acc := tail
+    let mut i := items.size
+    while i > 0 do
+      i := i - 1
+      match items[i]? with
+      | some e => acc := .cons e acc
+      | none => pure ()
+    pure acc
+
+  partial def parseExpr : Nat → Lim → P Expr
     | 0, _ => failHere "the input is too large to read"
     | f + 1, l => do
       let e ← parsePlus f l
       pipeLoop f l e
 
-  def pipeLoop : Nat → Lim → Expr → P Expr
+  partial def pipeLoop : Nat → Lim → Expr → P Expr
     | 0, _, _ => failHere "the input is too large to read"
     | f + 1, l, e => do
       match ← peek l with
@@ -421,13 +461,13 @@ mutual
         pipeLoop f l (.app r e)
       | _ => pure e
 
-  def parsePlus : Nat → Lim → P Expr
+  partial def parsePlus : Nat → Lim → P Expr
     | 0, _ => failHere "the input is too large to read"
     | f + 1, l => do
       let e ← parseApp f l
       plusLoop f l e
 
-  def plusLoop : Nat → Lim → Expr → P Expr
+  partial def plusLoop : Nat → Lim → Expr → P Expr
     | 0, _, _ => failHere "the input is too large to read"
     | f + 1, l, e => do
       match ← peek l with
@@ -438,7 +478,7 @@ mutual
         | _ => failAt (some t) "`+` only means the successor, written `e + 1`; the right side must be the number 1"
       | _ => pure e
 
-  def parseApp : Nat → Lim → P Expr
+  partial def parseApp : Nat → Lim → P Expr
     | 0, _ => failHere "the input is too large to read"
     | f + 1, l => do
       match ← peek l with
@@ -449,7 +489,7 @@ mutual
         else failAt (some t) s!"expected an expression, found `{t.kind.show}`"
       | none => failHere "expected an expression"
 
-  def appLoop : Nat → Lim → Expr → P Expr
+  partial def appLoop : Nat → Lim → Expr → P Expr
     | 0, _, _ => failHere "the input is too large to read"
     | f + 1, l, e => do
       match ← peek l with
@@ -460,7 +500,7 @@ mutual
         else pure e
       | none => pure e
 
-  def parseAtom : Nat → Lim → P Expr
+  partial def parseAtom : Nat → Lim → P Expr
     | 0, _ => failHere "the input is too large to read"
     | f + 1, l => do
       match ← peek l with
@@ -503,37 +543,17 @@ mutual
         | k => failAt (some t) s!"unexpected `{k.show}`"
 
   /-- After `[`. -/
-  def parseArray : Nat → P Expr
+  partial def parseArray : Nat → P Expr
     | 0 => failHere "the input is too large to read"
     | f + 1 => do
       match ← peekRaw with
       | some ⟨.rbrack, _, _, _⟩ => do advance; pure .nil
       | _ =>
         let x ← parseExpr f .none
-        arrayRest f x
-
-  /-- After an item: the end, `, item` and more, or `, ...tail` and the end. -/
-  def arrayRest : Nat → Expr → P Expr
-    | 0, _ => failHere "the input is too large to read"
-    | f + 1, x => do
-      match ← peekRaw with
-      | some ⟨.rbrack, _, _, _⟩ => do advance; pure (.cons x .nil)
-      | some ⟨.comma, _, _, _⟩ =>
-        advance
-        match ← peekRaw with
-        | some ⟨.dots, _, _, _⟩ =>
-          advance
-          let tl ← parseExpr f .none
-          expectTok .rbrack
-          pure (.cons x tl)
-        | _ =>
-          let y ← parseExpr f .none
-          let rest ← arrayRest f y
-          pure (.cons x rest)
-      | t => failAt t "expected `,` or `]`"
+        readArray f x
 
   /-- After `->` or `=`: the rest of the line, or a block on the lines below. -/
-  def parseBody : Nat → Lim → P Expr
+  partial def parseBody : Nat → Lim → P Expr
     | 0, _ => failHere "the input is too large to read"
     | f + 1, l => do
       match ← peekRaw with
@@ -546,7 +566,7 @@ mutual
         else parseExpr f l
 
   /-- Lines at column `c`: `let`s and `def`s, then one value. -/
-  def parseBlock : Nat → Nat → P Expr
+  partial def parseBlock : Nat → Nat → P Expr
     | 0, _ => failHere "the input is too large to read"
     | f + 1, c => do
       modify fun s => { s with exempt := s.pos }
@@ -583,7 +603,7 @@ mutual
           | none => pure e
 
   /-- What follows a `let` or `def`: another line of the block. -/
-  def blockRest : Nat → Nat → P Expr
+  partial def blockRest : Nat → Nat → P Expr
     | 0, _ => failHere "the input is too large to read"
     | f + 1, c => do
       match ← peekRaw with
@@ -595,7 +615,7 @@ mutual
       | none => failHere "a block must end in a value, not a binding"
 
   /-- After `case`: the scrutinee, then arms on the lines below, one column. -/
-  def parseCase : Nat → Lim → P Expr
+  partial def parseCase : Nat → Lim → P Expr
     | 0, _ => failHere "the input is too large to read"
     | f + 1, l => do
       let s ← parseExpr f .line
@@ -614,7 +634,7 @@ mutual
             let a := arms.a.getD ("_", .missing)
             pure (.caseE s z sc.1 sc.2 arrs a.1 a.2)
 
-  def parseArms : Nat → Lim → Nat → Arms → P Arms
+  partial def parseArms : Nat → Lim → Nat → Arms → P Arms
     | 0, _, _, _ => failHere "the input is too large to read"
     | f + 1, l, a, acc => do
       let some t ← peekRaw | failHere "expected an arm"
@@ -936,7 +956,30 @@ def lookup (sc : Scope) (p : Pos) (x : String) : Except String TT :=
       else .error (fmtPos p s!"unbound name `{x}`")
 
 mutual
-  def tr : Scope → Expr → Except String TT
+  /-- A `cons` chain, read in a loop. Recursing once per item overflowed the
+      stack on an array of about 66,000 items. -/
+  partial def trCons (sc : Scope) (head : Expr) (tail : Expr) : Except String TT := do
+    let mut acc : Array TT := #[]
+    let mut cur := head
+    let mut rest := tail
+    repeat
+      acc := acc.push (← tr sc cur)
+      match rest with
+      | .cons x y =>
+        cur := x
+        rest := y
+      | _ =>
+        let last ← tr sc rest
+        let mut i := acc.size
+        let mut out := last
+        while i > 0 do
+          i := i - 1
+          match acc[i]? with
+          | some e => out := .cons e out
+          | none => pure ()
+        return out
+
+  partial def tr : Scope → Expr → Except String TT
     | _, .num n => .ok (.lit (.nat n))
     | _, .text cs => .ok (.lit (.text cs))
     | _, .nil => .ok (.lit (.arr []))
@@ -948,10 +991,7 @@ mutual
       let f' ← tr sc f
       let a' ← tr sc a
       pure (.app f' a')
-    | sc, .cons a b => do
-      let a' ← tr sc a
-      let b' ← tr sc b
-      pure (.cons a' b')
+    | sc, .cons a b => trCons sc a b
     | sc, .succ e => do
       let e' ← tr sc e
       pure (.succ e')
@@ -1010,12 +1050,10 @@ mutual
         else .error (fmtPos p "a splice `~` cannot be under a binder of its quotation")
     | _, .arm _ _ _ _ => .ok (.term wrongTerm)
     | _, .missing => .ok (.term wrongTerm)
-  termination_by _ e => (sizeOf e, 0)
-
   /-- The rest of a run, where `earlier` is its definitions already read,
       nearest first: the definitions still to come, each in the layout
       `assemble` takes, and then the rest of the block. -/
-  def trRun (sc : Scope) (earlier : List String) : Expr → Except String (List Term × Term)
+  partial def trRun (sc : Scope) (earlier : List String) : Expr → Except String (List Term × Term)
     | .defE f ps b r => do
       let b' ← tr { sc with ctx := ps.reverse ++ f :: earlier ++ sc.ctx,
                             later := runNames r ++ sc.later } b
@@ -1024,16 +1062,13 @@ mutual
     | e => do
       let t ← tr { sc with ctx := earlier ++ sc.ctx } e
       pure ([], t.toTerm)
-  termination_by e => (sizeOf e, 1)
-
   /-- The array arms of a `case`, each body read where its names are bound. -/
-  def trArms (base : Scope) : Expr → Except String (List ArmT)
+  partial def trArms (base : Scope) : Expr → Except String (List ArmT)
     | .arm items rest body next => do
       let b ← tr { base with ctx := rest.toList ++ items.reverse ++ base.ctx } body
       let more ← trArms base next
       pure ({ k := items.length, rest := rest.isSome, body := b } :: more)
     | _ => pure []
-  termination_by e => (sizeOf e, 0)
 end
 
 end Surface.Read

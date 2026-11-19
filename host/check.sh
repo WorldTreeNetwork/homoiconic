@@ -169,6 +169,15 @@ if [ "$(wc -c < "$OUT/program.bytes" | tr -d ' ')" -le 65536 ]; then
     echo "the wide program's byte form does not exceed the first buffer" >&2
     exit 1
 fi
+# An array literal of 66,000 items. The source reader used to recurse once per
+# item and crash; 30,000 items was fine. The printed text is the literal.
+awk 'BEGIN { printf "["; for (i = 0; i < 65999; i++) printf "0, "; printf "0]\n" }' > "$OUT/many.hom"
+"$OUT/run" "$OUT/many.hom" > "$OUT/many.txt"
+cmp "$OUT/many.hom" "$OUT/many.txt"
+"$OUT/bytes" "$OUT/many.hom" > "$OUT/many.bytes"
+"$OUT/run" --bytes "$OUT/many.bytes" > "$OUT/many-bytes.txt"
+cmp "$OUT/many.hom" "$OUT/many-bytes.txt"
+echo "array of 66000 items reads from source and from bytes"
 # The identity function is three bytes, and the kernel writes those three.
 printf 'fn x -> x\n' > "$OUT/identity.hom"
 "$OUT/bytes" "$OUT/identity.hom" > "$OUT/identity.bytes"

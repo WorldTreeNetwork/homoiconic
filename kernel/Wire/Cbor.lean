@@ -32,32 +32,62 @@ inductive Item where
   | text : List Char → Item
   | bytes : ByteArray → Item
 
-mutual
-  def Item.ofData : Data → Item
-    | .nat n => .nat n
-    | .name n => .name n
-    | .text t => .text t
-    | .arr xs => .arr (Item.ofDatas xs)
-  def Item.ofDatas : List Data → List Item
-    | [] => []
-    | x :: xs => Item.ofData x :: Item.ofDatas xs
-end
+/-- One array frame: items already converted, last first, and the data still
+    to convert. Nested arrays are frames, not calls. `arriving` is the data
+    still to enter; `none` means `made` is finished and goes to the frame. -/
+private partial def ofDataGo (frames : List (List Item × List Data))
+    (arriving : Option Data) (made : Item) : Item :=
+  match arriving with
+  | some (.nat n) => ofDataGo frames none (.nat n)
+  | some (.name n) => ofDataGo frames none (.name n)
+  | some (.text t) => ofDataGo frames none (.text t)
+  | some (.arr []) => ofDataGo frames none (.arr [])
+  | some (.arr (h :: t)) => ofDataGo (([], t) :: frames) (some h) made
+  | none =>
+    match frames with
+    | [] => made
+    | (done, []) :: rest => ofDataGo rest none (.arr (made :: done).reverse)
+    | (done, next :: more) :: rest =>
+      ofDataGo ((made :: done, more) :: rest) (some next) made
 
-mutual
-  /-- `none` when there is a byte string anywhere in it. -/
-  def Item.toData : Item → Option Data
-    | .nat n => some (.nat n)
-    | .name n => some (.name n)
-    | .text t => some (.text t)
-    | .arr xs => (Item.toDatas xs).map .arr
-    | .bytes _ => none
-  def Item.toDatas : List Item → Option (List Data)
-    | [] => some []
-    | x :: xs =>
-        match Item.toData x, Item.toDatas xs with
-        | some d, some ds => some (d :: ds)
-        | _, _ => none
-end
+def Item.ofData (d : Data) : Item := ofDataGo [] (some d) (.nat 0)
+
+def Item.ofDatas (xs : List Data) : List Item :=
+  go xs []
+where
+  go : List Data → List Item → List Item
+    | [], acc => acc.reverse
+    | y :: ys, acc => go ys (Item.ofData y :: acc)
+
+/-- `none` when there is a byte string anywhere in it. A nested array is a
+    frame on the heap: a `cons` chain is that many nested three-item arrays. -/
+private partial def toDataGo (frames : List (List Data × List Item))
+    (arriving : Option Item) (made : Data) : Option Data :=
+  match arriving with
+  | some (.nat n) => toDataGo frames none (.nat n)
+  | some (.name n) => toDataGo frames none (.name n)
+  | some (.text t) => toDataGo frames none (.text t)
+  | some (.bytes _) => none
+  | some (.arr []) => toDataGo frames none (.arr [])
+  | some (.arr (h :: t)) => toDataGo (([], t) :: frames) (some h) made
+  | none =>
+    match frames with
+    | [] => some made
+    | (done, []) :: rest => toDataGo rest none (.arr (made :: done).reverse)
+    | (done, next :: more) :: rest =>
+      toDataGo ((made :: done, more) :: rest) (some next) made
+
+def Item.toData (i : Item) : Option Data := toDataGo [] (some i) (.nat 0)
+
+def Item.toDatas (xs : List Item) : Option (List Data) :=
+  go xs []
+where
+  go : List Item → List Data → Option (List Data)
+    | [], acc => some acc.reverse
+    | y :: ys, acc =>
+      match Item.toData y with
+      | none => none
+      | some d => go ys (d :: acc)
 
 /-- The low `k` bytes of `n`, most significant first, appended to `out`. -/
 def pushBE : Nat → Nat → ByteArray → ByteArray
@@ -85,19 +115,26 @@ def writeNat (n : Nat) (out : ByteArray) : ByteArray :=
     let k := byteLength n
     pushBE k n (pushHead 2 k (out.push 0xc2))
 
-mutual
-  def writeTo : Item → ByteArray → ByteArray
-    | .nat n, out => writeNat n out
-    | .name n, out => writeNat n (pushHead 6 39 out)
-    | .text t, out =>
-        let b := (String.ofList t).toUTF8
-        pushHead 3 b.size out ++ b
-    | .arr xs, out => writeAll xs (pushHead 4 xs.length out)
-    | .bytes b, out => pushHead 2 b.size out ++ b
-  def writeAll : List Item → ByteArray → ByteArray
-    | [], out => out
-    | x :: xs, out => writeAll xs (writeTo x out)
-end
+/-- Write `cur`, then the sibling lists in `stack`, outermost last. A nested
+    array is another list on the stack, not another call: a `cons` chain of
+    about 66,000 items is that many nested arrays. -/
+partial def writeGo (stack : List (List Item)) (cur : Item) (out : ByteArray) : ByteArray :=
+  match cur with
+  | .nat n => writeNext stack (writeNat n out)
+  | .name n => writeNext stack (writeNat n (pushHead 6 39 out))
+  | .text t =>
+      let b := (String.ofList t).toUTF8
+      writeNext stack (pushHead 3 b.size out ++ b)
+  | .bytes b => writeNext stack (pushHead 2 b.size out ++ b)
+  | .arr xs => writeNext (xs :: stack) (pushHead 4 xs.length out)
+where
+  writeNext (stack : List (List Item)) (out : ByteArray) : ByteArray :=
+    match stack with
+    | [] => out
+    | [] :: rest => writeNext rest out
+    | (x :: xs) :: rest => writeGo (xs :: rest) x out
+
+def writeTo (i : Item) (out : ByteArray) : ByteArray := writeGo [] i out
 
 def writeItem (i : Item) : ByteArray := writeTo i ByteArray.empty
 

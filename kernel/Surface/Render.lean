@@ -29,9 +29,16 @@ mutual
     | .text t => renderText t
     | .arr xs => "[" ++ ", ".intercalate (renderItems xs) ++ "]"
 
-  def renderItems : List Data → List String
-    | [] => []
-    | x :: xs => renderData x :: renderItems xs
+  /-- One recursive call per item overflowed the stack on a long array.
+      The walk is a tail call; `renderData` on an item is smaller than the list. -/
+  def renderItems (xs : List Data) : List String :=
+    go xs []
+  where
+    go : List Data → List String → List String
+      | [], acc => acc.reverse
+      | y :: yt, acc =>
+        let s := renderData y
+        go yt (s :: acc)
 end
 
 /-- A source outcome as text. -/
