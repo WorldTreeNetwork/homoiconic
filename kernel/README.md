@@ -202,8 +202,11 @@ The theorems on handling hold whatever the identifiers are. A log that is
 read is *sealed*: an entry is written `[mark, answer]`, and its identifier is
 the name a function `key` gives to that pair (`Entry.seal`). The kernel's
 `key` is `Surface.Keep.entryName`: the Blake3 hash of the pair's bytes, as one
-number. The mark is not read. It tells apart two entries with one answer, and
-a count, a link to the entry before or a signature can go there.
+number. A mark that is not a link is not read: it tells apart two entries
+with one answer. A link `[0, parent]` or `[0, parent, order]` is read: the
+parent is the previous entry's name, or `[]` on the first entry, and the
+order, when present, is the entry's place. The host checks a signature; the
+kernel does not.
 
 `LogContract.lean` states `log_deterministic` and `log_prefix` (the state is
 fixed by the program and the log, and a state part way is a prefix),

@@ -59,6 +59,15 @@ example : ∀ {key : Data → Data}, Function.Injective key → ∀ {log : List 
     (∀ e ∈ log, e.Sealed key) → ∀ {e : Entry}, e ∈ log → e ∈ firsts [] log :=
   Reflect.sealed_first
 
+-- Where the host has accepted the signature, a link names the entry before
+-- it. The signature itself is the hypothesis `signed`, not a kernel check.
+example : ∀ {signed : Data → Data → Prop} {key : Data → Data} {prev : Data} {i : Nat}
+    {mark answer : Data} {rest : List (Data × Data)} {parent : Data} {order : Option Nat},
+    signedChain signed key prev i ((mark, answer) :: rest) →
+    readLink mark = some (parent, order) →
+    signed mark answer ∧ parent = prev ∧ orderHere order i :=
+  Reflect.signed_parent
+
 -- An entry is sealed by its construction.
 example : ∀ (key : Data → Data) (mark answer : Data),
     (Entry.seal key mark answer).Sealed key :=
@@ -96,3 +105,4 @@ example : ∀ [Ops] {budget : Nat} {p : Term} {log : List Entry} {w : MVm},
 #print axioms Reflect.vm_true
 #print axioms Reflect.sealed_same
 #print axioms Reflect.sealed_first
+#print axioms Reflect.signed_parent

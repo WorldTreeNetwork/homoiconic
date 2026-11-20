@@ -1,5 +1,6 @@
 const std = @import("std");
 const session = @import("session.zig");
+const sig = @import("sig.zig");
 
 extern fn initialize_circularKernel_Surface_Host(builtin: u8) *anyopaque;
 extern fn kernel_finish_initialization(result: *anyopaque) u8;
@@ -43,8 +44,9 @@ pub fn main(init: std.process.Init) void {
             fail("vm: cannot read the program file: {s}\n", .{@errorName(err)})
     else
         args[3];
-    const log = std.Io.Dir.cwd().readFileAlloc(io, args[4], arena, .unlimited) catch |err|
+    const log_file = std.Io.Dir.cwd().readFileAlloc(io, args[4], arena, .unlimited) catch |err|
         fail("vm: cannot read the log file: {s}\n", .{@errorName(err)});
+    const log = sig.body("vm", log_file);
     const store = std.Io.Dir.cwd().openDir(io, args[1], .{}) catch |err|
         fail("vm: cannot open the store directory: {s}\n", .{@errorName(err)});
 

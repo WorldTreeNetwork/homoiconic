@@ -71,10 +71,18 @@ structure Entry where
   answer : Data
 
 /-- The entry made of a mark and an answer: its identifier is the name `key`
-    gives to the pair. The mark is not read; it tells apart two entries with
-    one answer. -/
+    gives to the pair. A mark that is not a link only tells two entries with
+    one answer apart. A link is read by `readLink`. -/
 def Entry.seal (key : Data → Data) (mark answer : Data) : Entry :=
   ⟨key (.arr [mark, answer]), answer⟩
+
+/-- A mark that names the entry before it: `[0, parent]`, or
+    `[0, parent, order]` when the entry carries its place. `0` is the tag.
+    Any other mark is not a link. The signature is not here. -/
+def readLink : Data → Option (Data × Option Nat)
+  | .arr [.nat 0, parent] => some (parent, none)
+  | .arr [.nat 0, parent, .nat n] => some (parent, some n)
+  | _ => none
 
 /-- `e` is the seal of some mark and its answer. -/
 def Entry.Sealed (key : Data → Data) (e : Entry) : Prop :=

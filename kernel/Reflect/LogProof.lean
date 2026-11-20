@@ -366,6 +366,37 @@ end Generic
 
 /-! Sealed logs. -/
 
+/-- An order that is absent, or is this entry's place. -/
+def orderHere (order : Option Nat) (i : Nat) : Prop :=
+  ∀ n, order = some n → n = i
+
+/-- A log the host has signed. `signed mark answer` is the host's acceptance
+    of that entry's signature; the kernel has no rule for it. A link names
+    the data of the entry before it (`prev` at the first), and an order, when
+    the entry carries one, is that entry's place. -/
+def signedChain (signed : Data → Data → Prop) (key : Data → Data)
+    (prev : Data) (i : Nat) : List (Data × Data) → Prop
+  | [] => True
+  | (mark, answer) :: rest =>
+    signed mark answer ∧
+      match readLink mark with
+      | some (parent, order) =>
+        parent = prev ∧ orderHere order i ∧
+          signedChain signed key (key (.arr [mark, answer])) (i + 1) rest
+      | none => signedChain signed key (key (.arr [mark, answer])) (i + 1) rest
+
+/-- Where the host has accepted the signature, a link names the entry before
+    it, and its order, if it has one, is its place. -/
+theorem signed_parent {signed : Data → Data → Prop} {key : Data → Data}
+    {prev : Data} {i : Nat} {mark answer : Data} {rest : List (Data × Data)}
+    {parent : Data} {order : Option Nat}
+    (h : signedChain signed key prev i ((mark, answer) :: rest))
+    (hk : readLink mark = some (parent, order)) :
+    signed mark answer ∧ parent = prev ∧ orderHere order i := by
+  simp only [signedChain] at h
+  rw [hk] at h
+  exact ⟨h.1, h.2.1, h.2.2.1⟩
+
 /-- Two sealed entries with one identifier are one entry, when `key` gives
     different names to different data. -/
 theorem sealed_same {key : Data → Data} (inj : Function.Injective key) {e e' : Entry}

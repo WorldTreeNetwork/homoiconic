@@ -171,3 +171,37 @@ def budget : Nat := 100000000
   IO.println (line (a / 2 ^ 256 == 0 && a != b && a != c && b != c && a == name (.arr [.nat 1, .nat 20])
       && a / 2 ^ 248 == (bytes.get! 0).toNat && a % 256 == (bytes.get! 31).toNat)
     "an entry's name is its hash as a number, first byte highest")
+
+/-- A link mark: tag `0`, the parent, and the place. -/
+def link (parent : Data) (order : Nat) : Data := .arr [.nat 0, parent, .nat order]
+
+-- A log whose marks name the entry before them. The first parent is `[]`.
+#eval do
+  let src ← IO.FS.readFile "../examples/ask.hom"
+  let m0 := link (.arr []) 0
+  let a0 : Data := .nat 20
+  let id0 := entryName (.arr [m0, a0])
+  let m1 := link id0 1
+  let a1 : Data := .nat 22
+  let good := Surface.renderData (.arr [.arr [m0, a0], .arr [m1, a1]])
+  IO.println s!"chain-log: {good}"
+  let (text, _) := finish {} 100000 (vmStart src.toUTF8 good.toUTF8 budget)
+  IO.println (line ((text.splitOn "\n").head? == some "42"
+      && part "entries: " text == "entries: 2 given, 2 acted on")
+    "a chained log names each entry's parent and finishes")
+  let wrongParent := Surface.renderData
+    (.arr [.arr [m0, a0], .arr [link (.nat 1) 1, a1]])
+  let (bad, _) := finish {} 1000 (vmStart src.toUTF8 wrongParent.toUTF8 budget)
+  IO.println (line (bad == "log: entry 1 does not name the entry before it")
+    "a mark that names the wrong parent is refused")
+  let wrongOrder := Surface.renderData
+    (.arr [.arr [m0, a0], .arr [link id0 5, a1]])
+  let (ord, _) := finish {} 1000 (vmStart src.toUTF8 wrongOrder.toUTF8 budget)
+  IO.println (line (ord == "log: entry 1 is out of order")
+    "a mark whose order is not its place is refused")
+  let bare0 : Data := .arr [.nat 0, .arr []]
+  let bare1 : Data := .arr [.nat 0, entryName (.arr [bare0, a0])]
+  let noOrder := Surface.renderData (.arr [.arr [bare0, a0], .arr [bare1, a1]])
+  let (plain, _) := finish {} 100000 (vmStart src.toUTF8 noOrder.toUTF8 budget)
+  IO.println (line ((plain.splitOn "\n").head? == some "42")
+    "a link with no order still names the entry before it")

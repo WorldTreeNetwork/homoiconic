@@ -60,7 +60,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
 for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store \
-              Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece \
+              Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece Wire/Reply \
               Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
@@ -70,7 +70,7 @@ for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter 
 done
 lake env leanc -c -o "$OUT/ffi.o" ffi.c
 lake env leanc -c -o "$OUT/runtime.o" "$HOST/runtime.c"
-for program in check run ask bytes keep chan vm node; do
+for program in check run ask bytes keep chan vm node sign; do
     # Without -lc, Zig's object defines _start. leanc also links glibc's
     # Scrt1.o, and the two _start symbols fail the link. -lc makes the object
     # export main and leave startup to glibc, which the C++ runtime needs
@@ -776,6 +776,38 @@ wantVm "$ENTRIES" "5 given, 2 acted on"
 wantVm "$STATE" "$WHOLE"
 # An entry is named by the hash of all of it: the mark of another entry with a
 # different answer is a different entry, and is acted on.
+# A link mark names the previous entry. The chain is printed by LogCheck,
+# which hashed it the way the kernel does.
+sed -n 's/^chain-log: //p' "$OUT/log.txt" > "$OUT/chain.log"
+test -s "$OUT/chain.log"
+vm start "$EXAMPLES/ask.hom" "$OUT/chain.log"
+wantVm "$STANDS" "42"
+printf '[[[0, [], 0], 20], [[0, 1, 1], 22]]\n' > "$OUT/bad-parent.log"
+wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/ask.hom" "$OUT/bad-parent.log")" "log: entry 1 does not name the entry before it"
+# The second entry's parent stays the first entry's name; only its order changes.
+sed 's/, 1], 22]/, 5], 22]/' "$OUT/chain.log" > "$OUT/bad-order.log"
+wantVm "$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/ask.hom" "$OUT/bad-order.log")" "log: entry 1 is out of order"
+# The host checks an Ed25519 signature over the log and does not hand the
+# signature line to the kernel. A good one is accepted; a bad one is refused.
+SEED=0000000000000000000000000000000000000000000000000000000000000001
+"$OUT/sign" "$SEED" "$OUT/chain.log" > "$OUT/chain.sig"
+{ cat "$OUT/chain.sig"; cat "$OUT/chain.log"; } > "$OUT/chain-signed.log"
+vm start "$EXAMPLES/ask.hom" "$OUT/chain-signed.log"
+wantVm "$STANDS" "42"
+# Flip one byte of the signature. The refusal is on stderr and exits 2.
+python3 - "$OUT/chain.sig" "$OUT/chain.log" "$OUT/bad-sig.log" << 'PY'
+import sys
+sig, body, dest = sys.argv[1:]
+line = open(sig).read().rstrip("\n")
+head, hexsig = line.rsplit(" ", 1)
+last = format((int(hexsig[-2:], 16) ^ 1), "02x")
+open(dest, "w").write(head + " " + hexsig[:-2] + last + "\n" + open(body).read())
+PY
+status=0
+got="$("$OUT/vm" "$VMSTORE" start "$EXAMPLES/ask.hom" "$OUT/bad-sig.log" 2>&1)" || status=$?
+wantVm "$got" "vm: the signature is not valid"
+wantVm "$status" "2"
+echo "a log entry names the one before it, and the host checks the signature"
 printf '[[1, 20], [1, 22]]\n' > "$OUT/one-mark.log"
 vm start "$EXAMPLES/ask.hom" "$OUT/one-mark.log"
 wantVm "$STANDS" "42"

@@ -114,7 +114,7 @@ For every operation table and every program, the state the machine reaches by a 
 
 ### Requirement: An entry that is read is named by its hash
 
-An entry of a log that is read SHALL be written as a mark and an answer, both data, and its identifier SHALL be the name of that pair: `Reflect.Entry.seal key mark answer`, with `key` being `Surface.Keep.entryName`, the Blake3 hash of the bytes `Wire.write` gives the pair, as one number with the first byte highest. The kernel SHALL compute the name; a log SHALL NOT supply it. The mark SHALL NOT be read for anything else. For every function `key` that gives different names to different data, two sealed entries with one identifier SHALL be one entry (`sealed_same`), and every entry of a log whose entries are all sealed SHALL be among the log's first deliveries (`sealed_first`). That Blake3 gives different names to different data SHALL be a stated assumption, not a theorem and not an axiom of any proof. Reading a log and sealing its entries SHALL be tested, not proved.
+An entry of a log that is read SHALL be written as a mark and an answer, both data, and its identifier SHALL be the name of that pair: `Reflect.Entry.seal key mark answer`, with `key` being `Surface.Keep.entryName`, the Blake3 hash of the bytes `Wire.write` gives the pair, as one number with the first byte highest. The kernel SHALL compute the name; a log SHALL NOT supply it. A mark `[0, parent]` or `[0, parent, order]` SHALL be read: `parent` SHALL be `[]` on the first entry and the previous entry's name after that, and `order`, when present, SHALL be the entry's place counting from zero. Any other mark SHALL NOT be read. The kernel SHALL NOT check a signature. A proof that a link names the previous entry SHALL take the host's acceptance of the signature as a hypothesis (`signed_parent`). For every function `key` that gives different names to different data, two sealed entries with one identifier SHALL be one entry (`sealed_same`), and every entry of a log whose entries are all sealed SHALL be among the log's first deliveries (`sealed_first`). That Blake3 gives different names to different data SHALL be a stated assumption, not a theorem and not an axiom of any proof. Reading a log and sealing its entries SHALL be tested, not proved.
 
 #### Scenario: Two answers under one mark
 
@@ -127,6 +127,13 @@ An entry of a log that is read SHALL be written as a mark and an answer, both da
 - GIVEN `Function.Injective key`, two entries sealed under `key`, and equal identifiers
 - WHEN `kernel/LogContract.lean` is checked
 - THEN the entries are equal, and the axioms printed for `sealed_same` and `sealed_first` are among `propext`, `Classical.choice` and `Quot.sound`
+
+#### Scenario: A link names the entry before it
+
+- GIVEN `examples/ask.hom` and a log whose first mark is `[0, [], 0]` and whose second mark is `[0, parent, 1]`, with `parent` the name of the first entry
+- WHEN the VM handles the log
+- THEN it acts on both entries and finishes with 42
+- AND a second mark that names any other parent, or an order other than `1`, is refused
 
 #### Scenario: The name is the hash
 

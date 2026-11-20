@@ -593,13 +593,29 @@ def give (s : Session) (bytes : ByteArray) : Session :=
 def entryName (d : Data) : Data :=
   .nat ((Blake3.hash (write d)).foldl (fun n b => n * 256 + b.toNat) 0)
 
-/-- The entries of a log given as data, each sealed under `entryName`, or the
-    place of the first that is not a mark and an answer. -/
-def dataEntries : Nat → List Data → Except Nat (List Entry)
+/-- The identifier of one written entry, after the link in its mark has been
+    read. `prev` is `[]` at the first entry and the identifier of the entry
+    before it after that. A link's parent must be that, and its order, when
+    the mark carries one, must be `k`. The signature is not checked. -/
+def acceptMark (prev : Data) (k : Nat) (mark payload : Data) : Except String Data :=
+  match readLink mark with
+  | none => .ok (entryName (.arr [mark, payload]))
+  | some (parent, order) =>
+    if parent != prev then .error s!"log: entry {k} does not name the entry before it"
+    else match order with
+      | some n =>
+        if n != k then .error s!"log: entry {k} is out of order"
+        else .ok (entryName (.arr [mark, payload]))
+      | none => .ok (entryName (.arr [mark, payload]))
+
+/-- The entries of a log given as data, each sealed under `entryName`. -/
+def dataEntries (prev : Data) : Nat → List Data → Except String (List Entry)
   | _, [] => .ok []
-  | k, .arr [mark, answer] :: ds =>
-      (dataEntries (k + 1) ds).map (Entry.seal entryName mark answer :: ·)
-  | k, _ :: _ => .error k
+  | k, .arr [mark, answer] :: ds => do
+      let id ← acceptMark prev k mark answer
+      let rest ← dataEntries id (k + 1) ds
+      pure (⟨id, answer⟩ :: rest)
+  | k, _ :: _ => .error s!"log: entry {k} is not a mark and an answer"
 
 /-- Read a log: a program whose result is an array of `[mark, answer]`. -/
 def readLog (src : ByteArray) (budget : Nat) : Except String (List Entry) :=
@@ -608,8 +624,8 @@ def readLog (src : ByteArray) (budget : Nat) : Except String (List Entry) :=
   | .ok t =>
       match runUntil budget (load (compile t)) with
       | .halted (.value (.data (.arr ds))) =>
-          match dataEntries 0 ds with
-          | .error k => .error s!"log: entry {k} is not a mark and an answer"
+          match dataEntries (.arr []) 0 ds with
+          | .error msg => .error msg
           | .ok es => .ok es
       | _ => .error "log: not an array"
 
@@ -639,13 +655,16 @@ def vmFrom (root : String) (log : ByteArray) (budget : Nat) : Session :=
 
 /-- The ops of a log given as data, each sealed under `entryName`, or the
     place of the first that is not a mark and an event. -/
-def dataOps : Nat → List Data → Except Nat (List Op)
+def dataOps (prev : Data) : Nat → List Data → Except String (List Op)
   | _, [] => .ok []
   | k, .arr [mark, ev] :: ds =>
       match dataEvent ev with
-      | some e => (dataOps (k + 1) ds).map (Op.seal entryName mark ev e :: ·)
-      | none => .error k
-  | k, _ :: _ => .error k
+      | none => .error s!"log: entry {k} is not a mark and an event"
+      | some e => do
+          let id ← acceptMark prev k mark ev
+          let rest ← dataOps id (k + 1) ds
+          pure (⟨id, e⟩ :: rest)
+  | k, _ :: _ => .error s!"log: entry {k} is not a mark and an event"
 
 /-- Read a node's log: a program whose result is an array of
     `[mark, event]`. -/
@@ -655,8 +674,8 @@ def readOps (src : ByteArray) (budget : Nat) : Except String (List Op) :=
   | .ok t =>
       match runUntil budget (load (compile t)) with
       | .halted (.value (.data (.arr ds))) =>
-          match dataOps 0 ds with
-          | .error k => .error s!"log: entry {k} is not a mark and an event"
+          match dataOps (.arr []) 0 ds with
+          | .error msg => .error msg
           | .ok os => .ok os
       | _ => .error "log: not an array"
 
