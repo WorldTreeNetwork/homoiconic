@@ -1,5 +1,7 @@
+import Reflect.Arith
 import Surface.Run
 import Wire.Form
+import Wire.Reply
 
 namespace Surface
 open Reflect
@@ -55,6 +57,20 @@ def interpText (src : ByteArray) (k budget : Nat) (asText : Bool := false) : Str
   match read src with
   | .error msg => renderSyntaxError msg
   | .ok t => renderInterpreted k budget asText t
+
+/-- Program bytes in, the bounded-run reply bytes out. One evaluation. -/
+def replyBytes (bytes : ByteArray) (budget : Nat) : ByteArray :=
+  let reply := match Wire.readProgram bytes with
+    | .error _ => Wire.RunReply.refused
+    | .ok t =>
+        match runUntil budget (load (compile t)) with
+        | .halted (.value v) =>
+            if (Wire.valueData v).isSome then .value v else .unrepresentable
+        | .halted (.unbound i) => .unbound i
+        | .halted .wrong => .wrong
+        | .fault => .fault
+        | .running _ _ _ _ => .budget
+  Wire.runReplyBytes reply
 
 /-- Read a program's source and give its byte form. The first byte answered is
     0 and the byte form follows, or it is 1 and the syntax error follows. -/

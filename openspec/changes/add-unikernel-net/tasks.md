@@ -10,12 +10,12 @@
   - [x] Owed (#6): requirement and scenario for a mid-request abort (OOM/panic/fault): serial cause, observable VMM exit, no re-readiness, client timeout.
   - [x] Owed (#7): a spike finding that contradicts the hardware contract amends the change and reopens fresh advise before implementation.
 - [x] Spike modern virtio-net/MMIO mapping and a datagram exchange on CH54/KVM; record host/toolchain/BAR/feature evidence. Passed 2026-11-18 on morphie: `spike/serial.log`, `spike/exchange.log`. The hardware contract held. Implementation is still open.
-- [ ] Implement bounded PCI discovery, MMIO mappings, split queues and polling Ethernet/ARP/IPv4/UDP.
-- [ ] Add Lean-owned binary replies and native FFI capacity/closure/outcome checks.
-- [ ] Add server build, endpoint configuration, framing and client with deadline/correlation checks.
-- [ ] Run parser, Lean, ring-wrap, malformed-packet and persistent real-guest tests; rerun existing image suite.
+- [x] Implement bounded PCI discovery, MMIO mappings, split queues and polling Ethernet/ARP/IPv4/UDP.
+- [x] Add Lean-owned binary replies and native FFI capacity/closure/outcome checks.
+- [x] Add server build, endpoint configuration, framing and client with deadline/correlation checks.
+- [x] Run parser, Lean, ring-wrap, malformed-packet and persistent real-guest tests; rerun existing image suite.
 - [ ] Publish verified endpoint contract for Mjolnir; fold living spec and archive this change.
 
-External prerequisite: morphie answered on 2026-11-18 (Linux x86_64, KVM, Cloud Hypervisor 54.0). The Framework laptop still times out over SSH and is not the build host. The virtio-net spike passed and matched the reviewed contract; network implementation and guest acceptance are not claimed yet. QUIC is tracked separately as homoiconic-q59.30.
+External prerequisite: morphie answered on 2026-11-18 (Linux x86_64, KVM, Cloud Hypervisor 54.0). The Framework laptop still times out over SSH and is not the build host. The virtio-net spike passed and matched the reviewed contract. On 2026-11-19 `unikernel/check-net.sh` and `unikernel/check.sh` passed on morphie: factorial bytes, a budget reply with the guest still up, status 2, malformed drops, a 65537-completion ring wrap, an allocation abort, and the one-program image. QUIC is tracked separately as homoiconic-q59.30. Fold and the Mjolnir endpoint note are still open.
 
 Spike routing rule: any finding that contradicts the reviewed hardware contract amends this change and reopens Fresh advise after preparation; a new accepting review is required before production implementation. A passing spike records the matching contract and proceeds.

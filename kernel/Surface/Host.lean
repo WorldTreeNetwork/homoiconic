@@ -45,6 +45,17 @@ unsafe def reflectChannels (program length schedule scheduleLength out capacity 
     (copyBytes schedule scheduleLength) budget.toNat limit.toNat
   storeBytes out capacity text.toUTF8
 
+/-- C ABI: program wire bytes in, bounded-run reply bytes out. Returns how many
+    bytes the reply needs. Writes nothing when they do not fit. -/
+@[export reflect_reply_bytes]
+unsafe def reflectReplyBytes (program length out capacity : USize) (budget : UInt64) : USize :=
+  storeBytes out capacity (Surface.replyBytes (copyBytes program length) budget.toNat)
+
+/-- Build-only hook: a Lean abort the network check can ask for. -/
+@[export reflect_abort_alloc]
+unsafe def reflectAbortAlloc (_: USize) : USize :=
+  panic! "allocation failure"
+
 /-- C ABI: as `reflect_run`, for a program given in its byte form. -/
 @[export reflect_run_bytes]
 unsafe def reflectRunBytes (program length out capacity : USize) (budget : UInt64) : USize :=

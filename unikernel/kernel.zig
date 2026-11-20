@@ -286,6 +286,12 @@ const Tss = extern struct {
     iomap: u16 align(1) = @sizeOf(Tss),
 };
 
+var command_line: [1024]u8 = .{0} ** 1024;
+
+export fn reflect_command_line() [*]const u8 {
+    return &command_line;
+}
+
 var idt: [32]Gate = undefined;
 var gdt: [5]u64 = undefined;
 var tss: Tss = .{};
@@ -352,6 +358,11 @@ export fn kmain(info: *const StartInfo) noreturn {
             if (e.kind == 1 and e.addr <= image_end and e.addr + e.size > image_end)
                 ram_end = e.addr + e.size;
         }
+    }
+    if (info.magic == 0x336ec578 and info.cmdline_paddr != 0) {
+        const src: [*]const u8 = @ptrFromInt(info.cmdline_paddr);
+        var n: usize = 0;
+        while (n + 1 < command_line.len and src[n] != 0) : (n += 1) command_line[n] = src[n];
     }
     if (ram_end == 0) stop("the machine gave no memory map");
     if (ram_end > (4 << 30)) ram_end = 4 << 30;
