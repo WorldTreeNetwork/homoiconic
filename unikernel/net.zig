@@ -12,11 +12,25 @@ const budget_max: u64 = 100000000;
 extern fn reflect_reply_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
 extern fn reflect_abort_alloc(unused: usize) usize;
 extern fn reflect_command_line() [*]const u8;
+extern fn reflect_remote_offer(out: [*]u8, capacity: usize) usize;
+extern fn reflect_remote_take(offer: [*]const u8, length: usize, out: [*]u8, capacity: usize) usize;
+extern fn reflect_remote_log(out: [*]u8, capacity: usize) usize;
 
-const Endpoint = struct { ip: [4]u8, port: u16, quic_port: u16, hook: bool };
+const Endpoint = struct {
+    ip: [4]u8,
+    port: u16,
+    quic_port: u16,
+    wire_port: u16,
+    peer_ip: [4]u8,
+    peer_port: u16,
+    has_peer: bool,
+    hook: bool,
+};
+const std = @import("std");
 const quic_mod = @import("quic.zig");
 var qconn: quic_mod.Conn = undefined;
 var q_ready = false;
+var q_wire = false;
 var q_peer = false;
 var q_answered = false;
 var q_frame: [64]u8 = undefined;
@@ -43,9 +57,28 @@ export fn net_serve() noreturn {
         putDec(ep.quic_port);
         say("\n");
     }
+    if (ep.wire_port != 0 or ep.has_peer) {
+        if (!startClock()) halt("no monotonic clock");
+        if (ep.wire_port != 0) {
+            qconn = quic_mod.Conn.openServer(rdrand64);
+            say("reflect: wire ");
+            putDec(ep.wire_port);
+            say("\n");
+        } else {
+            var pin: [32]u8 = undefined;
+            std.crypto.hash.sha2.Sha256.hash(quic_mod.certificate(), &pin, .{});
+            qconn = quic_mod.Conn.openClient(rdrand64, &pin);
+            say("reflect: peer ");
+            putIp(ep.peer_ip);
+            say(":");
+            putDec(ep.peer_port);
+            say("\n");
+        }
+        q_wire = true;
+    }
     while (true) {
         poll(nic, ep);
-        if (q_ready) quicTick(nic, ep);
+        if (q_wire) wireTick(nic, ep) else if (q_ready) quicTick(nic, ep);
     }
 }
 
@@ -62,6 +95,11 @@ fn parse(s: []const u8) ?Endpoint {
     var hook = false;
     var quic_port: u16 = 0;
     var saw_quic = false;
+    var wire_port: u16 = 0;
+    var saw_wire = false;
+    var peer_ip: [4]u8 = .{ 0, 0, 0, 0 };
+    var peer_port: u16 = 0;
+    var has_peer = false;
     var i: usize = 0;
     while (i < s.len) {
         while (i < s.len and s[i] == ' ') i += 1;
@@ -82,9 +120,32 @@ fn parse(s: []const u8) ?Endpoint {
             if (saw_quic) return null;
             saw_quic = true;
             quic_port = parsePort(word["reflect.quic_port=".len..]) orelse return null;
+        } else if (starts(word, "reflect.wire_port=")) {
+            if (saw_wire) return null;
+            saw_wire = true;
+            wire_port = parsePort(word["reflect.wire_port=".len..]) orelse return null;
+        } else if (starts(word, "reflect.peer=")) {
+            if (has_peer) return null;
+            const rest = word["reflect.peer=".len..];
+            var at: usize = 0;
+            while (at < rest.len and rest[at] != ':') at += 1;
+            if (at == rest.len) return null;
+            peer_ip = parseIp(rest[0..at]) orelse return null;
+            peer_port = parsePort(rest[at + 1 ..]) orelse return null;
+            has_peer = true;
         } else return null;
     }
-    return .{ .ip = ip orelse return null, .port = port orelse return null, .quic_port = quic_port, .hook = hook };
+    if (wire_port != 0 and has_peer) return null;
+    return .{
+        .ip = ip orelse return null,
+        .port = port orelse return null,
+        .quic_port = quic_port,
+        .wire_port = wire_port,
+        .peer_ip = peer_ip,
+        .peer_port = peer_port,
+        .has_peer = has_peer,
+        .hook = hook,
+    };
 }
 
 fn parseIp(s: []const u8) ?[4]u8 {
@@ -335,6 +396,7 @@ fn handle(frame: []u8, nic: Nic, ep: Endpoint) void {
     if (frame.len < 42) return;
     const et = be16(frame[12..14]);
     if (et == 0x0806) {
+        noteArp(frame, ep);
         _ = answerArp(frame, nic, ep);
         return;
     }
@@ -355,6 +417,14 @@ fn handle(frame: []u8, nic: Nic, ep: Endpoint) void {
     if (ulen < 8 or @as(usize, ulen) + 20 != total) return;
     const dport = be16(frame[udp + 2 .. udp + 4]);
     if (ep.quic_port != 0 and dport == ep.quic_port) {
+        quicDatagram(frame, nic, ep);
+        return;
+    }
+    if (ep.wire_port != 0 and dport == ep.wire_port) {
+        quicDatagram(frame, nic, ep);
+        return;
+    }
+    if (ep.has_peer and dport == 9000) {
         quicDatagram(frame, nic, ep);
         return;
     }
@@ -444,11 +514,118 @@ fn quicDatagram(frame: []const u8, nic: Nic, ep: Endpoint) void {
         q_answered = false;
     }
     qconn.recv(payload, mono());
-    quicPump(nic, ep);
+    if (q_wire) wirePump(nic, ep) else quicPump(nic, ep);
 }
 
 fn quicTick(nic: Nic, ep: Endpoint) void {
     quicPump(nic, ep);
+}
+
+var peer_mac: [6]u8 = .{0} ** 6;
+var peer_known = false;
+var wire_sent = false;
+var wire_done = false;
+var offer_buf: [2048]u8 = undefined;
+var offer_len: usize = 0;
+
+fn noteArp(frame: []const u8, ep: Endpoint) void {
+    if (!ep.has_peer or frame.len < 42) return;
+    if (be16(frame[20..22]) != 2) return;
+    if (!eq4(frame[28..32], &ep.peer_ip)) return;
+    @memcpy(&peer_mac, frame[22..28]);
+    peer_known = true;
+}
+
+fn askArp(nic: Nic, ep: Endpoint) void {
+    var out: [hdr_len + 42]u8 = .{0} ** (hdr_len + 42);
+    const pkt = out[hdr_len..];
+    @memset(pkt[0..6], 0xff);
+    @memcpy(pkt[6..12], &nic.mac);
+    pkt[12] = 0x08;
+    pkt[13] = 0x06;
+    pkt[14] = 0;
+    pkt[15] = 1;
+    pkt[16] = 0x08;
+    pkt[17] = 0;
+    pkt[18] = 6;
+    pkt[19] = 4;
+    pkt[20] = 0;
+    pkt[21] = 1;
+    @memcpy(pkt[22..28], &nic.mac);
+    @memcpy(pkt[28..32], &ep.ip);
+    @memcpy(pkt[38..42], &ep.peer_ip);
+    _ = tx(nic, &out);
+}
+
+fn sendTo(nic: Nic, ep: Endpoint, dst_mac: *const [6]u8, dst_ip: *const [4]u8, dport: u16, sport: u16, payload: []const u8) void {
+    const ulen: u16 = @truncate(8 + payload.len);
+    const ip_len: u16 = 20 + ulen;
+    const n = hdr_len + 14 + @as(usize, ip_len);
+    @memset(tx_buf[0..n], 0);
+    const pkt = tx_buf[hdr_len..n];
+    @memcpy(pkt[0..6], dst_mac);
+    @memcpy(pkt[6..12], &nic.mac);
+    pkt[12] = 0x08;
+    pkt[13] = 0x00;
+    pkt[14] = 0x45;
+    st16(pkt[16..18], ip_len);
+    pkt[22] = 64;
+    pkt[23] = 17;
+    @memcpy(pkt[26..30], &ep.ip);
+    @memcpy(pkt[30..34], dst_ip);
+    st16(pkt[24..26], ipSum(pkt[14..34]));
+    st16(pkt[34..36], sport);
+    st16(pkt[36..38], dport);
+    st16(pkt[38..40], ulen);
+    @memcpy(pkt[42..][0..payload.len], payload);
+    const uc = udpSum(pkt[26..34], pkt[34 .. 34 + ulen]);
+    st16(pkt[40..42], if (uc == 0) 0xffff else uc);
+    _ = tx(nic, tx_buf[0..n]);
+}
+
+var arp_tick: u32 = 0;
+fn wireTick(nic: Nic, ep: Endpoint) void {
+    arp_tick +%= 1;
+    if (ep.has_peer and !peer_known and (arp_tick == 1 or arp_tick % 100000 == 0)) askArp(nic, ep);
+    wirePump(nic, ep);
+}
+
+fn wirePump(nic: Nic, ep: Endpoint) void {
+    if (ep.wire_port != 0) {
+        if (!q_answered and qconn.peer_fin) {
+            const n = reflect_remote_take(qconn.readApp().ptr, qconn.readApp().len, &answer_buf, answer_buf.len);
+            if (n != 0 and n <= answer_buf.len) _ = qconn.writeApp(answer_buf[0..n]);
+            q_answered = true;
+        }
+        var out: [1500]u8 = undefined;
+        const n = qconn.send(&out, mono());
+        if (n > 0 and q_peer) sendUdp(q_frame[0..42], nic, ep, out[0..n], ep.wire_port);
+        return;
+    }
+    if (!peer_known) return;
+    if (!wire_sent and qconn.accepted) {
+        offer_len = reflect_remote_offer(&offer_buf, offer_buf.len);
+        if (offer_len == 0 or offer_len > offer_buf.len) halt("no remote offer");
+        if (!qconn.writeApp(offer_buf[0..offer_len])) halt("the offer was not sent");
+        wire_sent = true;
+    }
+    var out: [1500]u8 = undefined;
+    const n = qconn.send(&out, mono());
+    if (n > 0) sendTo(nic, ep, &peer_mac, &ep.peer_ip, ep.peer_port, 9000, out[0..n]);
+    if (!wire_done and qconn.peer_fin) {
+        const got = qconn.readApp();
+        var expect: [256]u8 = undefined;
+        const want = reflect_remote_take(offer_buf[0..offer_len].ptr, offer_len, &expect, expect.len);
+        if (want == got.len and eql(got, expect[0..want])) {
+            say("reflect: remote ok\nreflect: log ");
+            var logb: [1024]u8 = undefined;
+            const ln = reflect_remote_log(&logb, logb.len);
+            const show = if (ln > logb.len) logb.len else ln;
+            say(logb[0..show]);
+            say("\n");
+        } else say("reflect: remote differs\n");
+        wire_done = true;
+    }
 }
 
 fn quicPump(nic: Nic, ep: Endpoint) void {

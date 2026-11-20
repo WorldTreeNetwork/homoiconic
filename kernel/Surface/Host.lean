@@ -2,6 +2,7 @@ import Surface.Run
 import Surface.Bytes
 import Surface.Keep
 import Surface.Chan
+import Surface.Remote
 
 namespace Surface.Host
 
@@ -50,6 +51,26 @@ unsafe def reflectChannels (program length schedule scheduleLength out capacity 
 @[export reflect_reply_bytes]
 unsafe def reflectReplyBytes (program length out capacity : USize) (budget : UInt64) : USize :=
   storeBytes out capacity (Surface.replyBytes (copyBytes program length) budget.toNat)
+
+/-- C ABI: the wire bytes a guest sends on a remote name. -/
+@[export reflect_remote_offer]
+unsafe def reflectRemoteOffer (out capacity : USize) : USize :=
+  storeBytes out capacity Surface.Remote.offerBytes
+
+/-- C ABI: offer bytes in, the reply-channel message out. -/
+@[export reflect_remote_take]
+unsafe def reflectRemoteTake (offer length out capacity : USize) : USize :=
+  storeBytes out capacity (Surface.Remote.takeBytes (copyBytes offer length))
+
+/-- C ABI: the delivery order, as the text of a schedule. -/
+@[export reflect_remote_log]
+unsafe def reflectRemoteLog (out capacity : USize) : USize :=
+  storeBytes out capacity Surface.Remote.logText.toUTF8
+
+/-- C ABI: 1 when replaying that schedule on one machine gives the same result. -/
+@[export reflect_remote_same]
+unsafe def reflectRemoteSame (_: USize) : USize :=
+  if Surface.Remote.same then 1 else 0
 
 /-- Build-only hook: a Lean abort the network check can ask for. -/
 @[export reflect_abort_alloc]

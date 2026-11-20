@@ -1,0 +1,20 @@
+let worker = quote (fn reply -> ask [1, reply, 42] (fn sent -> []))
+let peer = quote (fn remote ->
+  ask [2, remote] (fn msg ->
+    let code =
+      case msg
+        [] -> 0
+        [h, ...rest] -> h
+    let reply =
+      case msg
+        [] -> 0
+        [h, ...rest] ->
+          case rest
+            [] -> 0
+            [k, ...more] -> k
+    ask [3, code, reply] (fn started -> [])))
+ask [0] (fn remote ->
+  ask [3, peer, remote] (fn started ->
+    ask [0] (fn reply ->
+      ask [1, remote, [worker, reply]] (fn sent ->
+        ask [2, reply] (fn n -> n)))))
