@@ -198,6 +198,8 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 
 > **2026-11-17, `seal-log-entries`:** an entry's identifier is now the Blake3 hash of the entry, computed by the kernel; a log supplies a mark and an answer. Two sealed entries with one identifier are one entry (`sealed_same`, `sealed_op_same`), under the hypothesis that the naming function gives different names to different data. Nothing is signed and an entry does not name the one before it; the mark is where both will go.
 
+> **2026-11-18, Duke:** the host owns signature checks. That check is a mechanical validity operation and stays out of the kernel. The kernel reads the parent link, and the order if it lives in the entry, from the mark. Proofs take a valid signature as a hypothesis. A compact record of entries acted on still waits until the hash chain cannot cycle. `homoiconic-q59.42` stays open for that design and is not implemented here.
+
 | | Statement | Why | Needs |
 |---|---|---|---|
 | **P13** | `state log = foldl handle init log`, and the running VM's state equals it after any prefix | The log is the truth. A snapshot is a prefix. | P10 |
