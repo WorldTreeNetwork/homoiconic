@@ -15,7 +15,34 @@ There is no Linux guest, firmware or disk. The source and step budget are
 embedded at build time (optional second argument, default 100000000 steps).
 Lean reads, compiles, evaluates and renders. Non-Lean code passes bytes.
 Successful execution prints the result, then `reflect: exit 0`, and powers off.
-The image has no network interface yet.
+This image has no network interface; the network image is `build-net.sh`.
+
+## A program given at boot
+
+The same `reflect.elf` runs any program handed to it at boot as its byte form.
+It is not built again for each one.
+
+```sh
+unikernel/out/reply source examples/factorial.hom > factorial.bytes
+cloud-hypervisor --kernel unikernel/out/reflect.elf --initramfs factorial.bytes \
+    --cmdline "100000000 1" --cpus boot=1 --memory size=512M --serial tty --console off
+unikernel/out/reflect-linux factorial.bytes 100000000 1     # the same, as a Linux process
+```
+
+The command line is `[step-budget [levels]]`. The budget defaults to the one
+built in, and the levels to 1: the bytes run through `reflect_interp`, the
+interpreter written in the language, on the machine. Level 0 runs the program
+itself; level 2 runs the interpreter in the interpreter. With no `--initramfs`
+the image runs the source built into it through `reflect_run`.
+
+`--initramfs` is only how Cloud Hypervisor carries a file into guest memory;
+there is no file system. The layer finds the bytes as the one PVH boot module,
+moves them to just above the image before it lays out the stack and the
+allocators (the hypervisor puts them where the stack goes), clears where they
+were, and serves them as the read-only file `/boot/program`. It starts the
+program with `reflect /boot/program` and the command line's words. It does not
+read the bytes: bytes that are no program are refused by the kernel, in the
+kernel's text. More than 16 MiB, or a second module, stops the image with a line.
 
 `build.sh` runs Lake, compiles generated C for Surface.Host's local imports,
 and links identical Lean objects into `out/reflect.elf` and
@@ -30,7 +57,9 @@ independent expected values, including a rendering larger than 64 KiB.
 
 The permitted entry is `main.zig` -> module initializer ->
 `kernel_finish_initialization` in `host/runtime.c` -> `reflect_run` in
-`kernel/Surface/Host.lean`. That export copies input bytes, calls
+`kernel/Surface/Host.lean`, or `reflect_interp` there when bytes were given
+at boot (`Surface.interpBytes`: decode, lift, run the bounded machine, render;
+synchronous like the first). That export copies input bytes, calls
 `Surface.runText`, and stores rendered bytes. The Surface.Run path reads,
 compiles, runs the bounded Reflect machine with arithmetic, and renders;
 it has no asynchronous IO or task execution. Imports must be re-audited
@@ -90,3 +119,9 @@ these results are from morphie, not the Framework.
 `CLOUD_HYPERVISOR=~/ch54/cloud-hypervisor sh unikernel/check.sh` on morphie,
 Linux x86_64/KVM, Cloud Hypervisor 54.0. The Framework laptop still times out
 over SSH; do not wait on it for an image rebuild.
+
+2026-11-19 on morphie, Cloud Hypervisor 54.0: `unikernel/check.sh` passed with
+the cases for a program given at boot (`evidence/check-boot-bytes.log`, 33
+lines of `ok`). One `reflect.elf`, hashed before and after, ran the byte forms
+of text, factorial at 0, 1 and 2 levels, the quine and a 5000-step budget, each
+equal to the Linux process. `unikernel/check-net.sh` passed after it, unedited.

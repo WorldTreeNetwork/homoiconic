@@ -273,6 +273,23 @@ const StartInfo = extern struct {
     reserved: u32,
 };
 const MemEntry = extern struct { addr: u64, size: u64, kind: u32, reserved: u32 };
+const Module = extern struct { addr: u64, size: u64, cmdline_paddr: u64, reserved: u64 };
+
+/// The bytes Cloud Hypervisor was given with --initramfs, if any: one file the
+/// program can open, `boot_path`. The layer copies them and does not read them.
+const boot_path = "/boot/program";
+const boot_limit = 16 << 20;
+const boot_fd = 4;
+var boot_given = false;
+var boot_at: usize = 0;
+var boot_len: usize = 0;
+var boot_pos: usize = 0;
+var boot_open = false;
+
+/// The words the program starts with: its name, then, when bytes were given at
+/// boot, the path of those bytes and the words of the command line.
+const max_args = 8;
+var arg_text: [1024]u8 = .{0} ** 1024;
 
 const Gate = extern struct { lo: u16, sel: u16, ist: u8, attr: u8, mid: u16, hi: u32, zero: u32 };
 const TablePtr = extern struct { limit: u16 align(1), base: u64 align(1) };
@@ -348,7 +365,7 @@ export fn kmain(info: *const StartInfo) noreturn {
     if (!hasRandom()) stop("this processor has no random instruction");
 
     // The memory region that holds this image, up to the 4 GiB that boot mapped.
-    const image_end = up(@intFromPtr(&_end));
+    var image_end = up(@intFromPtr(&_end));
     var ram_end: usize = 0;
     if (info.magic == 0x336ec578 and info.version >= 1) {
         const entries: [*]const MemEntry = @ptrFromInt(info.memmap_paddr);
@@ -366,6 +383,29 @@ export fn kmain(info: *const StartInfo) noreturn {
     }
     if (ram_end == 0) stop("the machine gave no memory map");
     if (ram_end > (4 << 30)) ram_end = 4 << 30;
+
+    // Bytes given at boot lie wherever the hypervisor put them, which is where
+    // the stack will be. Nothing has been written there yet: this code runs on
+    // the boot stack. Move them to just above the image and clear where they were.
+    if (info.magic == 0x336ec578 and info.nr_modules > 1) stop("more than one file was given at boot");
+    if (info.magic == 0x336ec578 and info.nr_modules == 1) {
+        const m = @as(*align(1) const Module, @ptrFromInt(info.modlist_paddr)).*;
+        if (m.size > boot_limit) stop("the program given at boot is too large");
+        const len: usize = @intCast(m.size);
+        if (m.addr < image_end + len or m.addr > ram_end or ram_end - m.addr < len)
+            stop("the program given at boot is not in usable memory");
+        const from: [*]u8 = @ptrFromInt(m.addr);
+        const to: [*]u8 = @ptrFromInt(image_end);
+        var n: usize = 0;
+        while (n < len) : (n += 1) {
+            to[n] = from[n];
+            from[n] = 0;
+        }
+        boot_given = true;
+        boot_at = image_end;
+        boot_len = len;
+        image_end = up(image_end + len);
+    }
 
     // From the top: the stack, then one unmapped 2 MiB page under it.
     const stack_top = ram_end & ~@as(usize, big_page - 1);
@@ -388,8 +428,34 @@ export fn kmain(info: *const StartInfo) noreturn {
     const phoff = @as(*align(1) const u64, @ptrFromInt(ehdr + 32)).*;
     const phnum = @as(*align(1) const u16, @ptrFromInt(ehdr + 56)).*;
     const name: [*:0]const u8 = "reflect";
-    const words = [_]usize{
-        1, @intFromPtr(name), 0, // argc, argv
+    const path: [*:0]const u8 = boot_path;
+    var args: [max_args + 2]usize = undefined;
+    var argc: usize = 0;
+    args[argc] = @intFromPtr(name);
+    argc += 1;
+    if (boot_given) {
+        args[argc] = @intFromPtr(path);
+        argc += 1;
+        // The command line's words, each ended by a zero byte. The last byte
+        // of arg_text is never written, so the last word is ended too.
+        var at: usize = 0;
+        var in_word = false;
+        while (at + 1 < arg_text.len and command_line[at] != 0) : (at += 1) {
+            const c = command_line[at];
+            if (c == ' ' or c == '\t' or c == '\n') {
+                in_word = false;
+                continue;
+            }
+            arg_text[at] = c;
+            if (!in_word) {
+                if (argc == max_args) stop("the command line has too many words");
+                args[argc] = @intFromPtr(&arg_text[at]);
+                argc += 1;
+                in_word = true;
+            }
+        }
+    }
+    const tail = [_]usize{
         0, // envp
         3, ehdr + phoff, // AT_PHDR
         4, 56, // AT_PHENT
@@ -400,10 +466,15 @@ export fn kmain(info: *const StartInfo) noreturn {
         25, @intFromPtr(&random_bytes), // AT_RANDOM
         0,  0,
     };
+    // The stack pointer is a multiple of 16 where argc lies.
     const sp = (stack_top - 4096) & ~@as(usize, 15);
     const dst: [*]usize = @ptrFromInt(sp);
+    dst[0] = argc;
     var i: usize = 0;
-    while (i < words.len) : (i += 1) dst[i] = words[i];
+    while (i < argc) : (i += 1) dst[1 + i] = args[i];
+    dst[1 + argc] = 0;
+    i = 0;
+    while (i < tail.len) : (i += 1) dst[2 + argc + i] = tail[i];
     started = true;
     enter_program(@intFromPtr(&_start), sp);
 }
@@ -416,6 +487,7 @@ fn err(e: u64) u64 {
     return @bitCast(-@as(i64, @intCast(e)));
 }
 const ENOENT = 2;
+const EACCES = 13;
 const EBADF = 9;
 const EAGAIN = 11;
 const ENOMEM = 12;
@@ -477,6 +549,12 @@ fn spoil() void {
             \\ vmovdqa %%ymm0, %%ymm15
             ::: .{ .ymm0 = true, .ymm1 = true, .ymm2 = true, .ymm3 = true, .ymm4 = true, .ymm5 = true, .ymm6 = true, .ymm7 = true, .ymm8 = true, .ymm9 = true, .ymm10 = true, .ymm11 = true, .ymm12 = true, .ymm13 = true, .ymm14 = true, .ymm15 = true });
     }
+}
+
+fn isPath(path: [*:0]const u8, comptime want: []const u8) bool {
+    var i: usize = 0;
+    while (i < want.len) : (i += 1) if (path[i] != want[i]) return false;
+    return path[want.len] == 0;
 }
 
 fn notProvided(nr: u64) u64 {
@@ -556,20 +634,46 @@ export fn syscall_dispatch(f: *const Frame) u64 {
             return 8;
         },
         318 => return fillRandom(f.a1, f.a2), // getrandom
-        2, 257 => { // open, openat: the one file is the random source
+        2, 257 => { // open, openat: the random source, and the bytes given at boot
             const path: [*:0]const u8 = @ptrFromInt(if (f.nr == 2) f.a1 else f.a2);
-            const want = "/dev/urandom";
-            var i: usize = 0;
-            while (i < want.len) : (i += 1) if (path[i] != want[i]) return err(ENOENT);
-            if (path[want.len] != 0) return err(ENOENT);
-            return random_fd;
+            if (isPath(path, "/dev/urandom")) return random_fd;
+            if (boot_given and !boot_open and isPath(path, boot_path)) {
+                const flags = if (f.nr == 2) f.a2 else f.a3;
+                if (flags & 3 != 0) return err(EACCES); // read only
+                boot_open = true;
+                boot_pos = 0;
+                return boot_fd;
+            }
+            return err(ENOENT);
         },
         0 => { // read
+            if (f.a1 == boot_fd and boot_open) {
+                const left = boot_len - boot_pos;
+                const n: usize = if (f.a3 < left) @intCast(f.a3) else left;
+                const from: [*]const u8 = @ptrFromInt(boot_at + boot_pos);
+                const to: [*]u8 = @ptrFromInt(f.a2);
+                var i: usize = 0;
+                while (i < n) : (i += 1) to[i] = from[i];
+                boot_pos += n;
+                return n;
+            }
             if (f.a1 != random_fd) return err(EBADF);
             return fillRandom(f.a2, f.a3);
         },
-        3 => return if (f.a1 == random_fd) 0 else err(EBADF), // close
-        5 => { // fstat: a character device
+        3 => { // close
+            if (f.a1 == boot_fd and boot_open) {
+                boot_open = false;
+                return 0;
+            }
+            return if (f.a1 == random_fd) 0 else err(EBADF);
+        },
+        5 => { // fstat: a character device, or the bytes given at boot
+            if (f.a1 == boot_fd and boot_open) {
+                zero(f.a2, 144);
+                @as(*align(1) u32, @ptrFromInt(f.a2 + 24)).* = 0o100444;
+                @as(*align(1) u64, @ptrFromInt(f.a2 + 48)).* = boot_len;
+                return 0;
+            }
             if (f.a1 > random_fd) return err(EBADF);
             zero(f.a2, 144);
             @as(*align(1) u32, @ptrFromInt(f.a2 + 24)).* = 0o020666;

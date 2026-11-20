@@ -1,0 +1,35 @@
+with cloud-hypervisor v54.0
+ok   factorial
+ok   forever
+ok   not-syntax
+ok   text
+ok   a zero byte in the source
+ok   an answer of 128911 bytes
+ok   the clock stopped
+ok   the event loop's start is the empty one
+ok   the program calls reflect_run and reflect_interp and nothing else that evaluates or reads
+ok   the Lean objects are the ones Lake's C compiled to
+ok   bytes at boot: text, through one interpreter
+ok   bytes at boot: factorial, through one interpreter
+ok   bytes at boot: factorial, through none
+ok   bytes at boot: factorial, through two interpreters
+ok   bytes at boot: the quine
+ok   bytes at boot: a budget of 5000 steps
+ok   bytes at boot: a megabyte that is no program
+ok   bytes at boot: one byte past a program
+ok   bytes at boot: a budget that is not a number
+ok   bytes at boot: more than 16 MiB is refused
+ok   one image ran every program given at boot
+ok   the same image with nothing given at boot
+ok   an unanswered system call is reported
+ok   a source nested too deep ends in a report of a full stack
+ok   a write into the page under the stack faults, and the memory under it is untouched
+ok   a system call gives back registers, flags, the red zone and the vector state
+ok   random bytes are served
+ok   a processor without XSAVE is refused
+ok   a processor without a random instruction is refused
+ok   a random instruction that fails at the start stops the image
+ok   a random instruction that fails under the program stops the image
+ok   a random instruction that fails under a request stops the image
+ok   a command that runs past the limit is stopped
+unikernel checks passed

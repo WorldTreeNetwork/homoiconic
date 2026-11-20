@@ -66,6 +66,46 @@ same() {
     echo "ok   $1"
 }
 
+# given <bytes-file> <command-line>: boot the image as it is, with a file handed
+# to it at boot. The command line is `[step-budget [levels]]`.
+given() {
+    rm -f "$OUT/serial.log"
+    GIVEN_BYTES="$1"
+    GIVEN_WORDS="$2"
+    status=0
+    timeout "$LIMIT" "$CH" --kernel "$OUT/reflect.elf" --initramfs "$1" ${2:+--cmdline "$2"} --cpus boot=1 --memory size=512M \
+        --serial file="$OUT/serial.log" --console off > "$OUT/cloud-hypervisor.log" 2>&1 || status=$?
+    [ "$status" = 124 ] && fail "given $1: no power off within $LIMIT seconds"
+    [ "$status" = 0 ] || { cat "$OUT/cloud-hypervisor.log" >&2; fail "given $1: cloud-hypervisor exit $status"; }
+    [ -r "$OUT/serial.log" ] || fail "given $1: the serial port said nothing"
+}
+
+# same_given <case> [expected-file]: the serial port says what the Linux process
+# says for the same file and words, then `reflect: exit 0`.
+same_given() {
+    if trouble; then fail "$1: the image lacked something"; fi
+    # shellcheck disable=SC2086
+    "$OUT/reflect-linux" "$GIVEN_BYTES" $GIVEN_WORDS > "$OUT/linux.txt" || fail "$1: the Linux process failed"
+    [ -s "$OUT/linux.txt" ] || fail "$1: the Linux process said nothing"
+    { cat "$OUT/linux.txt"; echo "reflect: exit 0"; } > "$OUT/wanted.txt"
+    cmp "$OUT/wanted.txt" "$OUT/serial.log" || fail "$1: the image and the Linux process differ"
+    if [ $# -gt 1 ]; then cmp "$2" "$OUT/serial.log" || fail "$1: the serial port differs from $2"; fi
+    echo "ok   $1"
+}
+
+# refused_given <case> <line>: the program refuses its words with this line and
+# status 2, in the image and as a Linux process.
+refused_given() {
+    status=0
+    # shellcheck disable=SC2086
+    "$OUT/reflect-linux" "$GIVEN_BYTES" $GIVEN_WORDS > "$OUT/linux.txt" || status=$?
+    [ "$status" = 2 ] || fail "$1: the Linux process ended with $status"
+    { cat "$OUT/linux.txt"; echo "reflect: exit 2"; } > "$OUT/wanted.txt"
+    cmp "$OUT/wanted.txt" "$OUT/serial.log" || fail "$1: the image and the Linux process differ"
+    grep -qx "$2" "$OUT/serial.log" || fail "$1: expected '$2'"
+    echo "ok   $1"
+}
+
 # only <case> <text>: the serial port says exactly this line and nothing else.
 only() {
     printf '%s\n' "$2" > "$OUT/wanted.txt"
@@ -107,11 +147,45 @@ echo "ok   the event loop's start is the empty one"
 # The layer names nothing in the kernel, and the program names three things in it.
 if nm -u "$OUT/kernel.o" | awk '{ print $2 }' | grep -q "^reflect_\|^circularKernel\|^lean_\|^l_"; then fail "the layer refers to the kernel"; fi
 uses="$(nm -u "$OUT/main.o" | awk '{ print $2 }' | grep "^reflect_\|circularKernel\|^kernel_\|^lean_\|^l_" | sort | tr '\n' ' ')"
-[ "$uses" = "initialize_circularKernel_Surface_Host kernel_finish_initialization reflect_run " ] ||
+[ "$uses" = "initialize_circularKernel_Surface_Host kernel_finish_initialization reflect_interp reflect_run " ] ||
     fail "the program refers to: $uses"
-echo "ok   the program calls reflect_run and nothing else that evaluates or reads"
+echo "ok   the program calls reflect_run and reflect_interp and nothing else that evaluates or reads"
 (cd "$OUT" && sha256sum --quiet -c objects.sha256) || fail "the objects are not the ones compiled at the start"
 echo "ok   the Lean objects are the ones Lake's C compiled to"
+
+# ---- a program given at boot ----
+# One image, built once above from factorial, runs each byte form it is handed
+# at boot through the interpreter. It is not built again inside this section:
+# the file's hash is taken here and compared at the end.
+before="$(sha256sum < "$OUT/reflect.elf")"
+bytes() { "$OUT/reply" source "$1" > "$2" || fail "$3: no byte form"; [ -s "$2" ] || fail "$3: an empty byte form"; }
+bytes "$HERE/expected/text.hom" "$OUT/text.bytes" text
+bytes "$EXAMPLES/factorial.hom" "$OUT/factorial.bytes" factorial
+bytes "$EXAMPLES/forever.hom" "$OUT/forever.bytes" forever
+bytes "$EXAMPLES/quine.hom" "$OUT/quine.bytes" quine
+# The built-in program is factorial, so a text answer can only come from the bytes.
+given "$OUT/text.bytes" ""; same_given "bytes at boot: text, through one interpreter" "$HERE/expected/text.txt"
+given "$OUT/factorial.bytes" ""; same_given "bytes at boot: factorial, through one interpreter" "$HERE/expected/factorial.txt"
+given "$OUT/factorial.bytes" "100000000 0"; same_given "bytes at boot: factorial, through none" "$HERE/expected/factorial.txt"
+given "$OUT/factorial.bytes" "1000000000 2"; same_given "bytes at boot: factorial, through two interpreters" "$HERE/expected/factorial.txt"
+given "$OUT/quine.bytes" ""; same_given "bytes at boot: the quine"
+# The budget on the command line is the one that counts.
+given "$OUT/forever.bytes" "5000"; same_given "bytes at boot: a budget of 5000 steps" "$HERE/expected/forever.txt"
+# Bytes that are no program are the kernel's to refuse, and a megabyte of them arrives whole.
+head -c 1048576 /dev/zero | tr '\0' '\377' > "$OUT/not-a-program.bytes"
+given "$OUT/not-a-program.bytes" ""; same_given "bytes at boot: a megabyte that is no program"
+{ cat "$OUT/factorial.bytes"; printf '\0'; } > "$OUT/one-more.bytes"
+given "$OUT/one-more.bytes" ""; same_given "bytes at boot: one byte past a program"
+# A budget that is not a number is refused by the program, as the Linux process refuses it.
+given "$OUT/factorial.bytes" "many"; refused_given "bytes at boot: a budget that is not a number" "reflect: the step budget must be a whole number"
+# More than the layer keeps room for is refused before the C library starts.
+head -c 16777217 /dev/zero > "$OUT/too-large.bytes"
+given "$OUT/too-large.bytes" ""
+only "bytes at boot: more than 16 MiB is refused" "reflect: the program given at boot is too large"
+[ "$before" = "$(sha256sum < "$OUT/reflect.elf")" ] || fail "the image changed between the programs given at boot"
+echo "ok   one image ran every program given at boot"
+# With nothing given, the same image still runs the program built into it.
+boot factorial; same "the same image with nothing given at boot" "$HERE/expected/factorial.txt"
 
 # ---- the rules above have to trip ----
 # An image whose layer does not answer a call the C library makes at its start says so.

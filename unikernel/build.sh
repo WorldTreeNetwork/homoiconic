@@ -1,6 +1,9 @@
 #!/bin/sh
 # Build the image: unikernel/out/reflect.elf, one file Cloud Hypervisor boots,
 # and unikernel/out/reflect-linux, the same program as a Linux process.
+# The program file is the one the image runs when it is given none at boot.
+# Given a byte form at boot (--initramfs <bytes> --cmdline "[budget [levels]]")
+# the same image runs that instead; unikernel/out/reply source <file> writes one.
 #   sh unikernel/build.sh <program-file> [step-budget]
 # Needs Linux x86_64, elan, Zig 0.16.0, and objcopy and sha256sum.
 # The check also sets:
@@ -121,5 +124,10 @@ if [ -z "${PROBE:-}" ]; then
     # shellcheck disable=SC2086
     zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reflect-linux" \
         "$OUT/main.o" "$HERE/glibc_names.c" "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
+    # The same objects once more, as the tool that writes a source's byte form
+    # (`reply source <file>`): what a program given at boot is made with.
+    # shellcheck disable=SC2086
+    zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reply" \
+        "$HERE/reply.zig" "$HERE/glibc_names.c" "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
 fi
 echo "built $OUT/reflect.elf"
