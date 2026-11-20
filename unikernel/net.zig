@@ -13,7 +13,13 @@ extern fn reflect_reply_bytes(program: [*]const u8, length: usize, out: [*]u8, c
 extern fn reflect_abort_alloc(unused: usize) usize;
 extern fn reflect_command_line() [*]const u8;
 
-const Endpoint = struct { ip: [4]u8, port: u16, hook: bool };
+const Endpoint = struct { ip: [4]u8, port: u16, quic_port: u16, hook: bool };
+const quic_mod = @import("quic.zig");
+var qconn: quic_mod.Conn = undefined;
+var q_ready = false;
+var q_peer = false;
+var q_answered = false;
+var q_frame: [64]u8 = undefined;
 
 export fn net_serve() noreturn {
     const ep = parse(line()) orelse halt("the network address is not valid");
@@ -29,7 +35,18 @@ export fn net_serve() noreturn {
     say(":");
     putDec(ep.port);
     say("\n");
-    while (true) poll(nic, ep);
+    if (ep.quic_port != 0) {
+        if (!startClock()) halt("no monotonic clock");
+        qconn = quic_mod.Conn.openServer(rdrand64);
+        q_ready = true;
+        say("reflect: quic ");
+        putDec(ep.quic_port);
+        say("\n");
+    }
+    while (true) {
+        poll(nic, ep);
+        if (q_ready) quicTick(nic, ep);
+    }
 }
 
 fn line() []const u8 {
@@ -43,6 +60,8 @@ fn parse(s: []const u8) ?Endpoint {
     var ip: ?[4]u8 = null;
     var port: ?u16 = null;
     var hook = false;
+    var quic_port: u16 = 0;
+    var saw_quic = false;
     var i: usize = 0;
     while (i < s.len) {
         while (i < s.len and s[i] == ' ') i += 1;
@@ -59,9 +78,13 @@ fn parse(s: []const u8) ?Endpoint {
         } else if (eql(word, "reflect.hook=alloc")) {
             if (hook) return null;
             hook = true;
+        } else if (starts(word, "reflect.quic_port=")) {
+            if (saw_quic) return null;
+            saw_quic = true;
+            quic_port = parsePort(word["reflect.quic_port=".len..]) orelse return null;
         } else return null;
     }
-    return .{ .ip = ip orelse return null, .port = port orelse return null, .hook = hook };
+    return .{ .ip = ip orelse return null, .port = port orelse return null, .quic_port = quic_port, .hook = hook };
 }
 
 fn parseIp(s: []const u8) ?[4]u8 {
@@ -330,7 +353,12 @@ fn handle(frame: []u8, nic: Nic, ep: Endpoint) void {
     const udp = 34;
     const ulen = be16(frame[udp + 4 .. udp + 6]);
     if (ulen < 8 or @as(usize, ulen) + 20 != total) return;
-    if (be16(frame[udp + 2 .. udp + 4]) != ep.port) return;
+    const dport = be16(frame[udp + 2 .. udp + 4]);
+    if (ep.quic_port != 0 and dport == ep.quic_port) {
+        quicDatagram(frame, nic, ep);
+        return;
+    }
+    if (dport != ep.port) return;
     const got = be16(frame[udp + 6 .. udp + 8]);
     if (got != 0 and !udpOk(frame[26..34], frame[udp .. udp + ulen])) return;
     const payload = frame[udp + 8 .. udp + ulen];
@@ -381,7 +409,7 @@ fn sendApp(req: []const u8, nic: Nic, ep: Endpoint, kind: u8, status: u8, id: u6
     st64(app[8..16], id);
     st64(app[16..24], budget);
     @memcpy(app[frame_len..][0..payload.len], payload);
-    sendUdp(req, nic, ep, app[0..total]);
+    sendUdp(req, nic, ep, app[0..total], ep.port);
 }
 
 fn answerArp(frame: []const u8, nic: Nic, ep: Endpoint) bool {
@@ -404,7 +432,75 @@ fn answerArp(frame: []const u8, nic: Nic, ep: Endpoint) bool {
     return tx(nic, &out);
 }
 
-fn sendUdp(req: []const u8, nic: Nic, ep: Endpoint, payload: []const u8) void {
+fn quicDatagram(frame: []const u8, nic: Nic, ep: Endpoint) void {
+    if (frame.len < 50) return;
+    const ulen = be16(frame[38..40]);
+    if (ulen < 8 or 42 + (ulen - 8) > frame.len) return;
+    @memcpy(q_frame[0..42], frame[0..42]);
+    q_peer = true;
+    const payload = frame[42..][0 .. ulen - 8];
+    if (q_answered and payload.len > 0 and payload[0] & 0x80 != 0) {
+        qconn = quic_mod.Conn.openServer(rdrand64);
+        q_answered = false;
+    }
+    qconn.recv(payload, mono());
+    quicPump(nic, ep);
+}
+
+fn quicTick(nic: Nic, ep: Endpoint) void {
+    quicPump(nic, ep);
+}
+
+fn quicPump(nic: Nic, ep: Endpoint) void {
+    if (!q_answered and qconn.peer_fin) {
+        const reply = answerBytes(qconn.readApp(), ep);
+        if (reply.len != 0) _ = qconn.writeApp(reply);
+        q_answered = true;
+    }
+    var out: [1500]u8 = undefined;
+    const n = qconn.send(&out, mono());
+    if (n > 0 and q_peer) sendUdp(q_frame[0..42], nic, ep, out[0..n], ep.quic_port);
+}
+
+var answer_buf: [1200]u8 = undefined;
+fn answerBytes(payload: []const u8, ep: Endpoint) []const u8 {
+    if (payload.len < frame_len or payload.len > max_dgram) return "";
+    if (!eql(payload[0..4], "RFL1") or payload[6] != 0 or payload[7] != 0) return "";
+    const kind = payload[4];
+    const status = payload[5];
+    const id = be64(payload[8..16]);
+    const budget = be64(payload[16..24]);
+    const body = payload[frame_len..];
+    if (kind == 2 and status == 0 and budget == 0 and body.len == 0) {
+        return fillAnswer(3, 0, id, 0, "");
+    }
+    if (kind != 0 or status != 0) return "";
+    if (budget == 0 or budget > budget_max) return fillAnswer(1, 3, id, budget, "");
+    if (ep.hook) {
+        say("reflect: allocation failure\n");
+        _ = reflect_abort_alloc(0);
+        halt("allocation failure");
+    }
+    const need = reflect_reply_bytes(body.ptr, body.len, &reply_buf, reply_buf.len, budget);
+    if (need > max_payload) return fillAnswer(1, 2, id, budget, "");
+    return fillAnswer(1, 0, id, budget, reply_buf[0..need]);
+}
+
+fn fillAnswer(kind: u8, status: u8, id: u64, budget: u64, payload: []const u8) []const u8 {
+    const total = frame_len + payload.len;
+    if (total > answer_buf.len) return "";
+    @memcpy(answer_buf[0..4], "RFL1");
+    answer_buf[4] = kind;
+    answer_buf[5] = status;
+    answer_buf[6] = 0;
+    answer_buf[7] = 0;
+    st64(answer_buf[8..16], id);
+    st64(answer_buf[16..24], budget);
+    @memcpy(answer_buf[frame_len..][0..payload.len], payload);
+    return answer_buf[0..total];
+}
+
+fn sendUdp(req: []const u8, nic: Nic, ep: Endpoint, payload: []const u8, source: u16) void {
     const ulen: u16 = @truncate(8 + payload.len);
     const ip_len: u16 = 20 + ulen;
     const n = hdr_len + 14 + @as(usize, ip_len);
@@ -421,9 +517,8 @@ fn sendUdp(req: []const u8, nic: Nic, ep: Endpoint, payload: []const u8) void {
     @memcpy(pkt[26..30], &ep.ip);
     @memcpy(pkt[30..34], req[26..30]);
     st16(pkt[24..26], ipSum(pkt[14..34]));
-    const sport = be16(req[34..36]);
-    st16(pkt[34..36], ep.port);
-    st16(pkt[36..38], sport);
+    st16(pkt[34..36], source);
+    st16(pkt[36..38], be16(req[34..36]));
     st16(pkt[38..40], ulen);
     @memcpy(pkt[42..][0..payload.len], payload);
     const uc = udpSum(pkt[26..34], pkt[34 .. 34 + ulen]);
@@ -640,6 +735,92 @@ fn putIp(ip: [4]u8) void {
     say(".");
     putDec(ip[3]);
 }
+const Pvc = extern struct {
+    version: u32,
+    pad0: u32,
+    tsc: u64,
+    system_time: u64,
+    mul: u32,
+    shift: i8,
+    flags: u8,
+    pad1: [2]u8,
+};
+var pvc: Pvc align(64) = .{ .version = 0, .pad0 = 0, .tsc = 0, .system_time = 0, .mul = 0, .shift = 0, .flags = 0, .pad1 = .{ 0, 0 } };
+
+fn startClock() bool {
+    const id = cpuid(0x40000000, 0);
+    // edx on this Cloud Hypervisor is 0x4d; ebx and ecx are the KVM signature.
+    if (id.b != 0x4b4d564b or id.c != 0x564b4d56) return false;
+    const leaf = cpuid(0x40000001, 0);
+    if (leaf.a & (1 << 3) == 0) return false;
+    const phys = @intFromPtr(&pvc);
+    wrmsr(0x4b564d01, phys | 1);
+    return true;
+}
+
+fn cpuid(leaf: u32, sub: u32) struct { a: u32, b: u32, c: u32, d: u32 } {
+    var regs: [4]u32 = undefined;
+    asm volatile (
+        \\cpuid
+        \\mov %%eax, 0(%[p])
+        \\mov %%ebx, 4(%[p])
+        \\mov %%ecx, 8(%[p])
+        \\mov %%edx, 12(%[p])
+        :
+        : [p] "r" (&regs),
+          [l] "{eax}" (leaf),
+          [s] "{ecx}" (sub),
+        : .{ .eax = true, .ebx = true, .ecx = true, .edx = true, .memory = true }
+    );
+    return .{ .a = regs[0], .b = regs[1], .c = regs[2], .d = regs[3] };
+}
+
+fn wrmsr(msr: u32, v: u64) void {
+    asm volatile ("wrmsr"
+        :
+        : [c] "{ecx}" (msr),
+          [a] "{eax}" (@as(u32, @truncate(v))),
+          [d] "{edx}" (@as(u32, @truncate(v >> 32))),
+    );
+}
+
+fn rdtsc() u64 {
+    var lo: u32 = undefined;
+    var hi: u32 = undefined;
+    asm volatile ("rdtsc"
+        : [lo] "={eax}" (lo),
+          [hi] "={edx}" (hi),
+    );
+    return (@as(u64, hi) << 32) | lo;
+}
+
+fn mono() u64 {
+    while (true) {
+        const v1 = pvc.version;
+        if (v1 & 1 != 0) continue;
+        const tsc = pvc.tsc;
+        const sys = pvc.system_time;
+        const mul = pvc.mul;
+        const shift = pvc.shift;
+        if (pvc.version != v1) continue;
+        var delta: u64 = rdtsc() -% tsc;
+        if (shift >= 0) delta <<= @intCast(shift) else delta >>= @intCast(-@as(i16, shift));
+        return sys +% ((delta *% mul) >> 32);
+    }
+}
+
+fn rdrand64() u64 {
+    var v: u64 = undefined;
+    var ok: u8 = 0;
+    while (ok == 0) {
+        asm volatile ("rdrand %[v]"
+            : [v] "={rax}" (v),
+              [ok] "={@ccc}" (ok),
+        );
+    }
+    return v;
+}
+
 fn halt(why: []const u8) noreturn {
     say("reflect: ");
     say(why);

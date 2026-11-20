@@ -88,4 +88,9 @@ zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reflec
 # shellcheck disable=SC2086
 zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reply" \
     "$HERE/reply.zig" "$HERE/glibc_names.c" "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
+# shellcheck disable=SC2086
+zig build-exe -O ReleaseSafe -femit-bin="$OUT/quic-self" "$HERE/quic-self.zig" $Z
+# shellcheck disable=SC2086
+zig build-exe -O ReleaseSafe -lc -femit-bin="$OUT/quic-client" "$HERE/quic-client.zig" $Z
+"$OUT/quic-self"
 echo "built $OUT/reflect-net.elf"
