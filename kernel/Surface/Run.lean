@@ -8,11 +8,12 @@ namespace Surface
 open Reflect
 
 /-- Read, compile, run the machine for `budget` steps, and render. This runs the
-    machine, not `evalFuel`. `runUntil` is `run` (`Reflect.runUntil_eq`). -/
+    machine, not `evalFuel`. Each step costs one, and a primitive costs what
+    its table charges (`runPriced`). `runUntil` is `run` (`Reflect.runUntil_eq`). -/
 def runText (src : ByteArray) (budget : Nat) : String :=
   match read src with
   | .error msg => renderSyntaxError msg
-  | .ok t => renderState budget (runUntil budget (load (compile t)))
+  | .ok t => renderState budget (runPriced budget (load (compile t)))
 
 /-- One line for each request made, in order. -/
 def renderAsked (asked : List Data) : String :=

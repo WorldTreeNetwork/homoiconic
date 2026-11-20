@@ -26,6 +26,9 @@ def Outcome.IsError : Outcome → Prop
     definition and theorem below holds for any table. -/
 class Ops where
   op : Nat → Data → Data
+  /-- Steps a budget charges for this operation on this argument, counted
+      before the operation runs. One, when a table does not say. -/
+  cost : Nat → Data → Nat := fun _ _ => 1
 
 variable [Ops]
 

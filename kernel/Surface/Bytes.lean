@@ -13,7 +13,7 @@ def renderBytesError (msg : String) : String := "bytes error: " ++ msg
 def runBytes (bytes : ByteArray) (budget : Nat) : String :=
   match Wire.readProgram bytes with
   | .error msg => renderBytesError msg
-  | .ok t => renderState budget (runUntil budget (load (compile t)))
+  | .ok t => renderState budget (runPriced budget (load (compile t)))
 
 /-- An outcome the interpreter gave as data, read back: `[0, [1, d]]` is the
     data `d`, `[0, [0, body, env]]` a function, `[1, i]` an unbound variable,

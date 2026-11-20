@@ -64,8 +64,11 @@ same for the interpreter interpreting itself to any depth.
 `prim c x` runs operation number `c` on the data value `x`. What an operation
 computes is not part of the language. It comes from a table, `Ops`, holding one
 total function `op : Nat → Data → Data`, and every definition and theorem takes
-the table as a parameter. The interpreter is the same term for every table, so
-adding an operation is adding a line to a table: no proof changes.
+the table as a parameter. The table also gives `cost`, the steps a budget
+charges before the operation runs; a table that does not say charges one.
+`arithCost` is that charge for `arith`. The interpreter is the same term for
+every table, so adding an operation is adding a line to a table: no proof
+changes.
 
 The contract files state each theorem as `∀ [Ops], …` and do not import a
 table. The host runs with `arith`.

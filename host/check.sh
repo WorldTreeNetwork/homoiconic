@@ -61,7 +61,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 OBJS=""
 for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece Wire/Reply \
-              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Host; do
+              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Remote Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
         -c "$OUT/$name.c" "$module.lean"
@@ -140,6 +140,16 @@ refuse "run: cannot read the program file: FileNotFound" "$EXAMPLES/$NEWLINE"
 refuse "run: cannot read the program file: IsDir" "$EXAMPLES"
 refuse "$BUDGET" "$EXAMPLES/append.hom" -1
 refuse "$BUDGET" "$EXAMPLES/append.hom" "$NEWLINE"
+# A step budget charges the operation's cost before the operation runs.
+# Multiplication costs the product of the operands' bit lengths, so the same
+# budget finishes a small product and stops a large one.
+printf 'mul 2 3\n' > "$OUT/small-mul.hom"
+expect "6" "$OUT/small-mul.hom" 200
+python3 -c 'print("mul", 10**40 - 1, 10**40 - 1)' > "$OUT/big-mul.hom"
+expect "no result within 200 steps" "$OUT/big-mul.hom" 200
+python3 -c 'print((10**40 - 1)**2)' > "$OUT/big-mul.expected"
+expect "$(cat "$OUT/big-mul.expected")" "$OUT/big-mul.hom" 200000
+echo "a step budget bounds a large operation and lets a small one finish"
 echo "run command checks passed"
 
 # The byte form: each example is written as bytes by the kernel and run from

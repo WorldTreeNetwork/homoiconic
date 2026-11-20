@@ -48,8 +48,31 @@ def arithNames : List (String × Nat × Nat) :=
   [("add", 0, 2), ("sub", 1, 2), ("mul", 2, 2), ("div", 3, 2), ("mod", 4, 2), ("equal", 5, 2),
    ("less", 6, 2), ("text", 7, 1), ("codes", 8, 1)]
 
+/-- Bits of a number. Zero costs one, the same as one. -/
+def bits (n : Nat) : Nat := Nat.log2 n + 1
+
+/-- What a step budget charges for an operation. Addition and subtraction cost
+    the bits of the operands. Multiplication, division and remainder cost the
+    product of those bits. Comparison, `text` and `codes` cost one, or one more
+    than the length of a text or an array of code points. Anything else costs
+    one. The charge is read off the argument; it does not run the operation. -/
+def arithCost : Nat → Data → Nat
+  | 0, .arr [.nat a, .nat b] => bits a + bits b
+  | 1, .arr [.nat a, .nat b] => bits a + bits b
+  | 2, .arr [.nat a, .nat b] => bits a * bits b
+  | 3, .arr [.nat a, .nat b] => bits a * bits b
+  | 4, .arr [.nat a, .nat b] => bits a * bits b
+  | 6, .arr [.nat a, .nat b] => bits a + bits b
+  | 7, .text t => t.length + 1
+  | 7, .arr xs => xs.length + 1
+  | 8, .text t => t.length + 1
+  | 8, .arr xs => xs.length + 1
+  | _, _ => 1
+
 /-- The table the host runs with. The theorems do not mention it: they hold
     for every table. -/
-instance arithOps : Ops := ⟨arith⟩
+instance arithOps : Ops where
+  op := arith
+  cost := arithCost
 
 end Reflect
