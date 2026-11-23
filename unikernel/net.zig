@@ -28,6 +28,7 @@ const Endpoint = struct {
 };
 const std = @import("std");
 const quic_mod = @import("quic.zig");
+const pvclock = @import("pvclock.zig");
 var qconn: quic_mod.Conn = undefined;
 var q_ready = false;
 var q_wire = false;
@@ -971,18 +972,25 @@ fn rdtsc() u64 {
     return (@as(u64, hi) << 32) | lo;
 }
 
+var mono_last: u64 = 0;
+
+/// Nanoseconds from the paravirtual clock. It never goes backwards: the
+/// scaling keeps the 128-bit product (pvclock.zig), and a record that the
+/// hypervisor moved back is held at the last value returned.
 fn mono() u64 {
+    const p: *volatile Pvc = &pvc;
     while (true) {
-        const v1 = pvc.version;
+        const v1 = p.version;
         if (v1 & 1 != 0) continue;
-        const tsc = pvc.tsc;
-        const sys = pvc.system_time;
-        const mul = pvc.mul;
-        const shift = pvc.shift;
-        if (pvc.version != v1) continue;
-        var delta: u64 = rdtsc() -% tsc;
-        if (shift >= 0) delta <<= @intCast(shift) else delta >>= @intCast(-@as(i16, shift));
-        return sys +% ((delta *% mul) >> 32);
+        const tsc = p.tsc;
+        const sys = p.system_time;
+        const mul = p.mul;
+        const shift = p.shift;
+        const t = rdtsc();
+        if (p.version != v1) continue;
+        const now = pvclock.nanos(sys, t -% tsc, mul, shift);
+        if (now > mono_last) mono_last = now;
+        return mono_last;
     }
 }
 

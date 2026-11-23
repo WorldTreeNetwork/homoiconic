@@ -157,13 +157,19 @@ The command line MAY carry `reflect.quic_port=<port>`, at most once, with a port
 
 ### Requirement: The guest reads time from the KVM paravirtual clock
 
-When a QUIC port is configured the guest SHALL check that CPUID leaf 0x40000000 carries the KVM signature in EBX and ECX and that leaf 0x40000001 sets feature bit 3 (the second paravirtual clock), and SHALL register a 64-byte-aligned clock record with MSR 0x4b564d01. A guest without them SHALL print `reflect: no monotonic clock` and power off, after `reflect: ready` and before `reflect: quic`. The time QUIC is given SHALL be read from that record, retried while its version is odd or changes during the read (`net.zig` `startClock`, `mono`). The one-program image's `clock_gettime` stand-in and the UDP-only guest SHALL be unchanged. The read is not claimed monotonic over long runs: it scales the TSC delta with a wrapping 64-bit multiply, which wraps once the shifted delta since the last clock update passes about 2^32 (`homoiconic-q59.48`).
+When a QUIC port is configured the guest SHALL check that CPUID leaf 0x40000000 carries the KVM signature in EBX and ECX and that leaf 0x40000001 sets feature bit 3 (the second paravirtual clock), and SHALL register a 64-byte-aligned clock record with MSR 0x4b564d01. A guest without them SHALL print `reflect: no monotonic clock` and power off, after `reflect: ready` and before `reflect: quic`. The time QUIC is given SHALL be read from that record, retried while its version is odd or changes during the read (`net.zig` `startClock`, `mono`). The conversion SHALL be the KVM one: the TSC delta since the record's `tsc_timestamp`, shifted left by `tsc_shift` or right when it is negative, times `tsc_to_system_mul` as a 128-bit product, shifted right by 32, added to `system_time` (`unikernel/pvclock.zig` `scale`, `nanos`). The time returned SHALL NOT go backwards: a read below the last value returned gives the last value. The one-program image's `clock_gettime` stand-in and the UDP-only guest SHALL be unchanged. The conversion is checked on the build host, not in a guest: no check keeps a guest up while its clock is compared with another.
 
 #### Scenario: The clock is there on Cloud Hypervisor 54.0
 
 - GIVEN Cloud Hypervisor 54.0 on KVM on morphie
 - WHEN the guest starts with `reflect.quic_port`
 - THEN serial shows `reflect: quic <port>` and not `reflect: no monotonic clock`
+
+#### Scenario: Time runs forward past 2^32 ticks
+
+- GIVEN `zig test unikernel/pvclock.zig`, which `unikernel/build-net.sh` runs
+- WHEN the delta is stepped from zero to beyond 2^44 shifted ticks for a 3 GHz counter (shift -1), a 1.5 GHz counter (shift 0) and a shift of 1
+- THEN every value is at least the one before and equals the product computed in two 64-bit halves, the wrapping 64-bit product is seen to go backwards over the same steps, and 3e9 ticks a second stay within one part in a million of a second for a day
 
 ### Requirement: The client pins the guest certificate
 
