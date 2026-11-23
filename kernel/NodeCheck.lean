@@ -293,3 +293,155 @@ def contains (text word : String) : Bool := (text.splitOn word).length > 1
         s!"sieve: no process holds a name twice, and of {helds.length} only the first three hold name 0")
       IO.println (line (part "process 12: " text == "process 12: []; holds [#11, #1]")
         s!"sieve: {part "process 12: " text}")
+
+/-! Cases the reviewer of add-logged-processes probed by hand: a long log, many
+    starts, children that finish at once, runs that end in an error, and a long
+    captured list resumed through many fetches. In each, the session and
+    `nodeRun` agree from the start at some prefixes, and a node kept at each of
+    those prefixes, given the rest of the log or the whole log, reaches the
+    whole log's node. -/
+
+/-- The session from a program's source, finished against an empty store. -/
+def startText (src : String) (os : List Op) : String × Pieces :=
+  finish {} 1000000 (nodeStart src.toUTF8 (opsText os) budget)
+
+/-- The session from the node a session kept (its text and store), given `rest`. -/
+def resume (kept : String × Pieces) (rest : List Op) : String :=
+  let root := ((part "state: " kept.1).drop 7).toString
+  (finish kept.2 1000000 (nodeFrom root (opsText rest) budget)).1
+
+/-- A log of events, numbered from 1. -/
+def numbered (evs : List Event) : List Op :=
+  (List.range evs.length).zip evs |>.map fun (k, ev) => ⟨.nat (k + 1), ev⟩
+
+/-- The session and `nodeRun` agree on the whole log and at each prefix in
+    `ks`, and from the node kept at each, the rest of the log and the whole log
+    reach the whole log's node. -/
+def agrees (src : String) (t : Term) (log : List Op) (ks : List Nat) : Bool :=
+  let whole := part "state: " (startText src log).1
+  whole == provedState t log && whole.length == 71 &&
+    ks.all fun k =>
+      let kept := startText src (log.take k)
+      let state := part "state: " kept.1
+      state == provedState t (log.take k) && state.length == 71 &&
+        part "state: " (resume kept (log.drop k)) == whole &&
+        part "state: " (resume kept log) == whole
+
+/-- How many pieces the session fetched. -/
+def fetched (text : String) : Nat :=
+  (((part "store: fetched " text).splitOn " ").getD 2 "").replace "," "" |>.toNat?.getD 0
+
+def withProgram (name src : String) (body : Term → IO Unit) : IO Unit :=
+  match Surface.read src.toUTF8 with
+  | .error _ => IO.println (line false s!"{name}: does not read")
+  | .ok t => body t
+
+/-- A long log: 1,000 answers from outside, to one process. -/
+def longText : String :=
+"def sum n acc =
+  case n
+    0 -> acc
+    m + 1 -> ask [9, n] (fn a -> sum m (add acc a))
+sum 1000 0"
+
+#eval withProgram "long" longText fun t => do
+  let log := numbered ((List.range 1000).map fun k => .answer 0 (.nat k))
+  -- Each op is hashed, and the hash is interpreted here, so this case runs
+  -- the session from the start once and from one kept node, not at every prefix.
+  let (text, _) := startText longText log
+  let kept := startText longText (log.take 500)
+  let again := resume kept log
+  let state := part "state: " text
+  IO.println (line (state == provedState t log && state.length == 71 &&
+      part "state: " kept.1 == provedState t (log.take 500) &&
+      part "state: " (resume kept (log.drop 500)) == state && part "state: " again == state)
+    "long: the session and nodeRun agree on 1,000 outside answers, and the node kept at 500 reaches the same node")
+  IO.println (line (part "process 0: " text == "process 0: 499500; holds []" &&
+      part "entries: " text == "entries: 1000 given, 1000 acted on" &&
+      part "entries: " again == "entries: 1000 given, 500 acted on" && fetched again > 1)
+    s!"long: {part "process 0: " text}; from the node kept at 500, {part "entries: " again}, {part "store: " again}")
+
+/-- 100 starts: each child asks the outside with the number it was started on. -/
+def startsText : String :=
+"def many n =
+  case n
+    0 -> []
+    m + 1 -> ask [3, quote (fn k -> ask [9, k] (fn a -> [k, a])), n] (fn s -> many m)
+many 100"
+
+#eval withProgram "starts" startsText fun t => do
+  let log := numbered ((List.range 100).map (fun _ => Event.spawn 0) ++
+    (List.range 100).map fun k => .answer (k + 1) (.nat k))
+  IO.println (line (agrees startsText t log [100, 150])
+    "starts: the session and nodeRun agree on 100 starts and an answer to each child")
+  let (text, _) := startText startsText log
+  IO.println (line (part "process 0: " text == "process 0: []; holds []" &&
+      part "process 1: " text == "process 1: [100, 0]; holds []" &&
+      part "process 100: " text == "process 100: [1, 99]; holds []" &&
+      part "process 101: " text == "")
+    s!"starts: 101 processes; {part "process 100: " text}")
+
+/-- Children that finish at once: one with a value, one in the error `wrong`. -/
+def immediateText : String :=
+"ask [3, quote (fn x -> [x, x]), 5] (fn s ->
+  ask [3, quote (fn x -> x x), 6] (fn s ->
+    ask [9] (fn a -> a)))"
+
+#eval withProgram "immediate" immediateText fun t => do
+  let log := numbered [.spawn 0, .spawn 0, .answer 0 (.nat 7)]
+  IO.println (line (agrees immediateText t log [0, 1, 2])
+    "immediate: the session and nodeRun agree when children finish as they start")
+  let (one, _) := startText immediateText (log.take 1)
+  let (text, _) := startText immediateText log
+  IO.println (line (part "process 1: " one == "process 1: [5, 5]; holds []" &&
+      part "process 0: " text == "process 0: 7; holds []" &&
+      part "process 1: " text == "process 1: [5, 5]; holds []" &&
+      part "process 2: " text == "process 2: " ++ Surface.renderMOutcome .wrong ++ "; holds []")
+    "immediate: the first child is [5, 5] after its start alone; the second ends in wrong")
+  -- A child that has finished takes no answer.
+  let late := log ++ [⟨.nat 9, .answer 1 (.nat 0)⟩]
+  let (refused, _) := startText immediateText late
+  IO.println (line (part "state: " refused == part "state: " text &&
+      part "state: " refused == provedState t late &&
+      part "refused: " refused == "refused: entry 3, [3, 1, 0], cannot happen")
+    s!"immediate: {part "refused: " refused}")
+
+/-- Runs that end in an error: a child started on a term with an unbound
+    variable, and a parent that applies a number. -/
+def errorsText : String := "ask [3, 3, 0] (fn s -> ask [9] (fn a -> a 1))"
+
+#eval withProgram "errors" errorsText fun t => do
+  let log := numbered [.spawn 0, .answer 0 (.nat 2)]
+  IO.println (line (agrees errorsText t log [0, 1])
+    "errors: the session and nodeRun agree on runs that end in an error")
+  let (one, _) := startText errorsText (log.take 1)
+  let (text, _) := startText errorsText log
+  let unbound := "process 1: " ++ Surface.renderMOutcome (.unbound 3) ++ "; holds []"
+  IO.println (line (part "process 1: " one == unbound && part "process 1: " text == unbound &&
+      part "process 0: " text == "process 0: " ++ Surface.renderMOutcome .wrong ++ "; holds []")
+    "errors: the child ends unbound at its start, and the parent ends wrong after its answer")
+  -- A process that ended in an error takes no answer.
+  let late := log ++ [⟨.nat 9, .answer 0 (.nat 3)⟩]
+  let (refused, _) := startText errorsText late
+  IO.println (line (part "state: " refused == part "state: " text &&
+      part "state: " refused == provedState t late &&
+      part "refused: " refused == "refused: entry 2, [3, 0, 3], cannot happen")
+    s!"errors: {part "refused: " refused}")
+
+-- A restart in many pieces: `examples/keep.hom` holds a captured list of 2,000
+-- numbers while it waits; the node kept after one answer is written in 48
+-- pieces and read back through 48 fetches.
+#eval do
+  let src ← IO.FS.readFile "../examples/keep.hom"
+  withProgram "keep" src fun t => do
+    let log := numbered [.answer 0 (.nat 3), .answer 0 (.nat 4)]
+    IO.println (line (agrees src t log [1])
+      "keep: the session and nodeRun agree on a node that holds a list of 2,000 numbers")
+    let kept := startText src (log.take 1)
+    let mid := kept.1
+    let again := resume kept log
+    IO.println (line (part "store: " mid == "store: fetched 0, wrote 48" &&
+        part "store: " again == "store: fetched 48, wrote 1" &&
+        part "entries: " again == "entries: 2 given, 1 acted on" &&
+        part "process 0: " again == "process 0: [2000, 7]; holds []")
+      s!"keep: kept after one answer, {part "store: " mid}; resumed, {part "store: " again}, {part "process 0: " again}")
