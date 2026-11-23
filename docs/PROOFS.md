@@ -126,6 +126,7 @@ and nothing else.
 | `machine_correct` | A program gives `o` exactly when the compiled program halts with `o` |
 | `machine_exact` | Anything the machine halts with is the outcome of the program |
 | `machine_never_halts` | A program with no outcome never halts the machine |
+| `machine_never_faults`, `machine_never_faults_until`, `machine_never_faults_priced` | A compiled program never reaches the machine's fault state, at any step count or budget, whether or not it halts |
 | `run_add`, `run_halted` | Pausing and resuming equals running straight through; a halted machine stays halted |
 | `runUntil_eq` | The early-exit loop the host uses equals the proved one |
 | `decompile_compile` | Bytecode converts back to the exact term |
@@ -336,8 +337,10 @@ theorems; `advance` is tested against it.
   not expect.
 - **Cost and time.** A step budget counts machine steps, not work inside an
   operation (`homoiconic-q59.9`).
-- **The fault state.** That a non-halting run never reaches the machine's
-  fault state is not proved (`homoiconic-q59.3`).
+- **The fault state outside compiled code.** `machine_never_faults` is about
+  runs that start from `load (compile t)`. `step` does fault on code no term
+  compiles to (`fault_reachable_from_uncompiled`), so a machine value or state
+  that arrives as bytes rather than from the compiler is not covered.
 - **Speed.** About 34 million machine steps per second, with operations
   emulated in compiled Lean.
 - **A request carries no mark.** The driver reads every function a turn

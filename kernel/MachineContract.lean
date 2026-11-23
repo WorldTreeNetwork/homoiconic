@@ -26,6 +26,14 @@ example : ∀ t, decompile (compile t) = some t := Reflect.decompile_compile
 
 example : ∀ [Ops], ∀ n s, depth (run n s) ≤ depth s + n := Reflect.depth_bound
 
+example : ∀ [Ops], ∀ t n, run n (load (compile t)) ≠ .fault := Reflect.machine_never_faults
+
+example : ∀ [Ops], ∀ t n, runUntil n (load (compile t)) ≠ .fault :=
+  Reflect.machine_never_faults_until
+
+example : ∀ [Ops], ∀ t fuel, runPriced fuel (load (compile t)) ≠ .fault :=
+  Reflect.machine_never_faults_priced
+
 #print axioms Reflect.machine_correct
 #print axioms Reflect.machine_exact
 #print axioms Reflect.machine_never_halts
@@ -34,3 +42,6 @@ example : ∀ [Ops], ∀ n s, depth (run n s) ≤ depth s + n := Reflect.depth_b
 #print axioms Reflect.decompile_compile
 #print axioms Reflect.depth_bound
 #print axioms Reflect.runUntil_eq
+#print axioms Reflect.machine_never_faults
+#print axioms Reflect.machine_never_faults_until
+#print axioms Reflect.machine_never_faults_priced

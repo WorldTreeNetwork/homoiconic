@@ -127,3 +127,7 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 ## 2026-11-22 — the interpreter on a schedule
 
 - 2026-11-22: `homoiconic-q59.25` needed no new lemma. `PSim`'s `start` field for the interpreter is `reflective` with `reflective_coverage`, and its turn-level `Sim` was already `sim_interpreted`, so `network_reflective` is two instances and an injectivity fact about `Config.map`. The limit the bead cites was never in `openspec/specs/channels/spec.md`; it was one sentence in `ARCHITECTURE.md` and a dated note in the vision's `design.md`.
+
+## 2026-11-22 — the fault state
+
+- `machine_never_faults` needed no hypothesis on the term: an open term halts with `unbound` and an ill-typed one with `wrong`, so every fault case in `step` is a stack-shape error that the check instructions the compiler emits rule out. The `fault` branch of `Surface.replyBytes` (reply tag 5) is therefore unreachable for program bytes; it stays as the answer for code the compiler did not make.

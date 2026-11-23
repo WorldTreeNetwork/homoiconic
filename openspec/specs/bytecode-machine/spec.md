@@ -1,6 +1,6 @@
 # bytecode-machine
 
-What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `runUntil_eq`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. `step`, `run`, and the theorems about them take the operation table `Ops` as a parameter and hold for every table. The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
+What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `machine_never_faults`, `run_add`, `run_halted`, `runUntil_eq`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. `step`, `run`, and the theorems about them take the operation table `Ops` as a parameter and hold for every table. The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
 
 ## Purpose
 
@@ -20,7 +20,7 @@ The kernel package SHALL define an instruction set for the `Reflect` language an
 
 ### Requirement: The machine agrees with direct evaluation
 
-The package SHALL define a machine state and a total function `step` on states. For every term `t` and outcome `o`, the package SHALL prove that `Direct [] t o` holds if and only if the machine, loaded with `compile t`, halts after some number of steps with an outcome that reads back as `o`. The package SHALL prove that whatever the machine halts with is exactly the compiled form of a source outcome, so that a returned closure holds the compiled code of its body. The package SHALL prove that a term with no derivation never halts.
+The package SHALL define a machine state and a total function `step` on states. For every term `t` and outcome `o`, the package SHALL prove that `Direct [] t o` holds if and only if the machine, loaded with `compile t`, halts after some number of steps with an outcome that reads back as `o`. The package SHALL prove that whatever the machine halts with is exactly the compiled form of a source outcome, so that a returned closure holds the compiled code of its body. The package SHALL prove that a term with no derivation never halts. The package SHALL prove that the machine, loaded with `compile t` for any term `t`, is not in the fault state after any number of steps, under `run`, `runUntil` and `runPriced` alike; running out of budget leaves a running state, which is not the fault state. This is stated for compiled code only: `step` faults on code that no term compiles to.
 
 #### Scenario: Identity
 
@@ -33,6 +33,12 @@ The package SHALL define a machine state and a total function `step` on states. 
 - GIVEN `omega`
 - WHEN its code is run for any number of steps
 - THEN the machine has not halted
+
+#### Scenario: No fault without halting
+
+- GIVEN `omega`, or any other term, closed or not
+- WHEN its code is run for any number of steps, or under any priced budget
+- THEN the machine is not in the fault state
 
 ### Requirement: A run can pause and continue
 
@@ -78,7 +84,7 @@ The package SHALL prove that the value stack plus the pending frames after `n` s
 
 ### Requirement: The theorems depend on the logic only
 
-`machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `run_halted`, `runUntil_eq`, `decompile_compile`, and `depth_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
+`machine_correct`, `machine_exact`, `machine_never_halts`, `machine_never_faults`, `machine_never_faults_until`, `machine_never_faults_priced`, `run_add`, `run_halted`, `runUntil_eq`, `decompile_compile`, and `depth_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
 
 #### Scenario: No admitted correctness
 

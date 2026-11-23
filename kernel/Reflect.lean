@@ -6,6 +6,7 @@ import Reflect.MachineProof
 import Reflect.MachineExact
 import Reflect.RunUntil
 import Reflect.RunUntilProof
+import Reflect.MachineSafe
 import Reflect.Request
 import Reflect.RequestProof
 import Reflect.Channel

@@ -45,6 +45,7 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 | `Reflect/Proof.lean`, `Correctness.lean` | `reflective`, `reflective_coverage`, `reflective_env`, `tower` |
 | `Reflect/Machine.lean` | `compile`, `step`, `run`: a stack machine that can stop after any step |
 | `Reflect/MachineProof.lean`, `MachineExact.lean` | `machine_correct`, `machine_exact`, `machine_never_halts`, `run_add`, `depth_bound` |
+| `Reflect/MachineSafe.lean` | `machine_never_faults` and its `runUntil` and `runPriced` forms: a compiled program never reaches `fault`, halting or not |
 | `Reflect/RunUntil.lean`, `RunUntilProof.lean` | `runUntil`, which stops when the machine stops, and `runUntil_eq` |
 | `Reflect/Request.lean` | `askTerm`, `payloadTerm`, `resumeTerm`; `Sys`, a way of evaluating; `Drive`, the driver over any `Sys`; `Interact`, `InteractI`, `InteractM`; `driveRun` and `converse`, the executable driver |
 | `Reflect/RequestProof.lean` | Determinism, resume and extra answers; `Sim.drive`, which lifts turn-by-turn agreement to runs; the interpreter and machine instances; soundness of `converse` |

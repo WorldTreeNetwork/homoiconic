@@ -88,8 +88,9 @@ structure Frame where
 inductive State where
   | running : Code → MEnv → List MValue → List Frame → State
   | halted : MOutcome → State
-  /-- Not an outcome. A compiled program that halts does not pass through it.
-      That a compiled program which never halts also avoids it is not proved. -/
+  /-- Not an outcome. A compiled program never reaches it, halting or not
+      (`machine_never_faults` in `MachineSafe.lean`). Code that no term
+      compiles to can. -/
   | fault : State
   deriving Repr
 
