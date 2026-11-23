@@ -31,7 +31,9 @@ import Std.Data.HashMap
 
     Each machine run here is covered by `Reflect.lazy_turn_complete` and
     `Reflect.lazy_turn_sound`. The session that joins the runs, the hashing
-    and the byte forms are tested, not proved. -/
+    and the byte forms are tested, not proved. That a state is saved under one
+    root however much of it is held as references is proved, for references
+    that saving made (`Surface/KeepProof.lean`, `Wire/PieceProof.lean`). -/
 
 namespace Surface.Keep
 open Reflect Wire
@@ -161,11 +163,15 @@ def Session.wait (s : Session) (d : Data) (k : P Ref) : Session :=
       { s with phase := .done, written := fresh,
                text := s!"asked: {renderData d}\nroot: {hex root}\nstore: fetched {s.fetched}, wrote {fresh.size}" }
 
+/-- A VM's state as one piece, `[seen, status]`: the identifiers it has acted
+    on and where its program stands. -/
+def vmState (seen : List Data) (status : P Ref) : P Ref :=
+  .cons (Data.toP (.arr seen)) (.cons status .nil)
+
 /-- The log is handled: save the VM's state, whose program stands at `status`,
     and say where the program stands in `line`. -/
 def Session.keepState (s : Session) (part : VmPart) (line : String) (status : P Ref) : Session :=
-  let state : P Ref := .cons (Data.toP (.arr part.seen)) (.cons status .nil)
-  match save pieceSize state with
+  match save pieceSize (vmState part.seen status) with
   | none => s.finish "error: the state has no byte form"
   | some (root, pieces) =>
       let fresh := s.fresh pieces

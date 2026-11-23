@@ -131,3 +131,7 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 ## 2026-11-22 — the fault state
 
 - `machine_never_faults` needed no hypothesis on the term: an open term halts with `unbound` and an ill-typed one with `wrong`, so every fault case in `step` is a stack-shape error that the check instructions the compiler emits rule out. The `fault` branch of `Surface.replyBytes` (reply tag 5) is therefore unreachable for program bytes; it stays as the answer for code the compiler did not make.
+
+## 2026-11-22 — one root for one value
+
+- Proving that equal values are saved under one root (`homoiconic-q59.29`) showed where it is false. `save` stores the top piece whatever its size, so a root can name a piece of at most 256 bytes, which `cut` would have left in place. `keep answer` starts the turn from the root itself, and a waiting program that keeps hold of the function it was resumed from (`λf. f 5 (λx. ask 7 (λy. f))`, 36 bytes) was saved under `af0852f8…` by the session and `c53dc525…` held whole. A VM and a node open the pieces under the root and do not carry it, so their roots were not affected in any run. The invariant that makes the statement true needs no assumption on the hash: a reference is good when it is the one `cut` gives the value it stands for.

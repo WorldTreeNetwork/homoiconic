@@ -6,9 +6,11 @@ import Reflect.Store
     naming each part by the hash of its bytes.
 
     A reference is the 32-byte Blake3 hash of the bytes of the piece it names.
-    Nothing here is proved. `Reflect.StoreProof` says that where the cuts go
-    cannot change what a program computes; that a hash names one piece is
-    assumed. -/
+    Nothing is proved in this file. `Reflect.StoreProof` says that where the
+    cuts go cannot change what a program computes; that a hash names one piece
+    is assumed. `Wire.PieceProof` says that what `cut` leaves and the root
+    `save` gives depend only on the value, when every reference in the piece
+    was made by `cut`. -/
 
 namespace Wire
 open Reflect

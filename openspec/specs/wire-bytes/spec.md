@@ -122,6 +122,20 @@ Saving SHALL cut a value from the leaves up, store each part whose byte form is 
 - WHEN the lazy machine continues from the stored pieces
 - THEN it halts with what the plain machine halts with
 
+### Requirement: Equal values are saved under one root
+
+What saving leaves and the root it gives SHALL be a function of the value a partial piece stands for, when every reference in the piece is one saving made. `Wire.Made size σ p q` SHALL say so: the partial piece `p` resolves to the whole piece `q` in the store `σ`, and each reference in `p`, and in the pieces `σ` holds under them, is the reference cutting at `size` gives the value it stands for. It SHALL be proved, with no axiom beyond Lean's own, that a piece with no reference in it is `Made` (`Made.whole`); that two pieces `Made` for one value are cut to the same piece and saved under the same root, whatever their stores hold (`cut_function`, `same_root`); that what `cut` leaves is `Made` for the same value in any store that holds the old pieces and the pieces it stored (`cut_made`); that a step of the lazy machine, on any part of the store, keeps every reference one that saving made (`lstep_good`); and that the root resolves to the value in such a store (`save_resolves`). The hash SHALL be used as the function it is: these statements assume nothing of it, and do not say that different values have different roots. The proofs are in `kernel/Wire/PieceProof.lean` and the exact statements in `kernel/RootContract.lean`, which `host/check.sh` runs.
+
+Three things are not proved. A store that holds two different pieces under one hash does not exist, so `cut_made` and `save_resolves` say nothing when two stored pieces collide. That a piece read from its bytes is the piece that was written is tested (`kernel/KeepCheck.lean`). And the session that joins the runs is tested: `Surface.Keep.full` and `chase` are `partial`, so Lean proves nothing of them.
+
+A root is not always a reference saving would make inside a value: the top is stored whatever its size, and a part of at most `size` bytes is otherwise left in place. So the statement does not hold of a piece that holds the root of a small piece. `Surface.Keep.answer` starts a turn from the root itself, and a waiting program that keeps hold of the function it was resumed from is then saved under another root than the same value held whole (`homoiconic-q59.47`, reproduced on 2026-11-22 with a 36-byte waiting program). A VM and a node are opened through the pieces under the root, so the root does not enter their state; that is read off `openState` and `openNode` and borne out by `kernel/LogCheck.lean` and `kernel/NodeCheck.lean`, not proved.
+
+#### Scenario: The statements are checked
+
+- GIVEN `kernel/RootContract.lean`
+- WHEN it is checked
+- THEN every statement holds as written and each depends on no axiom but `propext`, `Classical.choice` and `Quot.sound`
+
 ### Requirement: A text is stored whole
 
 Saving SHALL treat a text as it treats a number: a text whose byte form is larger than the given size SHALL be stored under its hash as one piece and replaced by its reference, and a smaller one SHALL be left in place. Saving SHALL NOT cut a text into parts.

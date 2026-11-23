@@ -22,6 +22,7 @@ lake env lean MachineContract.lean   # the machine theorems, exact statements
 lake env lean RequestContract.lean   # the request theorems, exact statements
 lake env lean StoreContract.lean     # the stored-state theorems, exact statements
 lake env lean ChannelContract.lean   # the channel theorems, exact statements
+lake env lean RootContract.lean      # equal states are saved under one root, exact statements
 lake env lean ReflectRun.lean        # the scenarios, executed
 lake env lean Surface/Check.lean     # the reader and renderer against examples
 lake env lean StoreCheck.lean        # runs cut into pieces and continued
@@ -272,7 +273,14 @@ function]`, `[1, data]`, `[2, i]` or `[3]` for a waiting program, a result, an
 unbound variable or `wrong`. `LogCheck.lean` compares it with `vmRun`: the
 root the session saves is the root of the fold's state saved the same way,
 and a kept state restarted on the whole log has the root the whole log gives
-from the start. That is tested, not proved.
+from the start. The session is tested, not proved. The saving is proved:
+`RootContract.lean` states `same_root` (two partial pieces that stand for one
+value, every reference in each made by saving, have one root), `cut_made`
+(saving makes only such references), `lstep_good` (the lazy machine makes
+none) and `restart_same_root` (so a restarted state and a replayed one have
+one root, given that each session holds such a piece). Nothing is assumed of
+the hash. The proofs are in `Wire/PieceProof.lean` and
+`Surface/KeepProof.lean`.
 
 A session can also be a node. `nodeStart` runs a program as the first process
 and applies a log of ops; `nodeFrom` applies one to a kept node. Whether an
