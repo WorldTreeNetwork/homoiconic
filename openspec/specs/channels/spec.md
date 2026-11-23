@@ -101,6 +101,22 @@ For every operation table, a run by direct evaluation SHALL be, in compiled form
 - WHEN `kernel/ChannelContract.lean` is checked
 - THEN there is a configuration `cfg` with `Network sourceP p (schedRun budget c₀ evs).1 cfg` and the reported configuration its compiled form
 
+### Requirement: The interpreter on data runs a schedule as the program does
+
+For every operation table, every program and every schedule, the schedule SHALL lead the program, by direct evaluation, to a configuration exactly when it leads the run in which every evaluation is done by the interpreter on data (`interpretedP`) to the data form of that configuration (`network_reflective`). Every run of the interpreter on data SHALL be the data form of a run by direct evaluation (`network_interpreted_exact`). In that run a program, and the program of a start request applied to its start data, SHALL be begun by `interp` on its data form, the payload and the rest of a request SHALL be evaluated by the interpreter's `evalTerm`, a finished process SHALL hold its outcome as data and a waiting process its function as data. The payloads, the events, the names held and the names made SHALL be the same in both runs. The statements SHALL have no condition on the program or the schedule. What is interpreted is evaluation: reading a payload, holding and what an event does are the scheduler's, defined once for every way of evaluating, and are not run by the interpreter. Nothing is stated for the interpreter interpreting itself to a depth beyond one, or for the interpreter run on the machine.
+
+#### Scenario: The interpreter follows the schedule
+
+- GIVEN a program `p`, a schedule `evs` and a configuration `cfg`
+- WHEN `kernel/ChannelContract.lean` is checked
+- THEN `Network sourceP p evs cfg` holds exactly when `Network interpretedP p evs (cfg.map reifyOutcome reifyValue)` does
+
+#### Scenario: The interpreter has no other runs
+
+- GIVEN `Network interpretedP p evs ic`
+- WHEN `kernel/ChannelContract.lean` is checked
+- THEN there is a configuration `cfg` with `Network sourceP p evs cfg` and `ic` its data form
+
 ### Requirement: The channel theorems depend on the logic only
 
 `kernel/ChannelContract.lean` SHALL state each theorem for every operation table, SHALL NOT import a table, and SHALL print each theorem's axioms. The axioms SHALL be among `propext`, `Classical.choice` and `Quot.sound`.

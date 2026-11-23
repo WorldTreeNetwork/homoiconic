@@ -51,6 +51,18 @@ example : ∀ [Ops] {p : Term} {evs : List Event} {mc : MConfig},
     ∃ cfg, Network sourceP p evs cfg ∧ mc = cfg.map MP.injO MP.injV :=
   Reflect.network_machine_exact
 
+-- The interpreter on data runs a schedule as the program does: every
+-- evaluation of the run is `interp`, or its `evalTerm`, on a data form.
+example : ∀ [Ops] (p : Term) (evs : List Event) (cfg : Config Value Outcome),
+    Network sourceP p evs cfg ↔
+    Network interpretedP p evs (cfg.map reifyOutcome reifyValue) :=
+  Reflect.network_reflective
+
+example : ∀ [Ops] {p : Term} {evs : List Event} {ic : Config Data Data},
+    Network interpretedP p evs ic →
+    ∃ cfg, Network sourceP p evs cfg ∧ ic = cfg.map reifyOutcome reifyValue :=
+  Reflect.network_interpreted_exact
+
 -- What the host's scheduler reports is true of the program, however it stopped.
 example : ∀ [Ops] {budget : Nat} {p : Term} {c₀ : MConfig} (evs : List Event),
     beginRun budget p = some c₀ →
@@ -71,5 +83,7 @@ example : ∀ [Ops] {budget : Nat} {p : Term} {c₀ : MConfig} (limit : Nat),
 #print axioms Reflect.Network.held_nodup
 #print axioms Reflect.network_machine
 #print axioms Reflect.network_machine_exact
+#print axioms Reflect.network_reflective
+#print axioms Reflect.network_interpreted_exact
 #print axioms Reflect.replay_true
 #print axioms Reflect.auto_true

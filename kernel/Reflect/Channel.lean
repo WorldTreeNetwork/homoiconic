@@ -180,6 +180,13 @@ def machineP : PSys MValue MOutcome where
   toSys := machine
   start t w := ∃ n, run n (load (compile t)) = .halted w
 
+/-- The interpreter, on data: a program is begun by `interp` on its data
+    form, and every turn is evaluated by the interpreter. Results are outcomes
+    as data, and a waiting process is held as a closure as data. -/
+def interpretedP : PSys Data Data where
+  toSys := interpreted
+  start t w := Direct [] (.app interp (.lit (reify t))) (.value (.data w))
+
 /-! The executable scheduler, on the machine. Every machine run gets `budget`
     steps: beginning a program, reading a payload, and running the rest on an
     answer. -/

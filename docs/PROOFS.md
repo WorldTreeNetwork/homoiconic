@@ -160,6 +160,7 @@ configuration is every process, the names each holds, and the names made.
 | `Network.held_issued` | Every name a process holds was made by an event of the schedule |
 | `Network.held_nodup` | No process holds a name twice. It rests on an invariant, `Config.Tidy`: every held list has no repeat and is within the names made |
 | `network_machine`, `network_machine_exact` | The machine runs a schedule exactly as direct evaluation does |
+| `network_reflective`, `network_interpreted_exact` | A schedule leads the program to a configuration exactly when it leads the run in which every evaluation is done by the interpreter on data to that configuration's data form, and the interpreter has no other runs. The scheduler is outside the interpreter, and one level of interpretation is covered |
 | `replay_true`, `auto_true` | The events the executable scheduler reports as done, and the configuration it reports, are a run of the program by direct evaluation, however the run stopped |
 
 ### The log

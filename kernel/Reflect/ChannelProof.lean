@@ -15,6 +15,8 @@ What is proved about channels.
 - `Network.held_nodup`: no process of a program holds a name twice.
 - `PSim.forward`, `PSim.backward`: a run by direct evaluation is, in compiled
   form, a run on the machine, and the machine has no others.
+- `network_reflective`: the interpreter on data runs a schedule as the program
+  does, each evaluation done by `interp` on the data form.
 - `stepRun_sound`, `schedRun_sound`, `autoRun_sound`: the executable scheduler
   only does what `Step` says.
 -/
@@ -485,6 +487,26 @@ theorem PSim.forward {S₁ : PSys C₁ R₁} {S₂ : PSys C₂ R₂} {f : R₁ �
     ⟨f r, st.map f g, (s.start _ _).mpr ⟨_, hr, rfl⟩, s.sim.settle_forward hs, rfl⟩,
     s.sched_forward hd⟩
 
+theorem Status.map_inj {f : R₁ → R₂} {g : C₁ → C₂} (hf : ∀ a b, f a = f b → a = b)
+    (hg : ∀ a b, g a = g b → a = b) {s s' : Status C₁ R₁} (h : s.map f g = s'.map f g) :
+    s = s' := by
+  cases s <;> cases s' <;> simp [Status.map] at h
+  · rw [hg _ _ h.1, h.2]
+  · rw [hf _ _ h]
+
+theorem Config.map_inj {f : R₁ → R₂} {g : C₁ → C₂} (hf : ∀ a b, f a = f b → a = b)
+    (hg : ∀ a b, g a = g b → a = b) {c c' : Config C₁ R₁} (h : c.map f g = c'.map f g) :
+    c = c' := by
+  obtain ⟨procs, names⟩ := c
+  obtain ⟨procs', names'⟩ := c'
+  simp only [Config.map, Config.mk.injEq] at h
+  obtain ⟨hp, rfl⟩ := h
+  have hq : ∀ q q' : Proc C₁ R₁, Proc.map f g q = Proc.map f g q' → q = q' := by
+    rintro ⟨st, held⟩ ⟨st', held'⟩ hqq
+    simp only [Proc.map, Proc.mk.injEq] at hqq
+    rw [Status.map_inj hf hg hqq.1, hqq.2]
+  rw [(List.map_inj_right hq).mp hp]
+
 end Generic
 
 variable [Ops]
@@ -521,6 +543,46 @@ theorem network_machine_exact {p : Term} {evs : List Event} {mc : MConfig}
     (h : Network machineP p evs mc) :
     ∃ cfg, Network sourceP p evs cfg ∧ mc = cfg.map MP.injO injV :=
   psim_machine.backward h
+
+theorem psim_interpreted : PSim sourceP interpretedP reifyOutcome reifyValue where
+  sim := sim_interpreted
+  start := by
+    intro t w
+    constructor
+    · intro h
+      obtain ⟨o, ho⟩ := reflective_coverage t _ h
+      simp only [Outcome.value.injEq, Value.data.injEq] at ho
+      subst ho
+      exact ⟨o, (reflective t o).mpr h, rfl⟩
+    · rintro ⟨o, hd, rfl⟩
+      exact (reflective t o).mp hd
+
+/-- A run by direct evaluation is, as data, a run of the interpreter on data:
+    the same schedule, with every evaluation done by the interpreter. -/
+theorem network_interpreted {p : Term} {evs : List Event} {cfg : Config Value Outcome}
+    (h : Network sourceP p evs cfg) :
+    Network interpretedP p evs (cfg.map reifyOutcome reifyValue) :=
+  psim_interpreted.forward h
+
+/-- Every run of the interpreter on data is the data form of a run by direct
+    evaluation. -/
+theorem network_interpreted_exact {p : Term} {evs : List Event} {ic : Config Data Data}
+    (h : Network interpretedP p evs ic) :
+    ∃ cfg, Network sourceP p evs cfg ∧ ic = cfg.map reifyOutcome reifyValue :=
+  psim_interpreted.backward h
+
+/-- The interpreter on data runs a schedule as the program does: a schedule
+    leads the program to a configuration exactly when it leads the interpreter
+    to that configuration's data form. -/
+theorem network_reflective (p : Term) (evs : List Event) (cfg : Config Value Outcome) :
+    Network sourceP p evs cfg ↔
+    Network interpretedP p evs (cfg.map reifyOutcome reifyValue) := by
+  constructor
+  · exact network_interpreted
+  · intro h
+    obtain ⟨cfg₁, h₁, he⟩ := network_interpreted_exact h
+    cases Config.map_inj (fun _ _ => reifyOutcome_inj) reifyValue_inj he
+    exact h₁
 
 theorem settleRun_sound {budget : Nat} {w : MOutcome} {st : Status MValue MOutcome}
     (h : settleRun budget w = some st) : Settle machine w st := by

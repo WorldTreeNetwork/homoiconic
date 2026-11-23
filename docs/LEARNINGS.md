@@ -123,3 +123,7 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - `add-unikernel-quic` and `add-network-channels` landed with a short proposal, checked tasks and no banner or spec delta, so fold could not admit them; the code (QUIC on `reflect.quic_port`, `reflect.wire_port`, `reflect.peer`, and the evaluating exports `reflect_remote_offer`, `reflect_remote_take`, `reflect_remote_log`, `reflect_remote_same`) is ahead of the living specs. The `zig-host` sentence naming every evaluating export was false from `793b583` until a delta adds them.
 - `add-boot-program-bytes` (rigor instrument) reached fold without the read by another model family its own task asked for; it was folded on the orchestrator's instruction with that box left open.
 - `add-unikernel-net` passed on morphie on 2026-11-19 and waited three days for fold behind one unchecked box ("publish the endpoint contract for Mjolnir") that Mjolnir had already consumed (`homoiconic-q59.17`).
+
+## 2026-11-22 — the interpreter on a schedule
+
+- 2026-11-22: `homoiconic-q59.25` needed no new lemma. `PSim`'s `start` field for the interpreter is `reflective` with `reflective_coverage`, and its turn-level `Sim` was already `sim_interpreted`, so `network_reflective` is two instances and an injectivity fact about `Config.map`. The limit the bead cites was never in `openspec/specs/channels/spec.md`; it was one sentence in `ARCHITECTURE.md` and a dated note in the vision's `design.md`.
