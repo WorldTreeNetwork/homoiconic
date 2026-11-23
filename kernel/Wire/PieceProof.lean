@@ -10,6 +10,8 @@ import Reflect.StoreProof
     to what the whole value is cut to (`Made.norm_eq`), and saved under the root
     the whole value is saved under (`same_root`). `cut` makes only such
     references (`Made.after_cut`), and the lazy machine makes none (`lstep_good`).
+    A turn that starts from a root holds the piece under it as `opened` gives
+    it, and that is `Made` too (`save_opened`).
 
     The hash is used as the function it is. Nothing is assumed of it: that
     equal values get one root does not need different pieces to have different
@@ -396,6 +398,122 @@ theorem save_resolves {p q : P Ref} {r : Ref} {w : Array (Ref × ByteArray)}
           · exact wrote_named ht
           · exact ⟨hb, rfl⟩
         · exact .ref (hτ (Blake3.hash b, b, c) (by simp [hsaved, hb])) (key τ hle hτ).unf
+
+/-- A piece is saved under the root of the value it stands for, when every
+    reference in it was made by `cut`. -/
+theorem good_root {p : P Ref} (h : Good size σ p) :
+    ∃ q, Unf σ p q ∧ (save size p).map (·.1) = (save size q).map (·.1) :=
+  let ⟨q, m⟩ := h
+  ⟨q, m.unf, m.root⟩
+
+/-! ## A turn starts from the piece under a root
+
+    `save` stores the top piece whatever its size, so a root is not always a
+    reference `cut` would make inside a value. `opened` holds the piece under a
+    root in place when it is small. What it gives is `Made`. -/
+
+theorem keptv_small {p c : P Ref} (h : keptv size p = some c) :
+    (∃ r, c = .ref r) ∨ ∃ b, pieceBytes c = some b ∧ b.size ≤ size := by
+  unfold keptv at h
+  cases hb : pieceBytes p with
+  | none => simp [hb] at h
+  | some b =>
+    simp only [hb, Option.map_some, Option.some.injEq] at h
+    by_cases hs : b.size ≤ size
+    · simp only [hs, ite_true] at h
+      subst h
+      exact .inr ⟨b, hb, hs⟩
+    · simp only [hs, ite_false] at h
+      exact .inl ⟨_, h.symm⟩
+
+/-- What `cut` leaves at the top is a reference or a piece of at most `size`
+    bytes. -/
+theorem norm_small : ∀ {p c : P Ref}, norm size p = some c →
+    (∃ r, c = .ref r) ∨ ∃ b, pieceBytes c = some b ∧ b.size ≤ size
+  | .nat _, _, h => keptv_small (by simpa [norm] using h)
+  | .name _, _, h => keptv_small (by simpa [norm] using h)
+  | .text _, _, h => keptv_small (by simpa [norm] using h)
+  | .nil, _, h => keptv_small (by simpa [norm] using h)
+  | .ref r, _, h => .inl ⟨r, by simpa [norm] using h.symm⟩
+  | .cons _ _, _, h => by
+      simp only [norm] at h
+      split at h
+      · exact keptv_small h
+      · simp at h
+  | .closure _ _, _, h => by
+      simp only [norm] at h
+      split at h
+      · exact keptv_small h
+      · simp at h
+
+theorem opened_small {r : Ref} {p : P Ref} {b : ByteArray} (hb : pieceBytes p = some b)
+    (hs : b.size ≤ size) : opened size r p = p := by
+  simp [opened, hb, hs]
+
+theorem opened_cases (r : Ref) (p : P Ref) : opened size r p = p ∨ opened size r p = .ref r := by
+  unfold opened
+  split
+  · split
+    · exact .inl rfl
+    · exact .inr rfl
+  · exact .inr rfl
+
+/-- A turn that starts from a root starts from a piece that is `Made` for the
+    value saved: in any store that holds the old pieces and the pieces `save`
+    stored, the root names a piece, and that piece as `opened` holds it is
+    `Made` for the value. -/
+theorem save_opened {p q : P Ref} {r : Ref} {w : Array (Ref × ByteArray)}
+    (h : Made size σ p q) (hs : save size p = some (r, w)) :
+    ∃ ps : List Stored, w = bytesOf ps ∧
+      (∀ t ∈ ps, pieceBytes t.2.2 = some t.2.1 ∧ t.1 = Blake3.hash t.2.1) ∧
+      ∀ τ : Store Ref, σ.le τ → (∀ t ∈ ps, τ t.1 = some t.2.2) →
+        ∃ top, τ r = some top ∧ Made size τ (opened size r top) q := by
+  rw [save_eq] at hs
+  cases hn : Wire.norm size p with
+  | none => simp [hn, rootOf] at hs
+  | some c =>
+    have key : ∀ τ : Store Ref, σ.le τ → (∀ t ∈ saved size p, τ t.1 = some t.2.2) →
+        Made size τ c q := fun τ hle hτ =>
+      h.after_cut hn hle (fun t ht => hτ t (by simp [saved, ht]))
+    by_cases hc : ∃ r', c = .ref r'
+    · obtain ⟨r', rfl⟩ := hc
+      simp only [hn, rootOf, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hs
+      obtain ⟨rfl, rfl⟩ := hs
+      refine ⟨saved size p, rfl, ?_, fun τ hle hτ => ?_⟩
+      · intro t ht
+        simp only [saved, hn, List.append_nil] at ht
+        exact wrote_named ht
+      · have m := key τ hle hτ
+        cases m with
+        | ref hr hp hq =>
+          refine ⟨_, hr, ?_⟩
+          rcases opened_cases (size := size) r' _ with e | e
+          · exact e ▸ hp
+          · exact e ▸ .ref hr hp hq
+    · have hroot : rootOf (some c) = (pieceBytes c).map Blake3.hash := by
+        cases c <;> first | rfl | exact absurd ⟨_, rfl⟩ hc
+      have hsaved : saved size p = wrote size p ++
+          match pieceBytes c with
+          | some b => [(Blake3.hash b, b, c)]
+          | none => [] := by
+        simp only [saved, hn]
+        cases c <;> first | rfl | exact absurd ⟨_, rfl⟩ hc
+      cases hb : pieceBytes c with
+      | none => simp [hn, hroot, hb] at hs
+      | some b =>
+        simp only [hn, hroot, hb, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hs
+        obtain ⟨rfl, rfl⟩ := hs
+        refine ⟨saved size p, rfl, ?_, fun τ hle hτ => ?_⟩
+        · intro t ht
+          simp only [hsaved, hb, List.mem_append, List.mem_singleton] at ht
+          rcases ht with ht | rfl
+          · exact wrote_named ht
+          · exact ⟨hb, rfl⟩
+        · refine ⟨c, hτ (Blake3.hash b, b, c) (by simp [hsaved, hb]), ?_⟩
+          rcases norm_small hn with hr | ⟨b', hb', hs'⟩
+          · exact absurd hr hc
+          · rw [opened_small hb' hs']
+            exact key τ hle hτ
 
 /-! ## The lazy machine makes no reference
 

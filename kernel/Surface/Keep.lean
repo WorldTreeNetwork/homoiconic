@@ -33,7 +33,14 @@ import Std.Data.HashMap
     `Reflect.lazy_turn_sound`. The session that joins the runs, the hashing
     and the byte forms are tested, not proved. That a state is saved under one
     root however much of it is held as references is proved, for references
-    that saving made (`Surface/KeepProof.lean`, `Wire/PieceProof.lean`). -/
+    that saving made (`Surface/KeepProof.lean`, `Wire/PieceProof.lean`). That
+    one turn of a program holds and saves only such references is proved too
+    (`advance_turn`); for a VM and a node it is not.
+
+    A turn that answers a waiting program does not hold the root as a
+    reference when the piece under it is small (`Wire.opened`): saving stores
+    the top piece whatever its size, and a reference to a small piece is one
+    saving never makes inside a value. -/
 
 namespace Surface.Keep
 open Reflect Wire
@@ -83,6 +90,8 @@ inductive Phase where
   | ask (k : P Ref) (p : P Ref)
   /-- A data result, being fetched whole. -/
   | result (p : P Ref)
+  /-- The waiting program under the root `r`, about to be answered with `d`. -/
+  | resuming (r : Ref) (d : Data)
   /-- A kept VM state, being read. -/
   | opening (root : P Ref)
   /-- A kept node, being read. -/
@@ -140,6 +149,10 @@ structure Session where
   node : Option NodePart := none
 
 def Session.store (s : Session) : Store Ref := fun r => s.pieces[r]?
+
+/-- More than the references a chain can pass through the pieces supplied
+    without meeting one twice. -/
+def Session.reach (s : Session) : Nat := s.pieces.size + 1
 
 /-- A session that is over before it ran. -/
 def failed (text : String) : Session :=
@@ -239,7 +252,8 @@ def steps (σ : Store Ref) : Nat → PState Ref → LRun Ref × Nat
     there is a function in it. It ends when no piece reaches itself. That
     holds for pieces made by saving, where a reference is made after the piece
     it names. For other pieces it is assumed: a piece that reached itself
-    would hold a hash of bytes that contain that hash. -/
+    would hold a hash of bytes that contain that hash. What it gives is data,
+    so no reference comes out of it. -/
 partial def full (σ : Store Ref) : P Ref → Except Ref (Option Data)
   | .nat n => .ok (some (.nat n))
   | .name n => .ok (some (.name n))
@@ -255,16 +269,19 @@ partial def full (σ : Store Ref) : P Ref → Except Ref (Option Data)
       | some p => full σ p
       | none => .error r
 
-/-- Follow references to the piece they name. Gives the last reference passed
-    (or the piece, when it was not a reference) and the piece. `error r` when
-    the store lacks `r`. It ends on the same condition as `full`. -/
-partial def chase (σ : Store Ref) : P Ref → Except Ref (P Ref × P Ref)
-  | .ref r =>
+/-- Follow references to the piece they name, through at most `n` of them.
+    Gives the last reference passed (or the piece, when it was not a
+    reference) and the piece. `error r` when the store lacks `r`. A chain that
+    is longer than `n` is given back as the reference it has reached. With `n`
+    above the number of pieces the store holds (`Session.reach`) that is a
+    chain that meets a reference twice, which `full` does not end on. -/
+def chase (σ : Store Ref) : Nat → P Ref → Except Ref (P Ref × P Ref)
+  | n + 1, .ref r =>
       match σ r with
       | none => .error r
-      | some (.ref r') => chase σ (.ref r')
+      | some (.ref r') => chase σ n (.ref r')
       | some p => .ok (.ref r, p)
-  | p => .ok (p, p)
+  | _, p => .ok (p, p)
 
 /-- What a run that stopped without a value says. -/
 def Session.stopped (s : Session) : PState Ref → Session
@@ -282,8 +299,8 @@ inductive Stands where
   | wrong
 
 /-- Is the piece, behind any references, the empty list? -/
-def isNil (σ : Store Ref) (p : P Ref) : Except Ref Bool := do
-  match ← chase σ p with
+def isNil (σ : Store Ref) (n : Nat) (p : P Ref) : Except Ref Bool := do
+  match ← chase σ n p with
   | (_, .nil) => pure true
   | _ => pure false
 
@@ -295,28 +312,28 @@ def isNil (σ : Store Ref) (p : P Ref) : Except Ref Bool := do
     fetch what a turn may never look at. A function made by something other
     than saving may hold a part the machine cannot use, and a turn that
     reaches it ends in a machine fault and keeps nothing. -/
-def openState (σ : Store Ref) (root : P Ref) : Except Ref (Option (List Data × Stands)) := do
-  let (_, top) ← chase σ root
+def openState (σ : Store Ref) (n : Nat) (root : P Ref) : Except Ref (Option (List Data × Stands)) := do
+  let (_, top) ← chase σ n root
   let .cons seenP rest := top | pure none
   let some (.arr seen) ← full σ seenP | pure none
-  let (_, .cons statusP last) ← chase σ rest | pure none
-  if !(← isNil σ last) then return none
-  let (_, .cons tagP body) ← chase σ statusP | pure none
-  let (_, tag) ← chase σ tagP
-  let (_, body) ← chase σ body
+  let (_, .cons statusP last) ← chase σ n rest | pure none
+  if !(← isNil σ n last) then return none
+  let (_, .cons tagP body) ← chase σ n statusP | pure none
+  let (_, tag) ← chase σ n tagP
+  let (_, body) ← chase σ n body
   match tag, body with
   | .nat 0, .cons k last =>
-      if !(← isNil σ last) then return none
-      match ← chase σ k with
+      if !(← isNil σ n last) then return none
+      match ← chase σ n k with
       | (held, .closure _ _) => pure (some (seen, .waiting held))
       | _ => pure none
   | .nat 1, .cons d last =>
-      if !(← isNil σ last) then return none
+      if !(← isNil σ n last) then return none
       let some _ ← full σ d | pure none
       pure (some (seen, .value d))
   | .nat 2, .cons i last =>
-      if !(← isNil σ last) then return none
-      match ← chase σ i with
+      if !(← isNil σ n last) then return none
+      match ← chase σ n i with
       | (_, .nat n) => pure (some (seen, .unbound n))
       | _ => pure none
   | .nat 3, .nil => pure (some (seen, .wrong))
@@ -324,11 +341,11 @@ def openState (σ : Store Ref) (root : P Ref) : Except Ref (Option (List Data ×
 
 /-- The parts of a list piece, behind any references. `none` when the piece is
     not a list. -/
-partial def parts (σ : Store Ref) (p : P Ref) : Except Ref (Option (List (P Ref))) := do
-  match ← chase σ p with
+partial def parts (σ : Store Ref) (n : Nat) (p : P Ref) : Except Ref (Option (List (P Ref))) := do
+  match ← chase σ n p with
   | (_, .nil) => pure (some [])
   | (_, .cons h t) =>
-      match ← parts σ t with
+      match ← parts σ n t with
       | some xs => pure (some (h :: xs))
       | none => pure none
   | _ => pure none
@@ -339,41 +356,41 @@ def natsOf : Data → Option (List Nat)
       | _ => none
   | _ => none
 
-def openStatus (σ : Store Ref) (p : P Ref) : Except Ref (Option (Status (P Ref) Final)) := do
-  let some ps ← parts σ p | pure none
+def openStatus (σ : Store Ref) (n : Nat) (p : P Ref) : Except Ref (Option (Status (P Ref) Final)) := do
+  let some ps ← parts σ n p | pure none
   match ps with
   | [tag, a, b] =>
-      match ← chase σ tag, ← chase σ a with
+      match ← chase σ n tag, ← chase σ n a with
       | (_, .nat 0), (held, .closure _ _) =>
           match ← full σ b with
           | some d => pure (some (.waiting held d))
           | none => pure none
       | _, _ => pure none
   | [tag, a] =>
-      match ← chase σ tag with
+      match ← chase σ n tag with
       | (_, .nat 1) =>
           match ← full σ a with
           | some d => pure (some (.finished (.value d)))
           | none => pure none
       | (_, .nat 2) =>
-          match ← chase σ a with
+          match ← chase σ n a with
           | (_, .nat i) => pure (some (.finished (.unbound i)))
           | _ => pure none
       | _ => pure none
   | [tag] =>
-      match ← chase σ tag with
+      match ← chase σ n tag with
       | (_, .nat 3) => pure (some (.finished .wrong))
       | _ => pure none
   | _ => pure none
 
-def openProcs (σ : Store Ref) : List (P Ref) → Except Ref (Option (List (Proc (P Ref) Final)))
+def openProcs (σ : Store Ref) (n : Nat) : List (P Ref) → Except Ref (Option (List (Proc (P Ref) Final)))
   | [] => pure (some [])
   | q :: qs => do
-      let some [heldP, statusP] ← parts σ q | pure none
+      let some [heldP, statusP] ← parts σ n q | pure none
       let some heldData ← full σ heldP | pure none
       let some held := natsOf heldData | pure none
-      let some status ← openStatus σ statusP | pure none
-      let some rest ← openProcs σ qs | pure none
+      let some status ← openStatus σ n statusP | pure none
+      let some rest ← openProcs σ n qs | pure none
       pure (some (⟨status, held⟩ :: rest))
 
 /-- Read a kept node: the identifiers acted on, and the processes. The piece
@@ -381,13 +398,13 @@ def openProcs (σ : Store Ref) : List (P Ref) → Except Ref (Option (List (Proc
     with names numbers, a payload and a result data, and a waiting program a
     function. As for a VM state, a function's environment is not walked. What
     the piece says a process is waiting on and holds is taken as it is. -/
-def openNode (σ : Store Ref) (root : P Ref) : Except Ref (Option (List Data × LConfig)) := do
-  let some [seenP, namesP, procsP] ← parts σ root | pure none
+def openNode (σ : Store Ref) (n : Nat) (root : P Ref) : Except Ref (Option (List Data × LConfig)) := do
+  let some [seenP, namesP, procsP] ← parts σ n root | pure none
   let some (.arr seen) ← full σ seenP | pure none
   let some namesData ← full σ namesP | pure none
   let some names := natsOf namesData | pure none
-  let some qs ← parts σ procsP | pure none
-  let some procs ← openProcs σ qs | pure none
+  let some qs ← parts σ n procsP | pure none
+  let some procs ← openProcs σ n qs | pure none
   pure (some (seen, ⟨procs, names⟩))
 
 /-- Carry the turn on until it is over or needs a piece. For one turn, each
@@ -422,7 +439,7 @@ def advance : Nat → Session → Session
                   advance fuel { s with phase := .landed (.finished .wrong) }
               | _, _ => s.stopped st'
       | .classify v =>
-          match chase s.store v with
+          match chase s.store s.reach v with
           | .error r => { s with need := some r }
           | .ok (k, .closure _ _) =>
               -- `k` is the function as it is held: a reference when it was
@@ -474,8 +491,17 @@ def advance : Nat → Session → Session
               | some _ => advance fuel { s with phase := .landed (.finished (.value d)) }
               | none => s.ended (renderData d) (.cons (.nat 1) (.cons d.toP .nil))
           | .ok none => s.finish "error: machine fault"
+      | .resuming r d =>
+          match s.store r with
+          | none => { s with need := some r }
+          | some p =>
+              -- The root's piece is held as saving would have left it inside
+              -- a value: in place when it is small, as its reference when not.
+              let first := Phase.run
+                (.running (compile (resumeTerm d)) (.cons (opened pieceSize r p) .nil) [] [])
+              advance fuel { s with phase := first }
       | .opening root =>
-          match openState s.store root with
+          match openState s.store s.reach root with
           | .error r => { s with need := some r }
           | .ok none => s.finish "store error: the root is not a kept state"
           | .ok (some (seen, stands)) =>
@@ -489,7 +515,7 @@ def advance : Nat → Session → Session
               | .unbound i => s.stopped (.halted (.unbound i))
               | .wrong => s.stopped (.halted .wrong)
       | .openingNode root =>
-          match openNode s.store root, s.node with
+          match openNode s.store s.reach root, s.node with
           | .error r, _ => { s with need := some r }
           | .ok (some (seen, cfg)), some part =>
               advance fuel { s with node := some { part with seen := seen, cfg := cfg },
@@ -571,9 +597,7 @@ def answer (root : String) (src : ByteArray) (budget : Nat) : Session :=
       | .ok t =>
           match runUntil budget (load (compile t)) with
           | .halted (.value (.data d)) =>
-              let first := Phase.run
-                (.running (compile (resumeTerm d)) (.cons (.ref r) .nil) [] [])
-              let s : Session := { budget, left := budget, phase := first }
+              let s : Session := { budget, left := budget, phase := .resuming r d }
               advance s.fuel s
           | _ => failed "answer: not data"
 

@@ -114,7 +114,7 @@ The reader and writer SHALL handle a definite-length CBOR byte string, with its 
 
 ### Requirement: Saving cuts a value by size
 
-Saving SHALL cut a value from the leaves up, store each part whose byte form is larger than a given size under its hash, and replace it by its reference. It SHALL leave a part that is already a reference as it is. It SHALL store the top of the value whatever its size, and give its reference as the root.
+Saving SHALL cut a value from the leaves up, store each part whose byte form is larger than a given size under its hash, and replace it by its reference. It SHALL leave a part that is already a reference as it is. It SHALL store the top of the value whatever its size, and give its reference as the root. A root can therefore name a piece of at most the size, which a turn holds in place (see "A turn holds the piece under a small root in place").
 
 #### Scenario: A run continues from saved pieces
 
@@ -126,15 +126,40 @@ Saving SHALL cut a value from the leaves up, store each part whose byte form is 
 
 What saving leaves and the root it gives SHALL be a function of the value a partial piece stands for, when every reference in the piece is one saving made. `Wire.Made size σ p q` SHALL say so: the partial piece `p` resolves to the whole piece `q` in the store `σ`, and each reference in `p`, and in the pieces `σ` holds under them, is the reference cutting at `size` gives the value it stands for. It SHALL be proved, with no axiom beyond Lean's own, that a piece with no reference in it is `Made` (`Made.whole`); that two pieces `Made` for one value are cut to the same piece and saved under the same root, whatever their stores hold (`cut_function`, `same_root`); that what `cut` leaves is `Made` for the same value in any store that holds the old pieces and the pieces it stored (`cut_made`); that a step of the lazy machine, on any part of the store, keeps every reference one that saving made (`lstep_good`); and that the root resolves to the value in such a store (`save_resolves`). The hash SHALL be used as the function it is: these statements assume nothing of it, and do not say that different values have different roots. The proofs are in `kernel/Wire/PieceProof.lean` and the exact statements in `kernel/RootContract.lean`, which `host/check.sh` runs.
 
-Three things are not proved. A store that holds two different pieces under one hash does not exist, so `cut_made` and `save_resolves` say nothing when two stored pieces collide. That a piece read from its bytes is the piece that was written is tested (`kernel/KeepCheck.lean`). And the session that joins the runs is tested: `Surface.Keep.full` and `chase` are `partial`, so Lean proves nothing of them.
+Three things are not proved. A store that holds two different pieces under one hash does not exist, so `cut_made`, `save_resolves` and `save_opened` say nothing when two stored pieces collide. That a piece read from its bytes is the piece that was written is tested (`kernel/KeepCheck.lean`). And the session of a VM and of a node is tested: `Surface.Keep.full` and `parts` are `partial`, so Lean proves nothing of them, and `openState` and `openNode` are not covered. The session of one turn of a program is proved to hold and save only references that saving made; see the next requirement.
 
-A root is not always a reference saving would make inside a value: the top is stored whatever its size, and a part of at most `size` bytes is otherwise left in place. So the statement does not hold of a piece that holds the root of a small piece. `Surface.Keep.answer` starts a turn from the root itself, and a waiting program that keeps hold of the function it was resumed from is then saved under another root than the same value held whole (`homoiconic-q59.47`, reproduced on 2026-11-22 with a 36-byte waiting program). A VM and a node are opened through the pieces under the root, so the root does not enter their state; that is read off `openState` and `openNode` and borne out by `kernel/LogCheck.lean` and `kernel/NodeCheck.lean`, not proved.
+A root is not always a reference saving would make inside a value: the top is stored whatever its size, and a part of at most `size` bytes is otherwise left in place. So the statement does not hold of a piece that holds the root of a small piece. Until 2026-11-23 `Surface.Keep.answer` started a turn from the root itself, and a waiting program that keeps hold of the function it was resumed from was then saved under another root than the same value held whole (`homoiconic-q59.47`: `fn f -> f 5 (fn x -> ask 7 (fn y -> f))`, whose first turn waits with a function of 36 bytes, answered with 0, was saved under `af0852f8…` and held whole under `c53dc525…`). A turn no longer does that; see the next requirement. A VM and a node are opened through the pieces under the root, so the root does not enter their state; that is read off `openState` and `openNode` and borne out by `kernel/LogCheck.lean` and `kernel/NodeCheck.lean`, not proved.
 
 #### Scenario: The statements are checked
 
 - GIVEN `kernel/RootContract.lean`
 - WHEN it is checked
 - THEN every statement holds as written and each depends on no axiom but `propext`, `Classical.choice` and `Quot.sound`
+
+### Requirement: A turn holds the piece under a small root in place
+
+A turn that answers the waiting program under a root SHALL fetch the piece under the root before it runs, and SHALL hold that piece in place when its byte form is at most the size saving cuts at, and hold the root as a reference when it is larger (`Wire.opened`, `Surface.Keep.answer`). That is what saving would have left of the value inside a larger one, so the root of a small piece does not enter the state the turn saves. Saving itself SHALL NOT change: it stores the top of a value whatever its size, and the root of a value is the root it had before. A state that an earlier build saved with the root of a small piece inside it SHALL still read and run; it is not rewritten, and its root stays the one it was saved under.
+
+It SHALL be proved, with no axiom beyond Lean's own, that the piece a turn starts from is `Made` for the value saved, in any store that holds the old pieces and the pieces saving stored (`Wire.save_opened`); that following references through a part of the store gives a reference saving made (`Surface.Keep.chase_good`, for which `chase` takes a bound, the number of pieces the session holds and one more, and is no longer `partial`); and that a session of one turn, begun by `start` or `answer` and carried on by `give`, holds only references saving made in every phase, and at its end has saved a function every reference of which saving made, or has stored nothing (`Inv`, `Turn`, `advance_turn`, `start_turn`, `answer_turn`, `give_turn`). Such a function resolves to a whole value and is saved under the root that value is saved under (`waits_root`). The proofs are in `kernel/Wire/PieceProof.lean` and `kernel/Surface/KeepProof.lean`, and the exact statements in `kernel/RootContract.lean`.
+
+What this leaves unproved of `keep`, each a hypothesis of a statement above and none an axiom:
+
+- `give_turn` assumes that the pieces the session holds, with the piece just read among them, are part of the store. That needs reading a piece's bytes to give the piece that was written, which is tested, and the session's map to give back what was put in it, for which Lean 4.35 has no lawful equality and hash on `ByteArray`.
+- `answer_turn` assumes the root's name reads back to the root (`unhex` of `hex`), and takes from `save_opened` that the store holds each saved piece under its reference, which fails only when two pieces share a hash.
+- That the function a turn saves is the one the request theorems speak of (`Reflect.lazy_turn_complete`) is not joined to this. What is proved is about its references: whatever value it resolves to, its root is that value's root.
+- A VM and a node (`vmStart`, `vmFrom`, `nodeStart`, `nodeFrom`) are not covered: `Inv` is false of their phases (`homoiconic-q59.54`).
+
+#### Scenario: A program that keeps hold of the function it was resumed from
+
+- GIVEN `fn f -> f 5 (fn x -> ask 7 (fn y -> f))`, started, and its root answered with 0
+- WHEN the second turn saves the waiting program
+- THEN the root it reports is the root the same value has when it is held whole and saved (`kernel/KeepCheck.lean`)
+
+#### Scenario: The statements are checked
+
+- GIVEN `kernel/RootContract.lean`
+- WHEN it is checked
+- THEN `save_opened`, `advance_turn`, `start_turn`, `answer_turn`, `give_turn` and `waits_root` hold as written and each depends on no axiom but `propext`, `Classical.choice` and `Quot.sound`
 
 ### Requirement: A text is stored whole
 

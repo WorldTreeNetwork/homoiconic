@@ -374,3 +374,35 @@ def keptText : String :=
       | _, _ => s!"FAIL {texts.length} stored pieces are text, or the first turn did not wait: {firstLine t1}"
 
 #eval IO.println keptText
+
+/-! One value has one root. A waiting program can keep hold of the function it
+    was resumed from: the selector a turn hands that function holds it. The
+    first turn of `fn f -> f 5 (fn x -> ask 7 (fn y -> f))` waits with a
+    function of 36 bytes, which is stored as the root though saving would have
+    left it in place inside a value. The second turn must not carry that root
+    as a reference into the state it saves (`homoiconic-q59.47`). -/
+
+/-- The root a session saves after the second turn, and the root the same
+    value has when it is held whole. -/
+def heldRoots : String :=
+  let src := "fn f -> f 5 (fn x -> ask 7 (fn y -> f))\n"
+  match serve {} 1000 (Surface.Keep.start src.toUTF8 100000) with
+  | none => "FAIL the first turn lacked a piece"
+  | some (m1, t1) =>
+      match rootOf t1 with
+      | none => s!"FAIL the first turn did not wait: {t1}"
+      | some r1 =>
+          match serve m1 1000 (Surface.Keep.answer r1 "0".toUTF8 100000) with
+          | none => "FAIL the second turn lacked a piece"
+          | some (m2, t2) =>
+              match rootOf t2, (rootOf t2).bind Surface.Keep.unhex with
+              | some r2, some r =>
+                  match resolve (storeOf m2) (.ref r) with
+                  | none => "FAIL the saved state does not resolve"
+                  | some whole =>
+                      let want := ((save Surface.Keep.pieceSize whole).map fun x => hex x.1).getD "no byte form"
+                      line (firstLine t1 == "asked: 5" && firstLine t2 == "asked: 7" && r2 == want)
+                        s!"a waiting program that holds the function it was resumed from has the root of the same value held whole: {(r2.take 16).toString}, whole {(want.take 16).toString}"
+              | _, _ => s!"FAIL the second turn did not wait: {t2}"
+
+#eval IO.println heldRoots

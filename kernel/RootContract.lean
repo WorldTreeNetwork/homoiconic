@@ -76,3 +76,87 @@ example : ∀ {size : Nat} {σ σ' : Store Ref} [Ops] {p : Term} {l₁ l₂ : Li
 #print axioms Wire.save_resolves
 #print axioms Surface.Keep.state_same_root
 #print axioms Surface.Keep.restart_same_root
+
+-- `homoiconic-q59.47`: a turn of `keep` saves only references that `cut` made.
+
+-- A root is not always a reference `cut` would make inside a value: `save`
+-- stores the top piece whatever its size. A turn that starts from a root holds
+-- the piece under it as `opened` gives it, and that is `Made` for the value
+-- saved, in any store that holds the old pieces and the pieces `save` stored.
+example : ∀ {size : Nat} {σ : Store Ref} {p q : P Ref} {r : Ref} {w : Array (Ref × ByteArray)},
+    Made size σ p q → save size p = some (r, w) →
+    ∃ ps : List Stored, w = bytesOf ps ∧
+      (∀ t ∈ ps, pieceBytes t.2.2 = some t.2.1 ∧ t.1 = Blake3.hash t.2.1) ∧
+      ∀ τ : Store Ref, σ.le τ → (∀ t ∈ ps, τ t.1 = some t.2.2) →
+        ∃ top, τ r = some top ∧ Made size τ (opened size r top) q :=
+  Wire.save_opened
+
+-- A piece every reference of which was made by `cut` resolves to a whole
+-- value and is saved under the root that value is saved under.
+example : ∀ {size : Nat} {σ : Store Ref} {p : P Ref}, Good size σ p →
+    ∃ q, Unf σ p q ∧ (save size p).map (·.1) = (save size q).map (·.1) :=
+  Wire.good_root
+
+-- The invariant of a session that runs one turn, and where such a session can
+-- be after it was carried on. These are the definitions, restated.
+example : ∀ {σ : Store Ref} {s : Session}, Inv σ s ↔
+    s.store.le σ ∧ PhaseGood σ s.phase ∧ s.vm = none ∧ s.node = none ∧ s.written = #[] :=
+  fun {_ _} => ⟨fun h => ⟨h.le, h.good, h.vm, h.node, h.written⟩,
+    fun h => ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2⟩⟩
+example : ∀ {σ : Store Ref} {s : Session}, Turn σ s ↔
+    Inv σ s ∨ (∃ (s' : Session) (d : Data) (k : P Ref), Good pieceSize σ k ∧ s = s'.wait d k) ∨
+      (s.phase = .done ∧ s.written = #[]) :=
+  fun {_ _} => ⟨fun h => by
+      cases h with
+      | holds h => exact .inl h
+      | waits h => exact .inr (.inl ⟨_, _, _, h, rfl⟩)
+      | over a b => exact .inr (.inr ⟨a, b⟩),
+    fun h => by
+      rcases h with h | ⟨_, _, _, h, rfl⟩ | ⟨a, b⟩
+      · exact .holds h
+      · exact .waits h
+      · exact .over a b⟩
+example : ∀ {σ : Store Ref} {st : PState Ref}, PhaseGood σ (.run st) ↔ GoodS pieceSize σ st :=
+  Iff.rfl
+example : ∀ {σ : Store Ref} {r : Ref} {d : Data}, PhaseGood σ (.resuming r d) ↔
+    ∃ p, σ r = some p ∧ Good pieceSize σ (opened pieceSize r p) := Iff.rfl
+
+-- Carrying a turn on keeps the invariant, until the turn saves a function
+-- every reference of which was made by `cut`, or ends with nothing stored.
+example : ∀ {σ : Store Ref} (fuel : Nat) {s : Session}, Inv σ s → Turn σ (advance fuel s) :=
+  Surface.Keep.advance_turn
+
+-- The first turn of a program.
+example : ∀ {σ : Store Ref} (src : ByteArray) (budget : Nat), Turn σ (start src budget) :=
+  Surface.Keep.start_turn
+
+-- A turn that answers the program under a root. `save_opened` gives the
+-- hypothesis for a root that saving gave.
+example : ∀ {σ : Store Ref} {root : String} {r : Ref}, unhex root = some r →
+    (∃ p, σ r = some p ∧ Good pieceSize σ (opened pieceSize r p)) →
+    ∀ (src : ByteArray) (budget : Nat), Turn σ (answer root src budget) :=
+  Surface.Keep.answer_turn
+
+-- Supplying a piece. That the session's pieces, with the piece read from the
+-- bytes among them, are still part of the store is a hypothesis.
+example : ∀ {σ : Store Ref} {s : Session} {bytes : ByteArray}, Inv σ s →
+    (∀ r p, s.need = some r → readPiece bytes = .ok p →
+      ∀ x q, (s.pieces.insert r p)[x]? = some q → σ x = some q) →
+    Turn σ (give s bytes) :=
+  Surface.Keep.give_turn
+
+-- What a turn that waits saved has the root of the same value held whole.
+example : ∀ {σ : Store Ref} {k : P Ref}, Good pieceSize σ k →
+    ∃ q, Unf σ k q ∧ (save pieceSize k).map (·.1) = (save pieceSize q).map (·.1) :=
+  Surface.Keep.waits_root
+
+#print axioms Wire.save_opened
+#print axioms Wire.good_root
+#print axioms Wire.norm_small
+#print axioms Surface.Keep.chase_good
+#print axioms Surface.Keep.steps_good
+#print axioms Surface.Keep.advance_turn
+#print axioms Surface.Keep.start_turn
+#print axioms Surface.Keep.answer_turn
+#print axioms Surface.Keep.give_turn
+#print axioms Surface.Keep.waits_root

@@ -10,7 +10,7 @@ import Reflect.Store
     cuts go cannot change what a program computes; that a hash names one piece
     is assumed. `Wire.PieceProof` says that what `cut` leaves and the root
     `save` gives depend only on the value, when every reference in the piece
-    was made by `cut`. -/
+    was made by `cut`, and that `opened` gives such a piece for a root. -/
 
 namespace Wire
 open Reflect
@@ -107,5 +107,15 @@ def save (size : Nat) (p : P Ref) : Option (Ref × Array (Ref × ByteArray)) :=
         | .ref r => pure r
         | _ => failure
   run.run #[]
+
+/-- What a turn holds of the value saved under the root `r`, given the piece
+    `p` stored there. `save` stores the top piece whatever its size, so a root
+    can name a piece of at most `size` bytes, which `cut` would have left in
+    place inside a value. Such a piece is held as it is, and the root is held
+    as a reference only when `cut` would have made that reference. -/
+def opened (size : Nat) (r : Ref) (p : P Ref) : P Ref :=
+  match pieceBytes p with
+  | some b => if b.size ≤ size then p else .ref r
+  | none => .ref r
 
 end Wire
