@@ -139,7 +139,9 @@ fn parse(s: []const u8) ?Endpoint {
             has_peer = true;
         } else return null;
     }
+    // One QUIC connection: the service, the wire server or the peer, not two.
     if (wire_port != 0 and has_peer) return null;
+    if (saw_quic and (saw_wire or has_peer)) return null;
     return .{
         .ip = ip orelse return null,
         .port = port orelse return null,

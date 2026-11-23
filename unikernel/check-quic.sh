@@ -3,7 +3,8 @@
 # with the guest still answering, a wrong peer key, loss plus reordering,
 # and a second host that sends what it likes: garbage and a new handshake in
 # the middle of an exchange, garbage long headers after the reply, and a
-# first flight with a bad UDP checksum.
+# first flight with a bad UDP checksum. Before that, the command lines that
+# ask for two QUIC services at once, which the guest refuses.
 set -eu
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$HERE/.." && pwd)"
@@ -41,6 +42,26 @@ boot() {
         --net "tap=$TAP,mac=$MAC" --cmdline "$1" >"$OUT/ch.log" 2>&1 &
     pid=$!
 }
+
+# One guest has one QUIC connection. A command line that asks for the QUIC
+# service and an end of the remote channel is refused before the device is
+# touched.
+refused() {
+    boot "$CMD $1"
+    end=$(( $(date +%s) + 90 ))
+    while kill -0 "$pid" 2>/dev/null && [ "$(date +%s)" -lt "$end" ]; do sleep 0.05; done
+    if kill -0 "$pid" 2>/dev/null; then
+        echo "a guest given '$1' with a QUIC port kept running" >&2
+        exit 1
+    fi
+    wait "$pid" 2>/dev/null || true
+    pid=
+    grep -q "reflect: the network address is not valid" "$OUT/serial.log"
+    if grep -q "reflect: ready" "$OUT/serial.log"; then exit 1; fi
+    echo "ok   refused: reflect.quic_port with $1"
+}
+refused "reflect.wire_port=4446"
+refused "reflect.peer=192.168.249.3:4446"
 
 boot "$CMD"
 end=$(( $(date +%s) + 90 ))
