@@ -35,6 +35,9 @@ var q_wire = false;
 var q_peer = false;
 var q_answered = false;
 var q_frame: [64]u8 = undefined;
+var q_next: quic_mod.Conn = undefined;
+var q_seen: u64 = 0;
+const q_idle: u64 = 2_000_000_000;
 
 export fn net_serve() noreturn {
     const ep = parse(line()) orelse halt("the network address is not valid");
@@ -417,6 +420,8 @@ fn handle(frame: []u8, nic: Nic, ep: Endpoint) void {
     const ulen = be16(frame[udp + 4 .. udp + 6]);
     if (ulen < 8 or @as(usize, ulen) + 20 != total) return;
     const dport = be16(frame[udp + 2 .. udp + 4]);
+    const got = be16(frame[udp + 6 .. udp + 8]);
+    if (got != 0 and !udpOk(frame[26..34], frame[udp .. udp + ulen])) return;
     if (ep.quic_port != 0 and dport == ep.quic_port) {
         quicDatagram(frame, nic, ep);
         return;
@@ -430,8 +435,6 @@ fn handle(frame: []u8, nic: Nic, ep: Endpoint) void {
         return;
     }
     if (dport != ep.port) return;
-    const got = be16(frame[udp + 6 .. udp + 8]);
-    if (got != 0 and !udpOk(frame[26..34], frame[udp .. udp + ulen])) return;
     const payload = frame[udp + 8 .. udp + ulen];
     if (payload.len > max_dgram) return;
     onDatagram(frame, payload, nic, ep);
@@ -507,14 +510,32 @@ fn quicDatagram(frame: []const u8, nic: Nic, ep: Endpoint) void {
     if (frame.len < 50) return;
     const ulen = be16(frame[38..40]);
     if (ulen < 8 or 42 + (ulen - 8) > frame.len) return;
-    @memcpy(q_frame[0..42], frame[0..42]);
-    q_peer = true;
     const payload = frame[42..][0 .. ulen - 8];
-    if (q_answered and payload.len > 0 and payload[0] & 0x80 != 0) {
-        qconn = quic_mod.Conn.openServer(rdrand64);
-        q_answered = false;
+    const now = mono();
+    // Nothing a datagram says is used until one of its packets opens (AEAD).
+    if (qconn.recv(payload, now)) {
+        // The reply address is the one the connection's first Initial came
+        // from. It is not moved afterwards, by any packet.
+        if (!q_peer) {
+            @memcpy(q_frame[0..42], frame[0..42]);
+            q_peer = true;
+        }
+        q_seen = now;
+    } else if (qconn.server and q_peer and (q_answered or now -| q_seen >= q_idle) and
+        quic_mod.newInitial(payload, &qconn.orig_dcid))
+    {
+        // A server connection gives way only when it has answered or has
+        // opened nothing for q_idle, and only to a datagram that opens as a
+        // new Initial. The candidate is built aside; if it does not open,
+        // the connection in place is untouched.
+        q_next = quic_mod.Conn.openServer(rdrand64);
+        if (q_next.recv(payload, now)) {
+            qconn = q_next;
+            @memcpy(q_frame[0..42], frame[0..42]);
+            q_answered = false;
+            q_seen = now;
+        }
     }
-    qconn.recv(payload, mono());
     if (q_wire) wirePump(nic, ep) else quicPump(nic, ep);
 }
 

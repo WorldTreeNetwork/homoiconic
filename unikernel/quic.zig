@@ -20,6 +20,20 @@ pub fn certificate() []const u8 {
     return &guest_cert;
 }
 
+pub const min_initial: usize = 1200;
+
+/// Whether a datagram has the shape of a client's first flight for a
+/// connection other than `current`: at least 1200 bytes, a version 1 Initial,
+/// 8-byte connection IDs, and a destination ID that is not `current`. Whether
+/// it opens is for `recv` on a fresh server connection to say.
+pub fn newInitial(dgram: []const u8, current: *const [8]u8) bool {
+    if (dgram.len < min_initial) return false;
+    if (dgram[0] & 0xf0 != 0xc0) return false;
+    if (std.mem.readInt(u32, dgram[1..5], .big) != 1) return false;
+    if (dgram[5] != 8 or dgram[14] != 8) return false;
+    return !std.mem.eql(u8, dgram[6..14], current);
+}
+
 const Keys = struct { key: [16]u8 = .{0} ** 16, iv: [12]u8 = .{0} ** 12, hp: [16]u8 = .{0} ** 16, on: bool = false, pn: u32 = 0 };
 const Pend = struct { on: bool = false, frames: [1400]u8 = undefined, len: usize = 0, pn: u32 = 0, at: u64 = 0, tries: u8 = 0 };
 const Holey = struct { buf: [8192]u8 = .{0} ** 8192, got: [8192]u8 = .{0} ** 8192, n: usize = 0 };
@@ -64,6 +78,8 @@ pub const Conn = struct {
     server_done: bool = false,
     peer_fin: bool = false,
     sent_fin: bool = false,
+    opens: u64 = 0,
+    dgram: usize = 0,
     rand: *const fn () u64,
 
     pub fn openClient(rand: *const fn () u64, pin: *const [32]u8) Conn {
@@ -87,13 +103,19 @@ pub const Conn = struct {
         return c;
     }
 
-    pub fn recv(c: *Conn, pkt: []const u8, now: u64) void {
+    /// Take one datagram. True when at least one of its packets opened
+    /// under this connection's keys; a datagram that returns false has
+    /// changed nothing.
+    pub fn recv(c: *Conn, pkt: []const u8, now: u64) bool {
+        const before = c.opens;
+        c.dgram = pkt.len;
         var i: usize = 0;
         while (i < pkt.len) {
             const n = c.one(pkt[i..], now) orelse break;
             if (n == 0) break;
             i += n;
         }
+        return c.opens != before;
     }
 
     pub fn send(c: *Conn, out: []u8, now: u64) usize {
@@ -177,18 +199,25 @@ pub const Conn = struct {
         if (o + ln.v > pkt.len) return null;
         const total = o + ln.v;
         const space: usize = if (kind == 0) 0 else if (kind == 2) 1 else return total;
+        // A server's first Initial names the keys it is opened with. They
+        // stay only if it opens, and only a datagram of at least 1200 bytes
+        // (RFC 9000 section 14.1) may start a connection.
+        var first = false;
         if (c.server and !c.initial.on and space == 0) {
-            var id: [8]u8 = undefined;
-            @memcpy(&id, dcid);
-            c.orig_dcid = id;
-            c.peer_cid = id;
-            @memcpy(&c.peer_cid, scid);
+            if (c.dgram < min_initial) return total;
+            @memcpy(&c.orig_dcid, dcid);
             installPair(&c.initial, &c.open_initial, &c.orig_dcid, true);
+            first = true;
         }
-        if (!c.server and space == 0) {
-            @memcpy(&c.peer_cid, scid);
-        }
-        const plain = c.open(space, pkt[0..total], o) orelse return total;
+        const plain = c.open(space, pkt[0..total], o) orelse {
+            if (first) {
+                c.initial.on = false;
+                c.open_initial.on = false;
+            }
+            return total;
+        };
+        // The peer's connection ID is taken from a packet that opened.
+        if (space == 0 and (first or !c.server)) @memcpy(&c.peer_cid, scid);
         c.mark(space, plain.pn);
         c.takeFrames(space, plain.data, now);
         return total;
@@ -227,6 +256,7 @@ pub const Conn = struct {
         var s: usize = 0;
         while (s < 4) : (s += 1) nonce[8 + s] ^= buf[pn_at + s];
         Aes128Gcm.decrypt(c.plain[0 .. tag_at - body], buf[body..tag_at], tag, buf[0..body], nonce, k.key) catch return null;
+        c.opens += 1;
         return .{ .pn = pn, .data = c.plain[0 .. tag_at - body] };
     }
 

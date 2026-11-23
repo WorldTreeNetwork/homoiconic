@@ -42,13 +42,19 @@ The driver SHALL discover PCI BAR capabilities and map advertised MMIO before ac
 
 ### Requirement: Malformed packets do not reach evaluation
 
-The stack SHALL serve only its own IPv4 address, answer ARP for that address and validate Ethernet/IP bounds and the IPv4 header checksum before dispatch. It SHALL reject IP fragments, options, unsupported protocols and inconsistent IP or UDP lengths. On the UDP service port (`reflect.port`) an IPv4 UDP zero checksum MAY be accepted and nonzero checksums SHALL be verified. Replies SHALL have valid checksums. The UDP service SHALL bound application datagrams to 1200 bytes and SHALL NOT fragment or truncate application output into a successful reply. A datagram for a QUIC port (`reflect.quic_port`, `reflect.wire_port`, and port 9000 on a guest given `reflect.peer`) SHALL be passed to QUIC after the IP and UDP length checks; its UDP checksum is not verified, and QUIC packet protection SHALL drop a packet that fails authentication before its frames are read (`unikernel/net.zig` `handle`, `unikernel/quic.zig` `open`; `homoiconic-q59.53`).
+The stack SHALL serve only its own IPv4 address, answer ARP for that address and validate Ethernet/IP bounds and the IPv4 header checksum before dispatch. It SHALL reject IP fragments, options, unsupported protocols and inconsistent IP or UDP lengths. On every port it serves, an IPv4 UDP zero checksum MAY be accepted and nonzero checksums SHALL be verified before the datagram is dispatched. Replies SHALL have valid checksums. The UDP service SHALL bound application datagrams to 1200 bytes and SHALL NOT fragment or truncate application output into a successful reply. A datagram for a QUIC port (`reflect.quic_port`, `reflect.wire_port`, and port 9000 on a guest given `reflect.peer`) SHALL be passed to QUIC after the IP and UDP length checks and the same checksum check, and QUIC packet protection SHALL drop a packet that fails authentication before its frames are read (`unikernel/net.zig` `handle`, `unikernel/quic.zig` `open`). What such a datagram may change is the requirement "A datagram that does not open changes nothing".
 
 #### Scenario: Bad traffic followed by good traffic
 
 - GIVEN truncated, fragmented, misaddressed, oversized and checksum-invalid input to the UDP service port
 - WHEN those packets precede a valid program request
 - THEN malformed input invokes no evaluator, and the valid request still receives its complete correct reply
+
+#### Scenario: A bad checksum on the QUIC port
+
+- GIVEN a running guest with a QUIC port and the first datagram of a real handshake, written by `quic-client ... initial`
+- WHEN it is sent to the QUIC port with a nonzero UDP checksum that is wrong, and then again with the right one
+- THEN the guest sends nothing for the first and answers the second (`unikernel/check-quic.sh`)
 
 ### Requirement: Framing supplies correlation and a bounded step budget
 
@@ -147,13 +153,45 @@ A device-spike result contradicting the reviewed discovery, MMIO, feature or que
 
 ### Requirement: An optional port serves one authenticated QUIC stream
 
-The command line MAY carry `reflect.quic_port=<port>`, at most once, with a port in 1..65535; a repeated or malformed word SHALL be refused as other bad configuration is (`reflect: the network address is not valid`). Without the word, and without the remote-channel words, the guest SHALL serve UDP exactly as before and SHALL NOT start the clock. With it, after `reflect: ready`, the guest SHALL start the paravirtual clock, open a QUIC server connection and print `reflect: quic <port>` on serial (`unikernel/net.zig` `net_serve`, `parse`). The QUIC layer (`unikernel/quic.zig`) SHALL speak QUIC version 1 with TLS 1.3, the cipher suite TLS_AES_128_GCM_SHA256, X25519 key exchange and a P-256 ECDSA certificate, with 8-byte connection IDs and random values from `RDRAND`. It SHALL carry one bidirectional stream. The client's stream, ended by FIN, SHALL be one `RFL1` frame of at most 1200 bytes, judged by the frame rules of the UDP service: a ping answered by a pong, a well-framed run with an out-of-range budget answered with status 3 and not evaluated, a run whose reply exceeds 1176 bytes answered with status 2, and anything else answered with nothing. A valid run SHALL call `reflect_reply_bytes` once, and the guest SHALL write the answering frame on the stream with FIN (`net.zig` `quicPump`, `answerBytes`). Zig SHALL NOT read the program or the outcome. The guest SHALL serve one QUIC connection at a time: after it has answered, the next long-header packet SHALL start a new server connection, so a budget reply leaves the guest serving. The build-only allocation hook SHALL apply to a QUIC run as it does to a UDP run.
+The command line MAY carry `reflect.quic_port=<port>`, at most once, with a port in 1..65535; a repeated or malformed word SHALL be refused as other bad configuration is (`reflect: the network address is not valid`). Without the word, and without the remote-channel words, the guest SHALL serve UDP exactly as before and SHALL NOT start the clock. With it, after `reflect: ready`, the guest SHALL start the paravirtual clock, open a QUIC server connection and print `reflect: quic <port>` on serial (`unikernel/net.zig` `net_serve`, `parse`). The QUIC layer (`unikernel/quic.zig`) SHALL speak QUIC version 1 with TLS 1.3, the cipher suite TLS_AES_128_GCM_SHA256, X25519 key exchange and a P-256 ECDSA certificate, with 8-byte connection IDs and random values from `RDRAND`. It SHALL carry one bidirectional stream. The client's stream, ended by FIN, SHALL be one `RFL1` frame of at most 1200 bytes, judged by the frame rules of the UDP service: a ping answered by a pong, a well-framed run with an out-of-range budget answered with status 3 and not evaluated, a run whose reply exceeds 1176 bytes answered with status 2, and anything else answered with nothing. A valid run SHALL call `reflect_reply_bytes` once, and the guest SHALL write the answering frame on the stream with FIN (`net.zig` `quicPump`, `answerBytes`). Zig SHALL NOT read the program or the outcome. The guest SHALL serve one QUIC connection at a time. After it has answered, the next datagram that opens as a new Initial SHALL start a new server connection, so a budget reply leaves the guest serving; when a connection gives way is the requirement "A datagram that does not open changes nothing". The build-only allocation hook SHALL apply to a QUIC run as it does to a UDP run.
 
 #### Scenario: Factorial, a budget reply, and the guest still up
 
 - GIVEN a guest booted with `reflect.ip=192.168.249.2 reflect.port=4444 reflect.quic_port=4445` on a TAP
 - WHEN `unikernel/out/quic-client` sends factorial with budget 100000000, then `examples/forever.hom` with budget 5000, then factorial again over new handshakes
 - THEN the first two reply frames have kind 1 and status 0, and each payload equals, byte for byte, what `unikernel/out/reply run` gives for the same program and budget in a Linux process (`unikernel/check-quic.sh`)
+
+### Requirement: A datagram that does not open changes nothing
+
+A datagram to a QUIC port SHALL change the guest's connection, and where the guest sends, only when one of its packets opens: its AEAD tag checks under keys of the connection it is given to (`quic.zig` `recv`, `open`). A server connection SHALL install the Initial keys named by a first Initial only if that packet opens, and either end SHALL take the peer's connection ID only from an Initial that opened (`quic.zig` `longPacket`). The guest SHALL send a server connection's packets to the address its first opened Initial came from and SHALL NOT move that address afterwards for any packet; there is no connection migration (`net.zig` `quicDatagram`).
+
+A server connection SHALL give way to a new one only under this policy. The datagram SHALL be at least 1200 bytes and begin with a QUIC version 1 Initial with 8-byte connection IDs whose destination ID is not the present connection's (`quic.zig` `newInitial`); the present connection SHALL have answered its stream, or have opened no packet for 2 seconds by the paravirtual clock (`net.zig` `q_idle`); and the Initial SHALL open under the Initial keys of its own destination ID on a connection built aside, which replaces the present one only then. A first Initial in a datagram shorter than 1200 bytes SHALL start nothing. Every other long-header packet that does not open under the present connection's keys, of any type and from any address, SHALL be dropped with no effect. The guest's own connection to a peer (`reflect.peer`) SHALL never be replaced.
+
+What this does not give SHALL be stated as it is. Initial keys are derived from the connection ID in the packet, so opening as an Initial shows a well-formed QUIC client and nothing about who sent it; the guest does not authenticate clients (`homoiconic-q59.49`). A host that keeps sending well-formed Initials can therefore take the one connection each time it is free and hold it for 2 seconds a time, and one that sends a well-formed Initial after the guest has answered ends that connection's resending of the reply. What a host that cannot open packets can no longer do is move, stall or reset an exchange in progress. Packets are not checked for replay.
+
+#### Scenario: A second address during an exchange
+
+- GIVEN a running guest with a QUIC port and a client whose handshake has been accepted
+- WHEN `quic-client ... spoof <local-ip>` sends, from a second address, a short-header datagram, a full-size Initial, a small Initial and a Handshake packet of random bytes and then the well-formed first datagram of another handshake, sends nothing for half a second, and then sends its program
+- THEN the second address receives nothing from the guest, and the client's reply equals the Linux process's (`check-quic.sh`)
+
+#### Scenario: Garbage long headers after the reply
+
+- GIVEN the same exchange, with the guest's first copy of the reply discarded by the client as a lost datagram would be
+- WHEN the same four garbage datagrams are sent from the client's address and then from the second address before the guest resends, and the client then sends nothing for half a second
+- THEN the guest resends the reply to the client within that time, the second address still receives nothing, and a later handshake is served (`check-quic.sh`)
+
+#### Scenario: An abandoned handshake
+
+- GIVEN a guest whose last client refused the handshake and sent no more
+- WHEN another client connects at once
+- THEN its Initials are dropped until the unfinished connection has been idle for 2 seconds, and then it is served (`check-quic.sh`, the step after the wrong pin)
+
+#### Scenario: Garbage in one process
+
+- GIVEN `unikernel/out/quic-self`
+- WHEN a full-size Initial, a Handshake packet and a short-header datagram of random bytes are given to both ends before every step of a clean exchange and of a lossy one
+- THEN no garbage datagram opens, the client's ID for the server does not change, both exchanges finish, and a real first flight cut to 1199 bytes starts nothing on a server
 
 ### Requirement: The guest reads time from the KVM paravirtual clock
 
@@ -173,7 +211,7 @@ When a QUIC port is configured the guest SHALL check that CPUID leaf 0x40000000 
 
 ### Requirement: The client pins the guest certificate
 
-The host client `unikernel/out/quic-client <ip> <port> <budget> <program-file> [loss|wrong]` SHALL hold the SHA-256 of the DER certificate compiled into `unikernel/quic.zig`. Before it accepts the handshake it SHALL check that the certificate the guest sends hashes to that pin, verify the CertificateVerify signature over the transcript with the certificate's P-256 key, and check the guest's Finished. Any failure SHALL mark the connection refused, and the client SHALL send no application data on a refused connection (`quic.zig` `onServerFlight`, `writeApp`). The client SHALL write only the guest's reply frame to standard output and exit 0 when it gets one; it SHALL exit 3 when the connection is refused, 4 when nothing arrives within 60 seconds, and 2 for a wrong call or an unreadable file. With `wrong` it SHALL flip the pin and exit 0 only when the connection is refused. The guest SHALL accept the client's stream only after the client's Finished checks. What the pin authenticates SHALL be stated as it is: the certificate's private key is a constant in `unikernel/quic.zig`, so every guest built from the tree has the same identity and anyone with the source can present it, and the guest does not authenticate the client (`homoiconic-q59.49`).
+The host client `unikernel/out/quic-client <ip> <port> <budget> <program-file> [loss|wrong|spoof <local-ip>|initial]` SHALL hold the SHA-256 of the DER certificate compiled into `unikernel/quic.zig`. Its connection IDs and its X25519 secret SHALL come from the operating system's `getrandom`. Before it accepts the handshake it SHALL check that the certificate the guest sends hashes to that pin, verify the CertificateVerify signature over the transcript with the certificate's P-256 key, and check the guest's Finished. Any failure SHALL mark the connection refused, and the client SHALL send no application data on a refused connection (`quic.zig` `onServerFlight`, `writeApp`). The client SHALL write only the guest's reply frame to standard output and exit 0 when it gets one; it SHALL exit 3 when the connection is refused, 4 when nothing arrives within 60 seconds, and 2 for a wrong call or an unreadable file. With `wrong` it SHALL flip the pin and exit 0 only when the connection is refused. With `spoof <local-ip>` it SHALL also bind a second socket to that address and play the second host of the requirement "A datagram that does not open changes nothing", and SHALL exit 5 when that socket receives anything, when the reply is not resent to the client while it is silent, or when the garbage was not sent. With `initial` it SHALL write the first datagram of a handshake to standard output and send nothing. The guest SHALL accept the client's stream only after the client's Finished checks. What the pin authenticates SHALL be stated as it is: the certificate's private key is a constant in `unikernel/quic.zig`, so every guest built from the tree has the same identity and anyone with the source can present it, and the guest does not authenticate the client (`homoiconic-q59.49`).
 
 #### Scenario: A wrong key is refused
 
@@ -183,7 +221,7 @@ The host client `unikernel/out/quic-client <ip> <port> <budget> <program-file> [
 
 ### Requirement: QUIC survives loss and reordering
 
-Each packet number space SHALL keep its unacknowledged flight and resend it, waiting 20 ms shifted left by the number of tries so far, at most by 4, until an acknowledgement for that packet arrives. Received CRYPTO and STREAM data SHALL be placed by offset, so packets that arrive out of order are used once the gap is filled (`quic.zig` `due`, `seal`, `holePut`). There is no congestion control, idle timeout or connection close, and stream data is limited to 8192 bytes each way.
+Each packet number space SHALL keep its unacknowledged flight and resend it, waiting 20 ms shifted left by the number of tries so far, at most by 4, until an acknowledgement for that packet arrives. Received CRYPTO and STREAM data SHALL be placed by offset, so packets that arrive out of order are used once the gap is filled (`quic.zig` `due`, `seal`, `holePut`). There is no congestion control or connection close, and stream data is limited to 8192 bytes each way. A connection is not closed for being idle: it resends until another takes its place, which an unfinished one allows after 2 idle seconds.
 
 #### Scenario: Loss and reordering against the guest
 
@@ -199,13 +237,13 @@ Each packet number space SHALL keep its unacknowledged flight and resend it, wai
 
 ### Requirement: The QUIC check uses a real guest
 
-`unikernel/check-quic.sh` SHALL require KVM and Cloud Hypervisor v54.0, build with `build-net.sh` (which runs `quic-self`), create its own TAP, boot the network image with `reflect.quic_port`, wait up to 90 seconds for `reflect: quic <port>` on serial, and run factorial, the 5000-step budget, factorial on a new handshake, the wrong key and loss, comparing reply payloads with `unikernel/out/reply`. It SHALL remove its TAP on exit. It stops the guest when every step passes; when a step fails the guest is left to its 400-second timeout.
+`unikernel/check-quic.sh` SHALL require KVM and Cloud Hypervisor v54.0, build with `build-net.sh` (which runs `quic-self`), create its own TAP, boot the network image with `reflect.quic_port`, wait up to 90 seconds for `reflect: quic <port>` on serial, and run factorial, the 5000-step budget, factorial on a new handshake, the wrong key, loss straight after it, the second address (`spoof`, from a second address it gives its TAP), factorial again, the first flight with a bad and then a good UDP checksum, and factorial once more, comparing reply payloads with `unikernel/out/reply`. It SHALL require that the serving guest printed nothing but its two start lines, print one `ok` line a step, and stop its guest and remove its TAP on exit, pass or fail.
 
 #### Scenario: The check passes
 
 - GIVEN morphie with Cloud Hypervisor 54.0
 - WHEN `sh unikernel/check-quic.sh` runs
-- THEN it prints `quic guest ok` and exits 0
+- THEN it prints nine `ok` lines and `quic guest ok`, and exits 0 (`unikernel/evidence/check-quic.log`)
 
 ### Requirement: Two guests carry a remote channel over QUIC
 
@@ -225,4 +263,4 @@ The command line MAY carry `reflect.wire_port=<port>` or `reflect.peer=<a.b.c.d>
 
 - GIVEN morphie with Cloud Hypervisor 54.0
 - WHEN `sh unikernel/check-wire.sh` runs
-- THEN it prints `wire guests ok` and exits 0
+- THEN it prints `wire guests ok` and exits 0 (`unikernel/evidence/check-wire.log`)
