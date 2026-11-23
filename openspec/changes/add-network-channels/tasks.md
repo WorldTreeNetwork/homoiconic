@@ -1,3 +1,0 @@
-- [x] Lean records the crossing message and replays the schedule to the same result
-- [x] Two guests exchange that message on the existing QUIC stream
-- [x] `check.sh`, `check-net.sh`, and `check-quic.sh` still pass

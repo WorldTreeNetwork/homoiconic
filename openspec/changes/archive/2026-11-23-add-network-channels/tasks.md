@@ -1,0 +1,5 @@
+- [x] Lean records the crossing message and replays the schedule to the same result
+- [x] Two guests exchange that message on the existing QUIC stream
+- [x] `check.sh`, `check-net.sh`, and `check-quic.sh` still pass
+- [x] Banner and deltas for `unikernel-net`, `channels` and `zig-host` written from the code and the checks (2026-11-23, `homoiconic-q59.44`); what the code does short of the proposal is filed as `homoiconic-q59.50` and `q59.51`
+- [ ] Read by another model family. Not run; folded on the orchestrator's instruction (box left open)
