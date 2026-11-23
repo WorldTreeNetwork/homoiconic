@@ -1,0 +1,59 @@
+== control: the reply address follows every datagram (before q59.53)
+   quic self ok
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   exit 5
+== control: any long header after a reply starts a new connection (before q59.53)
+   quic self ok
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   exit 5
+== control: the UDP checksum is verified on reflect.port only (before q59.53)
+   quic self ok
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   | a first flight with a bad UDP checksum was answered
+   exit 1
+== control: reflect.quic_port with a remote channel word is accepted (before q59.50)
+   quic self ok
+   | quic self ok
+   | built /home/dorje/hom-c0c800c-controls/unikernel/out-net/reflect-net.elf
+   | a guest given 'reflect.wire_port=4446' with a QUIC port kept running
+   exit 1
+== control: an unfinished connection never gives way
+   quic self ok
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   exit 4
+== control: a server keeps the Initial keys of a packet that did not open (before q59.53)
+   | 2/3 pvclock.test.a 3 GHz counter gives a second per 3e9 ticks, for a day...OK
+   | 3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
+   | All 3 tests passed.
+   exit 9
+== control: a client takes the peer's ID from a packet that did not open (before q59.53)
+   | 2/3 pvclock.test.a 3 GHz counter gives a second per 3e9 ticks, for a day...OK
+   | 3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
+   | All 3 tests passed.
+   exit 11
+== restored

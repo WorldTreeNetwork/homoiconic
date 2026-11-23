@@ -125,3 +125,16 @@ the cases for a program given at boot (`evidence/check-boot-bytes.log`, 33
 lines of `ok`). One `reflect.elf`, hashed before and after, ran the byte forms
 of text, factorial at 0, 1 and 2 levels, the quine and a 5000-step budget, each
 equal to the Linux process. `unikernel/check-net.sh` passed after it, unedited.
+
+2026-11-23 on morphie, Cloud Hypervisor 54.0, tree `c0c800c` exported with
+`git archive` to `~/hom-c0c800c`: `build.sh examples/factorial.hom`,
+`build-net.sh`, `check.sh`, `check-net.sh`, `check-quic.sh` and `check-wire.sh`
+each exited 0. Their logs are `evidence/build.log`, `build-net.log`,
+`check.log`, `check-net.log`, `check-quic.log` and `check-wire.log`, with the
+exit codes and image hashes in `evidence/run-c0c800c.txt`; `source.sha256`,
+`objects.sha256` and `versions.txt` are the ones that build wrote.
+`reflect-net.elf` is sha256 `babd599f…f302ec`, the same before and after the
+checks rebuilt it. `evidence/check-quic-controls.log` is `check-quic.sh` on a
+copy of that tree with each fix of `homoiconic-q59.50` and `q59.53` undone in
+turn; every one fails at its own step. A non-interactive `ssh morphie` has no
+`zig` on its PATH: Zig 0.16.0 is at `~/.local/share/mise/installs/zig/0.16.0/bin`.
