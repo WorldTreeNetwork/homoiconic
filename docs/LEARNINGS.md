@@ -117,3 +117,9 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 - A single "last entry" in place of the list of entries acted on would need the hash to have no cycles to prove that an old entry is passed over. That does not follow from "different data, different names", so the list stays.
 - Printing a refused op with its identifier would have printed a 77-digit number. The line now gives the op's place in the log.
 - Review (gpt-6.1-sol) found the proofs sound and two sentences too strong: `sealed_first` says which entries count as deliveries, not that each is used, and the step from the abstract theorem to `entryName` also rests on the byte form telling data apart, which is tested only.
+
+## 2026-11-22 — folding the network stage
+
+- `add-unikernel-quic` and `add-network-channels` landed with a short proposal, checked tasks and no banner or spec delta, so fold could not admit them; the code (QUIC on `reflect.quic_port`, `reflect.wire_port`, `reflect.peer`, and the evaluating exports `reflect_remote_offer`, `reflect_remote_take`, `reflect_remote_log`, `reflect_remote_same`) is ahead of the living specs. The `zig-host` sentence naming every evaluating export was false from `793b583` until a delta adds them.
+- `add-boot-program-bytes` (rigor instrument) reached fold without the read by another model family its own task asked for; it was folded on the orchestrator's instruction with that box left open.
+- `add-unikernel-net` passed on morphie on 2026-11-19 and waited three days for fold behind one unchecked box ("publish the endpoint contract for Mjolnir") that Mjolnir had already consumed (`homoiconic-q59.17`).
