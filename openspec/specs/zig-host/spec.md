@@ -324,3 +324,25 @@ The Lean definitions exported as `reflect_remote_offer(out, capacity)`, `reflect
 - GIVEN `unikernel/out/remote-check`, linked from the objects the guests link
 - WHEN `unikernel/check-wire.sh` runs it
 - THEN it exits 0
+
+### Requirement: The run command charges operation costs
+
+`reflect_run` and `reflect_run_bytes` SHALL run the machine with `runPriced`, charging each operation its cost under `arith` (`Surface.runText`, `Surface.runBytes`). A run stopped by the budget SHALL print `no result within N steps` with `N` the budget, as before. The other exports that evaluate, `reflect_interp`, `reflect_reply_bytes`, `reflect_converse`, `reflect_channels`, `reflect_keep_*`, `reflect_vm_*`, `reflect_node_*` and `reflect_remote_*`, SHALL NOT use `runPriced`: their budgets count one for every step, an operation included, so the same program and budget can finish under `--interp=0` and stop without it (`homoiconic-q59.52`).
+
+#### Scenario: A small product finishes
+
+- GIVEN the program `mul 2 3`
+- WHEN the run command runs it with the budget 200
+- THEN it prints `6` (`host/check.sh`)
+
+#### Scenario: A large product stops before it runs
+
+- GIVEN the program `mul` applied to two numbers of 40 nines
+- WHEN the run command runs it with the budget 200
+- THEN it prints `no result within 200 steps` (`host/check.sh`)
+
+#### Scenario: The same product finishes with more budget
+
+- GIVEN the same program
+- WHEN the run command runs it with the budget 200000
+- THEN it prints the product, 80 digits (`host/check.sh`)

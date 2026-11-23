@@ -1,6 +1,6 @@
 # bytecode-machine
 
-What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `machine_never_faults`, `run_add`, `run_halted`, `runUntil_eq`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. `step`, `run`, and the theorems about them take the operation table `Ops` as a parameter and hold for every table. The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
+What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `machine_never_faults`, `run_add`, `run_halted`, `runUntil_eq`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. `step`, `run`, and the theorems about them take the operation table `Ops` as a parameter and hold for every table. `runPriced` (`kernel/Reflect/RunUntil.lean`) runs the same steps against a budget that charges each operation the cost its table gives (`ab8e361`). The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
 
 ## Purpose
 
@@ -91,3 +91,19 @@ The package SHALL prove that the value stack plus the pending frames after `n` s
 - GIVEN the compiled theorem `machine_correct`
 - WHEN its axiom dependencies are printed
 - THEN `sorryAx` is absent and no axiom from this package is present
+
+### Requirement: A budget charges an operation its cost before it runs
+
+The table `Ops` SHALL hold `cost : Nat → Data → Nat` beside `op`, with one as its value when a table does not give it. `stepCost` SHALL be `cost n d` for a state whose next step runs operation `n` (a number, or a name whose number is `n`) on the data `d`, and one for every other state. `runPriced fuel s` SHALL take the same steps as `run`, in the same order, from the same states: the charge SHALL decide only whether the next step is taken, never which step it is. It SHALL stop, leaving the running state it is in, before a step whose charge is more than the fuel left; it SHALL take every step whose charge it can pay and subtract that charge, and a charge of zero SHALL use one unit, so every step uses at least one. A halted state SHALL stay halted. `step`, `run`, `runUntil` and the instruction set SHALL be unchanged, and an operation SHALL still be one step of `run`: what the charge counts is the budget, not the steps. For the table `arith`, `arithCost` (`kernel/Reflect/Arith.lean`) SHALL charge addition, subtraction and `less` the sum of the operands' bit lengths, multiplication, division and remainder their product, `text` and `codes` one more than the length of the text or array, and `equal` and every other operation or argument one; the bit length of a number `n` is `log2 n + 1`, so zero costs as one does. The charge SHALL be read from the argument without running the operation. When every charge is one, `runPriced` takes the steps `runUntil` takes; this follows from the definitions and is not stated as a theorem. `machine_never_faults_priced` covers `runPriced` on compiled code for every table.
+
+#### Scenario: A large product costs more than a small one
+
+- GIVEN `arithCost` and the operation `mul`
+- WHEN it is charged for `[2, 3]` and for two numbers of 40 nines
+- THEN the charges are 4 and 17689, the product of 133 bits by 133 bits
+
+#### Scenario: Out of budget is not a fault
+
+- GIVEN any term and any fuel
+- WHEN the compiled term is run with `runPriced`
+- THEN the machine is not in the fault state (`machine_never_faults_priced`)

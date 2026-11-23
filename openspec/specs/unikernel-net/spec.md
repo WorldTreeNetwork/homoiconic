@@ -85,7 +85,7 @@ The server SHALL accept only kinds 0 and 2 with status zero. It SHALL drop kinds
 
 ### Requirement: Lean owns binary replies
 
-The Lean export `reflect_reply_bytes` SHALL copy program bytes, decode them with Wire.readProgram, compile and execute the existing Reflect machine under arithmetic, and encode through `Wire.runReplyBytes` in `kernel/Wire/Reply.lean`. The payload SHALL be the bounded-run reply form specified by wire-bytes, independent of UDP framing. The server SHALL invoke the export once per received run request; an oversized answer SHALL NOT be evaluated again to retry it with more capacity. The export SHALL return the required byte length and write nothing unless capacity suffices. Non-Lean code SHALL NOT parse program syntax or reconstruct an outcome from rendered text.
+The Lean export `reflect_reply_bytes` SHALL copy program bytes, decode them with Wire.readProgram, compile and execute the existing Reflect machine under arithmetic for at most the budget in steps, and encode through `Wire.runReplyBytes` in `kernel/Wire/Reply.lean`. The budget SHALL count one for every machine step, an operation included (`runUntil`); operation costs are not charged on this path (`homoiconic-q59.52`). The payload SHALL be the bounded-run reply form specified by wire-bytes, independent of UDP framing. The server SHALL invoke the export once per received run request; an oversized answer SHALL NOT be evaluated again to retry it with more capacity. The export SHALL return the required byte length and write nothing unless capacity suffices. Non-Lean code SHALL NOT parse program syntax or reconstruct an outcome from rendered text.
 
 #### Scenario: Known replies and a closure
 

@@ -335,8 +335,11 @@ theorems; `advance` is tested against it.
 - **Failure inside an operation.** An operation is a total function from data
   to data. It cannot fail as `wrong`; arithmetic answers `[]` for input it does
   not expect.
-- **Cost and time.** A step budget counts machine steps, not work inside an
-  operation (`homoiconic-q59.9`).
+- **Cost and time.** The run command's budget charges an operation its
+  table cost before it runs (`runPriced`, `arithCost`); the interpreter, the
+  network reply and the request, channel, keep, vm and node exports still
+  count machine steps, not work inside an operation (`homoiconic-q59.52`).
+  What `arithCost` charges is a definition, not a theorem about time.
 - **The fault state outside compiled code.** `machine_never_faults` is about
   runs that start from `load (compile t)`. `step` does fault on code no term
   compiles to (`fault_reachable_from_uncompiled`), so a machine value or state

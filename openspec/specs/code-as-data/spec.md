@@ -116,7 +116,7 @@ For every depth `k`, every term `p`, and every outcome `o`, the package SHALL pr
 
 The language SHALL have a construct `prim c x`. Evaluation SHALL evaluate `c` first. An error outcome of `c` SHALL be the outcome, and `x` SHALL NOT be evaluated. If `c` evaluates to a function, an array or a text, the outcome SHALL be `wrong`, and `x` SHALL NOT be evaluated. Otherwise `c` evaluates to a number `k`, or to a name whose number is `k`, and `x` is evaluated. An error outcome of `x` SHALL be the outcome. If `x` evaluates to a function, the outcome SHALL be `wrong`. Otherwise `x` evaluates to a data value `d`, and the outcome SHALL be the data value `op k d`.
 
-`op` SHALL come from a table, `Ops`, that holds one total function from a number and a data value to a data value. `Direct`, `evalFuel`, and every theorem this spec names about them SHALL take the table as a parameter and SHALL hold for every table. `reify (prim c x)` SHALL be `[6, reify c, reify x]`.
+`op` SHALL come from a table, `Ops`, that holds one total function from a number and a data value to a data value. The table SHALL also hold `cost`, the charge a priced budget makes for an operation (`openspec/specs/bytecode-machine/spec.md`), one when a table does not give it; `Direct`, `evalFuel`, `interp` and the theorems of this spec SHALL NOT read it. `Direct`, `evalFuel`, and every theorem this spec names about them SHALL take the table as a parameter and SHALL hold for every table. `reify (prim c x)` SHALL be `[6, reify c, reify x]`.
 
 `interp` and `evalTerm` SHALL be the same terms for every table. Adding an operation to a table SHALL NOT require a change to the interpreter or to a proof.
 
