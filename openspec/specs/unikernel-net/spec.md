@@ -85,13 +85,19 @@ The server SHALL accept only kinds 0 and 2 with status zero. It SHALL drop kinds
 
 ### Requirement: Lean owns binary replies
 
-The Lean export `reflect_reply_bytes` SHALL copy program bytes, decode them with Wire.readProgram, compile and execute the existing Reflect machine under arithmetic for at most the budget in steps, and encode through `Wire.runReplyBytes` in `kernel/Wire/Reply.lean`. The budget SHALL count one for every machine step, an operation included (`runUntil`); operation costs are not charged on this path (`homoiconic-q59.52`). The payload SHALL be the bounded-run reply form specified by wire-bytes, independent of UDP framing. The server SHALL invoke the export once per received run request; an oversized answer SHALL NOT be evaluated again to retry it with more capacity. The export SHALL return the required byte length and write nothing unless capacity suffices. Non-Lean code SHALL NOT parse program syntax or reconstruct an outcome from rendered text.
+The Lean export `reflect_reply_bytes` SHALL copy program bytes, decode them with Wire.readProgram, compile and execute the existing Reflect machine under arithmetic for at most the budget in steps, and encode through `Wire.runReplyBytes` in `kernel/Wire/Reply.lean`. The budget SHALL be charged as `reflect_run` charges it (`runPriced`): one for every machine step, and an operation its cost under `arith` before it runs, so a budget bounds the work inside an operation (`homoiconic-q59.52`). A run the budget stops SHALL be the budget reply (`81 01`). The replies for factorial at 100000000 and for `examples/forever.hom` at 5000 SHALL be byte-identical to those the image at `793b583` gave. The payload SHALL be the bounded-run reply form specified by wire-bytes, independent of UDP framing. The server SHALL invoke the export once per received run request; an oversized answer SHALL NOT be evaluated again to retry it with more capacity. The export SHALL return the required byte length and write nothing unless capacity suffices. Non-Lean code SHALL NOT parse program syntax or reconstruct an outcome from rendered text.
 
 #### Scenario: Known replies and a closure
 
 - GIVEN factorial, exhaustion, invalid bytes and a program returning a closure
 - WHEN the export runs and its output is independently decoded
 - THEN every response has the specified shape, factorial's data equals the known integer, and the closure's code/environment round-trips through the existing Wire value format
+
+#### Scenario: A large operation is bounded on the network path
+
+- GIVEN `mul` applied to two numbers of 40 nines, as program bytes
+- WHEN `Surface.replyBytes` runs it with the budget 200 and with 200000
+- THEN the first reply is the budget reply `81 01` and the second is the product (`kernel/WireReplyCheck.lean`)
 
 #### Scenario: Capacity contract
 

@@ -68,7 +68,7 @@ For every operation table and every program, the run by direct evaluation and th
 
 ### Requirement: The machine asks what the program asks
 
-For every operation table and every program, the run on the machine SHALL make the same requests in the same order and SHALL end with the compiled form of the same ending (`interact_machine`, `interact_machine_exact`). What the executable driver `converse` reports as finished or as waiting SHALL be a run of the program by direct evaluation with exactly those requests (`converse_finished`, `converse_waiting`). `converse` SHALL give a fresh step budget to each machine run: the first evaluation, each reading of a payload, and each running of the rest on an answer. It SHALL report a machine run that does not halt within its budget as unfinished, which claims nothing, including about the requests listed before it.
+For every operation table and every program, the run on the machine SHALL make the same requests in the same order and SHALL end with the compiled form of the same ending (`interact_machine`, `interact_machine_exact`). What the executable driver `converse` reports as finished or as waiting SHALL be a run of the program by direct evaluation with exactly those requests (`converse_finished`, `converse_waiting`). `converse` SHALL give a fresh budget, charged as `runPriced` charges it, to each machine run: the first evaluation, each reading of a payload, and each running of the rest on an answer. It SHALL report a machine run that does not halt within its budget as unfinished, which claims nothing, including about the requests listed before it.
 
 #### Scenario: The driver's report is true
 

@@ -150,6 +150,15 @@ python3 -c 'print("mul", 10**40 - 1, 10**40 - 1)' > "$OUT/big-mul.hom"
 expect "no result within 200 steps" "$OUT/big-mul.hom" 200
 python3 -c 'print((10**40 - 1)**2)' > "$OUT/big-mul.expected"
 expect "$(cat "$OUT/big-mul.expected")" "$OUT/big-mul.hom" 200000
+# The interpreter performs the program's operation as the same machine
+# primitive, so it pays the same charge and its own steps on top: a budget
+# that bounds the program bounds it through the interpreter, and a budget the
+# program finishes in (18000 here) is not enough through one interpreter.
+expect "no result within 200 steps" --interp "$OUT/big-mul.hom" 200
+expect "no result within 200 steps" --interp=2 "$OUT/big-mul.hom" 200
+expect "$(cat "$OUT/big-mul.expected")" "$OUT/big-mul.hom" 18000
+expect "no result within 18000 steps" --interp "$OUT/big-mul.hom" 18000
+expect "$(cat "$OUT/big-mul.expected")" --interp "$OUT/big-mul.hom" 200000
 echo "a step budget bounds a large operation and lets a small one finish"
 echo "run command checks passed"
 

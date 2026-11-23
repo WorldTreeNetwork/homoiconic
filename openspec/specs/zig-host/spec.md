@@ -327,7 +327,7 @@ The Lean definitions exported as `reflect_remote_offer(out, capacity)`, `reflect
 
 ### Requirement: The run command charges operation costs
 
-`reflect_run` and `reflect_run_bytes` SHALL run the machine with `runPriced`, charging each operation its cost under `arith` (`Surface.runText`, `Surface.runBytes`). A run stopped by the budget SHALL print `no result within N steps` with `N` the budget, as before. The other exports that evaluate, `reflect_interp`, `reflect_reply_bytes`, `reflect_converse`, `reflect_channels`, `reflect_keep_*`, `reflect_vm_*`, `reflect_node_*` and `reflect_remote_*`, SHALL NOT use `runPriced`: their budgets count one for every step, an operation included, so the same program and budget can finish under `--interp=0` and stop without it (`homoiconic-q59.52`).
+`reflect_run` and `reflect_run_bytes` SHALL run the machine with `runPriced`, charging each operation its cost under `arith` (`Surface.runText`, `Surface.runBytes`). A run stopped by the budget SHALL print `no result within N steps` with `N` the budget, as before. The other exports that evaluate, `reflect_interp`, `reflect_reply_bytes`, `reflect_converse`, `reflect_channels`, `reflect_keep_*`, `reflect_vm_*`, `reflect_node_*` and `reflect_remote_*`, SHALL charge the same costs: each machine run they make is a priced run, and a kept session's lazy run charges an operation its cost too (`openspec/specs/bytecode-machine/spec.md`, `homoiconic-q59.52`). A budget SHALL mean the same on every export. Through the interpreter (`--interp`) an operation of the program is charged what it is charged directly, and the interpreter's own steps are charged on top, so a budget that stops a program stops it through the interpreter.
 
 #### Scenario: A small product finishes
 
@@ -346,3 +346,9 @@ The Lean definitions exported as `reflect_remote_offer(out, capacity)`, `reflect
 - GIVEN the same program
 - WHEN the run command runs it with the budget 200000
 - THEN it prints the product, 80 digits (`host/check.sh`)
+
+#### Scenario: The interpreter is charged for the operation
+
+- GIVEN the same program
+- WHEN the run command runs it with `--interp` and the budget 200, and with `--interp` and the budget 18000
+- THEN both print `no result within N steps` with `N` the budget, while the direct run at 18000 prints the product (`host/check.sh`)
