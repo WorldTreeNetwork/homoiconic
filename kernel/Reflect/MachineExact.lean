@@ -1,5 +1,6 @@
 import Reflect.MachineProof
 import Reflect.Examples
+import Reflect.RunUntilProof
 
 namespace Reflect
 variable [Ops]
@@ -40,5 +41,12 @@ theorem omega_never_halts (n : Nat) (w : MOutcome) :
 theorem identity_halts :
     run 7 (load (compile (.app identity identity))) =
       .halted (MP.injO (.value (.closure (.var 0) []))) := rfl
+
+/-- What a priced run of a compiled program halts with is what the program
+    evaluates to. -/
+theorem machine_exact_priced (t : Term) (fuel : Nat) (w : MOutcome)
+    (h : runPriced fuel (load (compile t)) = .halted w) : ∃ o, Direct [] t o ∧ w = MP.injO o := by
+  obtain ⟨n, hn⟩ := runPriced_reach h
+  exact machine_exact t n w hn
 
 end Reflect

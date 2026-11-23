@@ -34,6 +34,19 @@ example : ∀ [Ops], ∀ t n, runUntil n (load (compile t)) ≠ .fault :=
 example : ∀ [Ops], ∀ t fuel, runPriced fuel (load (compile t)) ≠ .fault :=
   Reflect.machine_never_faults_priced
 
+example : ∀ [Ops], ∀ fuel s, ∃ n, n ≤ fuel ∧ runPriced fuel s = run n s :=
+  Reflect.runPriced_run
+
+example : ∀ [Ops], ∀ {fuel : Nat} {s t : State}, runPriced fuel s = t → ∃ n, run n s = t :=
+  Reflect.runPriced_reach
+
+example : ∀ [Ops], (∀ n d, Ops.cost n d = 1) → ∀ fuel s, runPriced fuel s = runUntil fuel s :=
+  Reflect.runPriced_unit
+
+example : ∀ [Ops], ∀ t fuel w,
+    runPriced fuel (load (compile t)) = .halted w → ∃ o, Direct [] t o ∧ w = MP.injO o :=
+  Reflect.machine_exact_priced
+
 #print axioms Reflect.machine_correct
 #print axioms Reflect.machine_exact
 #print axioms Reflect.machine_never_halts
@@ -45,3 +58,7 @@ example : ∀ [Ops], ∀ t fuel, runPriced fuel (load (compile t)) ≠ .fault :=
 #print axioms Reflect.machine_never_faults
 #print axioms Reflect.machine_never_faults_until
 #print axioms Reflect.machine_never_faults_priced
+#print axioms Reflect.runPriced_run
+#print axioms Reflect.runPriced_reach
+#print axioms Reflect.runPriced_unit
+#print axioms Reflect.machine_exact_priced
