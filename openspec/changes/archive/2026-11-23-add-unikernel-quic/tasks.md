@@ -1,0 +1,5 @@
+- [x] Pinned QUIC v1, one stream, loss and a wrong pin in `unikernel/quic-self`
+- [x] Guest clock and `reflect.quic_port` without changing the UDP image contract
+- [x] `unikernel/check-quic.sh`: factorial, budget, guest still up, wrong key, loss
+- [x] Banner and `specs/unikernel-net/spec.md` delta written from the code and `check-quic.sh` (2026-11-23, `homoiconic-q59.43`); what the code does short of the proposal is filed as `homoiconic-q59.48`, `q59.49` and `q59.53`
+- [ ] Read by another model family. Not run; folded on the orchestrator's instruction (box left open)

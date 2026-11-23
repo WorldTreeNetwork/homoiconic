@@ -135,3 +135,7 @@ To show that a run of the interpreter comes from a source derivation, it is enou
 ## 2026-11-22 — one root for one value
 
 - Proving that equal values are saved under one root (`homoiconic-q59.29`) showed where it is false. `save` stores the top piece whatever its size, so a root can name a piece of at most 256 bytes, which `cut` would have left in place. `keep answer` starts the turn from the root itself, and a waiting program that keeps hold of the function it was resumed from (`λf. f 5 (λx. ask 7 (λy. f))`, 36 bytes) was saved under `af0852f8…` by the session and `c53dc525…` held whole. A VM and a node open the pieces under the root and do not carry it, so their roots were not affected in any run. The invariant that makes the statement true needs no assumption on the hash: a reference is good when it is the one `cut` gives the value it stands for.
+
+## 2026-11-23 — writing the network specs from the code
+
+- Writing `add-unikernel-quic`'s SHALLs from `unikernel/net.zig` and `quic.zig`, rather than from the proposal, found four things the proposal does not say: the paravirtual clock read scales with a wrapping 64-bit multiply and goes backwards after a few seconds without a clock update (`homoiconic-q59.48`); the certificate's private key is a constant in the source, so the pin names the tree, not a guest (`q59.49`); QUIC datagrams skip the UDP checksum and any datagram to the port moves where the guest sends next (`q59.53`); `check-quic.sh` leaves the guest to its timeout when a step fails. `check-quic.sh` passing was not evidence for any of them.

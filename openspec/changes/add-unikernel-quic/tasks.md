@@ -1,3 +1,0 @@
-- [x] Pinned QUIC v1, one stream, loss and a wrong pin in `unikernel/quic-self`
-- [x] Guest clock and `reflect.quic_port` without changing the UDP image contract
-- [x] `unikernel/check-quic.sh`: factorial, budget, guest still up, wrong key, loss
