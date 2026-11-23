@@ -1,16 +1,16 @@
 # unikernel-image
 
-What is built: one program runs in a Cloud Hypervisor machine with no operating system in it. `unikernel/out/reflect.elf` is a static x86_64 ELF file started by direct kernel boot. It holds the boot code (`unikernel/boot.S`), a Zig layer that stands where an operating system would (`unikernel/kernel.zig`, `unikernel/main.zig`), Zig's musl, the Lean runtime, and the same compiled Lean objects as its Linux comparison process, `unikernel/out/reflect-linux`. The program and its step budget are built into the image; on boot it calls `reflect_run`, writes the answer to the serial port and powers off. `unikernel/build.sh` builds it and `unikernel/check.sh` boots it and checks it. Nothing in this capability is proved; it is trusted as the host is (`docs/PROOFS.md`).
+What is built: one program runs in a Cloud Hypervisor machine with no operating system in it. `unikernel/out/reflect.elf` is a static x86_64 ELF file started by direct kernel boot. It holds the boot code (`unikernel/boot.S`), a Zig layer that stands where an operating system would (`unikernel/kernel.zig`, `unikernel/main.zig`), Zig's musl, the Lean runtime, and the same compiled Lean objects as its Linux comparison process, `unikernel/out/reflect-linux`. The program and its step budget are built into the image; on boot it calls `reflect_run`, writes the answer to the serial port and powers off. Given a program's byte form at boot with Cloud Hypervisor's `--initramfs`, the layer moves those bytes above the image, serves them as the read-only file `/boot/program`, and the image runs them through `reflect_interp` instead, with the step budget and interpreter levels taken from the PVH command line, so one image file runs any number of programs, one per boot (`openspec/changes/archive/2026-11-22-add-boot-program-bytes/`). `unikernel/out/reply source <file>` writes a source's byte form. `unikernel/build.sh` builds it and `unikernel/check.sh` boots it and checks it. Nothing in this capability is proved; it is trusted as the host is (`docs/PROOFS.md`).
 
 ## Purpose
 
-State what the image does, what it leaves to Lean, what it refuses or reports instead of providing, and what its build and check must show. This spec does not cover a network device, a program given at boot, more than one thread, aarch64, or building on macOS.
+State what the image does, what it leaves to Lean, what it refuses or reports instead of providing, and what its build and check must show. This spec does not cover a network device (that is `openspec/specs/unikernel-net/spec.md`), source text given at boot, more than one boot module, more than one thread, aarch64, or building on macOS.
 
 ## Requirements
 
 ### Requirement: One image boots under Cloud Hypervisor with no operating system
 
-The build SHALL produce one static x86_64 ELF file that Cloud Hypervisor starts by direct kernel boot through the PVH entry, with no firmware, no initial file system and no operating system in the guest. The image SHALL hold the same compiled Lean objects as its Linux comparison process. Lean SHALL own reading, compilation, evaluation and rendering. Non-Lean image code SHALL NOT implement a language reader or evaluator.
+The build SHALL produce one static x86_64 ELF file that Cloud Hypervisor starts by direct kernel boot through the PVH entry, with no firmware, no file system and no operating system in the guest. Bytes handed to the image at boot with `--initramfs` are one program's byte form, not a file system. The image SHALL hold the same compiled Lean objects as its Linux comparison process. Lean SHALL own reading, compilation, evaluation and rendering. Non-Lean image code SHALL NOT implement a language reader or evaluator.
 
 #### Scenario: The factorial program
 
@@ -20,7 +20,7 @@ The build SHALL produce one static x86_64 ELF file that Cloud Hypervisor starts 
 
 ### Requirement: The image runs its program through the kernel and writes the kernel's text
 
-On boot the image SHALL pass the program source built into it, and the step budget built into it, to `reflect_run`, SHALL write the text that comes back to the serial port followed by a line end, and SHALL power the machine off. A syntax error, an error outcome, a run that does not finish in its budget, and a value are all text the kernel wrote, and all of them SHALL end with `reflect: exit 0`.
+On boot an image given no bytes SHALL pass the program source built into it, and the step budget built into it, to `reflect_run`; an image given bytes SHALL run them as the requirement "One image runs a byte form given at boot" says. In both cases it SHALL write the text that comes back to the serial port followed by a line end, and SHALL power the machine off. A syntax error, an error outcome, a run that does not finish in its budget, and a value are all text the kernel wrote, and all of them SHALL end with `reflect: exit 0`.
 
 #### Scenario: A program that does not finish
 
@@ -68,7 +68,7 @@ The build SHALL compile the pinned Lean-generated C on Linux x86_64 and link the
 
 - GIVEN the image sources and linked objects
 - WHEN their call paths and symbol references are inspected
-- THEN non-Lean code only initializes, passes bytes and supplies runtime services; main calls reflect_run and the identical Lean objects occur in both links
+- THEN non-Lean code only initializes, passes bytes and supplies runtime services; main calls reflect_run and reflect_interp and no other export that evaluates or reads, and the identical Lean objects occur in both links
 
 ### Requirement: Complete output and infrastructure errors
 
@@ -113,3 +113,33 @@ The image SHALL reject CPUs without XSAVE before entering musl. It SHALL enable 
 - GIVEN the pinned source audit and image link
 - WHEN initialization and reflect_run's path are inspected and factorial boots with time fixed at zero
 - THEN initialize_libuv resolves to the empty image function, no thread creation is reached, and the factorial answer is unchanged
+
+### Requirement: One image runs a byte form given at boot
+
+When Cloud Hypervisor is started with `--initramfs <file>`, the image SHALL treat that file's bytes as one program's byte form (`wire-bytes`). It SHALL pass exactly those bytes to `reflect_interp` with the byte-form flag set and the text flag clear, SHALL write the text that comes back to the serial port followed by a line end, and SHALL power the machine off. The PVH command line SHALL be `[step-budget [levels]]`: the budget SHALL default to the one built into the image and the levels to 1; level 0 runs the program itself and level k runs it through k interpreters. The program built into the image SHALL NOT run when bytes are given. One image file SHALL serve any number of different byte forms, one per boot, without being built again.
+
+The layer SHALL move the bytes out of the memory the stack and the allocators will use before it lays those out, SHALL NOT hand that memory out while the bytes are still read from it, and SHALL NOT read or change the bytes. Non-Lean code SHALL NOT decide whether the bytes are a program: bytes the kernel refuses SHALL end in the kernel's text and `reflect: exit 0`. More than 16 MiB of bytes, or more than one boot module, SHALL stop the image with a line saying so before the C library starts. A budget or a level count that is not a whole number SHALL end in a line saying so and `reflect: exit 2`. The Linux comparison process SHALL take the same file and the same words, `reflect-linux <bytes-file> [step-budget [levels]]`, and call the same export.
+
+#### Scenario: Two programs, one image
+
+- GIVEN one image file, built once, and the byte forms of `examples/factorial.hom` and of a program whose answer is a text
+- WHEN Cloud Hypervisor boots that file once with each byte form given at boot
+- THEN each serial stream is byte for byte what the Linux process prints for the same bytes followed by `reflect: exit 0`, the factorial stream shows `265252859812191058636308480000000`, and the image file's hash is unchanged between the boots
+
+#### Scenario: Levels and budget come from the command line
+
+- GIVEN the factorial byte form and the byte form of `examples/forever.hom`
+- WHEN the image boots with factorial and command lines naming 0, 1 and 2 levels, and with forever and the command line `5000`
+- THEN factorial's answer is the same at every level, and forever shows `no result within 5000 steps`
+
+#### Scenario: Bytes that are no program, and too many bytes
+
+- GIVEN a megabyte of bytes that is no program, a program's byte form with one byte added, and a file of 16 MiB and one byte
+- WHEN the image boots with each
+- THEN the first two end in the text the Linux process prints for them and `reflect: exit 0`, and the third shows only `reflect: the program given at boot is too large`
+
+#### Scenario: Nothing given
+
+- GIVEN the same image file
+- WHEN it boots with no bytes given
+- THEN it runs the program built into it, as before

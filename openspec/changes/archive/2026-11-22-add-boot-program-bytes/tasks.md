@@ -5,4 +5,4 @@
 - [x] Build: link `out/reply` from the same objects for `reply source`.
 - [x] Check on morphie (Cloud Hypervisor 54.0): one image, not rebuilt, runs text, factorial (levels 0, 1, 2), the quine and a 5000-step budget from bytes given at boot; refuses non-program bytes through the kernel, a non-number budget through the program, and more than 16 MiB in the layer; still runs its built-in program with nothing given. Whole serial stream against the Linux process each time.
 - [x] `unikernel/check-net.sh` still passes on morphie. Both passed 2026-11-19; the image suite's log is `unikernel/evidence/check-boot-bytes.log`.
-- [ ] Read by another model family (advise), then fold into `openspec/specs/unikernel-image/spec.md` and archive.
+- [ ] Read by another model family (advise), then fold into `openspec/specs/unikernel-image/spec.md` and archive. Fold done 2026-11-22 on the orchestrator's instruction after the morphie checks; the advise read by another model family was not run and is still owed (box left open).
