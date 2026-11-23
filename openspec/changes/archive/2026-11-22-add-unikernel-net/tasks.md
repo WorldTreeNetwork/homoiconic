@@ -14,7 +14,7 @@
 - [x] Add Lean-owned binary replies and native FFI capacity/closure/outcome checks.
 - [x] Add server build, endpoint configuration, framing and client with deadline/correlation checks.
 - [x] Run parser, Lean, ring-wrap, malformed-packet and persistent real-guest tests; rerun existing image suite.
-- [ ] Publish verified endpoint contract for Mjolnir; fold living spec and archive this change.
+- [x] Publish verified endpoint contract for Mjolnir; fold living spec and archive this change. Mjolnir consumed the contract (`homoiconic-q59.17` closed, mjolnir `8587d9e`); folded 2026-11-22 into `openspec/specs/unikernel-net/spec.md`, `wire-bytes` and `zig-host`.
 
 External prerequisite: morphie answered on 2026-11-18 (Linux x86_64, KVM, Cloud Hypervisor 54.0). The Framework laptop still times out over SSH and is not the build host. The virtio-net spike passed and matched the reviewed contract. On 2026-11-19 `unikernel/check-net.sh` and `unikernel/check.sh` passed on morphie: factorial bytes, a budget reply with the guest still up, status 2, malformed drops, a 65537-completion ring wrap, an allocation abort, and the one-program image. QUIC is tracked separately as homoiconic-q59.30. Fold and the Mjolnir endpoint note are still open.
 

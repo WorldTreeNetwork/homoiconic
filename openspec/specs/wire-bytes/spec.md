@@ -4,7 +4,7 @@ What is built: one byte form for data, for the part of dCBOR that `Data` has: nu
 
 ## Purpose
 
-State the byte form of a data value, of a program, of a machine value and of a piece of stored state, how a reference is made, how a value is cut for saving, what the reader refuses, and what is proved and what is tested about them. This spec does not cover the event log, signatures or the network. The host commands that use the byte form are in `openspec/specs/zig-host/spec.md`.
+State the byte form of a data value, of a program, of a machine value and of a piece of stored state, how a reference is made, how a value is cut for saving, what the reader refuses, and what is proved and what is tested about them. It also states the byte form of a bounded run's reply (`kernel/Wire/Reply.lean`, tested by `kernel/WireReplyCheck.lean`), which the network image sends. This spec does not cover the event log, signatures or network framing; the frame is in `openspec/specs/unikernel-net/spec.md`. The host commands that use the byte form are in `openspec/specs/zig-host/spec.md`.
 
 ## Requirements
 
@@ -131,3 +131,29 @@ Saving SHALL treat a text as it treats a number: a text whose byte form is large
 - GIVEN a waiting program that holds a text of 1,000 characters, saved with cuts at 256 bytes
 - WHEN the pieces are listed
 - THEN exactly one of them is that text, and its next turn, which does not look at the text, is not supplied it
+
+### Requirement: A bounded run reply has a byte form
+
+The Wire library SHALL define `Wire.RunReply`, its data encoder `Wire.runReplyData`, byte encoder `Wire.runReplyBytes` and strict inverse `Wire.readRunReply` in `kernel/Wire/Reply.lean`. Reply bytes SHALL be `Wire.write` of exactly one of these data shapes:
+
+- `[0, value]`, where value is the existing `Wire.valueData` form of a resulting machine value;
+- `[1]` for a still-running machine at its step budget;
+- `[2]` for refused program bytes;
+- `[3, index]` for an unbound outcome;
+- `[4]` for a wrong outcome;
+- `[5]` for machine fault;
+- `[6]` for an unrepresentable machine value.
+
+Tags 5 and 6 SHALL be internal errors, not language outcomes. A value whose Wire.valueData is absent SHALL encode as tag 6. Reading SHALL use the existing strict data reader and Wire.dataValue for the value field, reject unknown tags, wrong arities or invalid values, and preserve byte identity on read/write of every accepted reply. The run-reply envelope SHALL be independent of network framing. Its additional decode/budget/internal statuses and the compiled-machine value wire form SHALL NOT change `Reflect.reifyOutcome`, which remains the semantic outcome encoding used inside the metacircular interpreter. This wire format is tested, not proved.
+
+#### Scenario: Outcomes have one complete envelope
+
+- GIVEN each response kind, including a known factorial value and a closure
+- WHEN its reply bytes are read as data and by Wire.readRunReply, then written again
+- THEN the expected tag and complete fields are obtained and the same bytes are written; closure code and its captured values use the existing machine-value wire form
+
+#### Scenario: Alternate or malformed reply forms
+
+- GIVEN noncanonical CBOR, trailing bytes, an unknown reply tag, wrong arity or invalid value form
+- WHEN Wire.readRunReply reads it
+- THEN it is refused
