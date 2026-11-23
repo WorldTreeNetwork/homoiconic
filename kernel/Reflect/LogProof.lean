@@ -576,7 +576,7 @@ theorem bootRun_sound {budget : Nat} {p : Term} {v : MVm} (h : bootRun budget p 
   unfold bootRun at h
   split at h
   · next w hw =>
-    rw [runUntil_eq] at hw
+    obtain ⟨_, hw⟩ := runPriced_reach hw
     split at h
     · next st hs => cases h; exact ⟨w, st, ⟨_, hw⟩, settleRun_sound hs, rfl⟩
     · cases h

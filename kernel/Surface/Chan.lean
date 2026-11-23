@@ -63,7 +63,8 @@ def renderRun (budget : Nat) (done : List Event) (cfg : MConfig) (stop : Stopped
     text, events are chosen (`Reflect.pick`) until nothing can happen or
     `limit` events have. Otherwise the schedule text is a program whose result
     is an array of events, and exactly those are run, stopping at the first
-    that cannot happen. Each machine run gets `budget` steps. -/
+    that cannot happen. Each machine run gets a budget of `budget`, charged as
+    `Reflect.runPriced` charges it. -/
 def channelsText (program schedule : ByteArray) (budget limit : Nat) : String :=
   match read program with
   | .error msg => renderSyntaxError msg
@@ -78,7 +79,7 @@ def channelsText (program schedule : ByteArray) (budget limit : Nat) : String :=
         match read schedule with
         | .error msg => "schedule: " ++ renderSyntaxError msg
         | .ok scheduleTerm =>
-          match runUntil budget (load (compile scheduleTerm)) with
+          match runPriced budget (load (compile scheduleTerm)) with
           | .halted (.value (.data (.arr ds))) =>
             match dataEvents 0 ds with
             | .error k => s!"schedule: entry {k} is not an event"

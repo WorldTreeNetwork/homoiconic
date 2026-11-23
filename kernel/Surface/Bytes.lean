@@ -31,14 +31,18 @@ def unlift : Nat → MOutcome → Option MOutcome
   | k + 1, .value (.data d) => (unreifyOutcome d).bind (unlift k)
   | _ + 1, _ => none
 
-/-- Run `t` through `k` interpreters, `level k t`, on the machine for `budget`
-    steps, and render what the program itself gave. `Reflect.tower` and the
+/-- Run `t` through `k` interpreters, `level k t`, on the machine with a budget
+    of `budget` charged as `runPriced` charges it, and render what the program
+    itself gave. The interpreter performs each operation of the program as the
+    machine's own primitive on the same operation number and argument
+    (`Reflect.interp`, the `prim` case), so it pays the same charge the
+    program pays for it, and at least one for each of its own steps on top. `Reflect.tower` and the
     machine theorems say the text is the text of the direct run when both
     finish. With `asText` a result that is a text is written raw, with no
     quotes and no escapes. An answer that is not an outcome's data form cannot happen and
     renders as an internal error. -/
 def renderInterpreted (k budget : Nat) (asText : Bool) (t : Term) : String :=
-  match runUntil budget (load (compile (level k t))) with
+  match runPriced budget (load (compile (level k t))) with
   | .halted o =>
     match unlift k o with
     | some o => if asText then renderMOutcomeText o else renderMOutcome o
@@ -58,12 +62,14 @@ def interpText (src : ByteArray) (k budget : Nat) (asText : Bool := false) : Str
   | .error msg => renderSyntaxError msg
   | .ok t => renderInterpreted k budget asText t
 
-/-- Program bytes in, the bounded-run reply bytes out. One evaluation. -/
+/-- Program bytes in, the bounded-run reply bytes out. One evaluation, with
+    the budget charged as `runText` charges it (`runPriced`): one a step, and
+    an operation its cost before it runs. -/
 def replyBytes (bytes : ByteArray) (budget : Nat) : ByteArray :=
   let reply := match Wire.readProgram bytes with
     | .error _ => Wire.RunReply.refused
     | .ok t =>
-        match runUntil budget (load (compile t)) with
+        match runPriced budget (load (compile t)) with
         | .halted (.value v) =>
             if (Wire.valueData v).isSome then .value v else .unrepresentable
         | .halted (.unbound i) => .unbound i

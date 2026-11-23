@@ -590,15 +590,15 @@ theorem settleRun_sound {budget : Nat} {w : MOutcome} {st : Status MValue MOutco
   · rw [settleRun] at h
     split at h
     · next hp =>
-      rw [runUntil_eq] at hp
+      obtain ⟨_, hp⟩ := runPriced_reach hp
       cases h
       exact Settle.wait (S := machine) rfl ⟨_, hp⟩ rfl
     · next hp =>
-      rw [runUntil_eq] at hp
+      obtain ⟨_, hp⟩ := runPriced_reach hp
       cases h
       exact Settle.payloadFunction (S := machine) rfl ⟨_, hp⟩ rfl
     · next w' hnd hnf hp =>
-      rw [runUntil_eq] at hp
+      obtain ⟨_, hp⟩ := runPriced_reach hp
       cases h
       obtain ⟨h1, h2⟩ := payload_other (w' := w') (fun d h => hnd d (by rw [h]))
         (fun k e h => hnf k e (by rw [h]))
@@ -613,7 +613,7 @@ theorem turnRun_sound {budget : Nat} {c : MValue} {a : Data} {st : Status MValue
   unfold turnRun at h
   split at h
   · next w hw =>
-    rw [runUntil_eq] at hw
+    obtain ⟨_, hw⟩ := runPriced_reach hw
     exact ⟨w, ⟨_, hw⟩, settleRun_sound h⟩
   · cases h
 
@@ -645,7 +645,7 @@ theorem stepRun_sound {budget : Nat} {cfg cfg' : MConfig} {ev : Event}
       · next t arg hq =>
         split at h
         · next w hw =>
-          rw [runUntil_eq] at hw
+          obtain ⟨_, hw⟩ := runPriced_reach hw
           split at h
           · next child st hc ht =>
             cases h
@@ -722,7 +722,7 @@ theorem beginRun_sound {budget : Nat} {p : Term} {cfg : MConfig}
   unfold beginRun at h
   split at h
   · next w hw =>
-    rw [runUntil_eq] at hw
+    obtain ⟨_, hw⟩ := runPriced_reach hw
     split at h
     · next st hs => cases h; exact ⟨w, st, ⟨_, hw⟩, settleRun_sound hs, rfl⟩
     · cases h

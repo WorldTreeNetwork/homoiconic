@@ -112,7 +112,7 @@ def main : IO UInt32 := do
       fails := fails + 1
   for (t, budget, out) in runs do
     total := total + 1
-    let got := renderState budget (runUntil budget (load (compile t)))
+    let got := renderState budget (runPriced budget (load (compile t)))
     if got != out then
       fails := fails + 1
       IO.println s!"FAIL runs: `{got}`, expected `{out}`"

@@ -125,15 +125,16 @@ inductive Stop where
   | waiting : MValue → Stop
   | unfinished : Stop
 
-/-- The executable driver, on the machine. Each turn gets `budget` steps. -/
+/-- The executable driver, on the machine. Each turn gets a budget of `budget`,
+    charged as `runPriced` charges it: one a step, and an operation its cost. -/
 def driveRun (budget : Nat) : List Data → MOutcome → List Data × Stop
   | as, .value (.closure k e) =>
-    match runUntil budget (.running (compile payloadTerm) [.closure k e] [] []) with
+    match runPriced budget (.running (compile payloadTerm) [.closure k e] [] []) with
     | .halted (.value (.data p)) =>
       match as with
       | [] => ([p], .waiting (.closure k e))
       | a :: rest =>
-        match runUntil budget (.running (compile (resumeTerm a)) [.closure k e] [] []) with
+        match runPriced budget (.running (compile (resumeTerm a)) [.closure k e] [] []) with
         | .halted w =>
           let r := driveRun budget rest w
           (p :: r.1, r.2)
@@ -145,7 +146,7 @@ def driveRun (budget : Nat) : List Data → MOutcome → List Data × Stop
 
 /-- Run a program against a list of answers on the machine. -/
 def converse (budget : Nat) (p : Term) (answers : List Data) : List Data × Stop :=
-  match runUntil budget (load (compile p)) with
+  match runPriced budget (load (compile p)) with
   | .halted w => driveRun budget answers w
   | _ => ([], .unfinished)
 

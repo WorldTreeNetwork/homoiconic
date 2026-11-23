@@ -236,7 +236,9 @@ def Session.ended (s : Session) (line : String) (status : P Ref) : Session :=
   | some part => s.keepState part line status
 
 /-- Lazy steps until the machine stops, pauses, or the budget ends, with the
-    steps left. -/
+    budget left. Each step is charged `lstepCost`, at least one, before it is
+    taken, as `Reflect.runPriced` charges the plain machine: a step the budget
+    left cannot pay for is not taken, and the run ends at the state before it. -/
 def steps (σ : Store Ref) : Nat → PState Ref → LRun Ref × Nat
   | 0, s => (.at s, 0)
   | n + 1, s =>
@@ -244,9 +246,13 @@ def steps (σ : Store Ref) : Nat → PState Ref → LRun Ref × Nat
       | .halted _ => (.at s, n + 1)
       | .fault => (.at s, n + 1)
       | _ =>
-          match lstep σ s with
-          | .next s' => steps σ n s'
-          | .needs r => (.paused r s, n + 1)
+          if h : max 1 (lstepCost s) ≤ n + 1 then
+            match lstep σ s with
+            | .next s' => steps σ (n + 1 - max 1 (lstepCost s)) s'
+            | .needs r => (.paused r s, n + 1)
+          else (.at s, n + 1)
+termination_by n => n
+decreasing_by omega
 
 /-- A piece as whole data: `error r` when the store lacks `r`, `none` when
     there is a function in it. It ends when no piece reaches itself. That
@@ -412,9 +418,10 @@ def openNode (σ : Store Ref) (n : Nat) (root : P Ref) : Except Ref (Option (Lis
     a VM goes through them once for each entry it acts on. `fuel` above that
     number is never used up; if it were, the turn says so and is over.
     This follows `Reflect.driveRun` for one turn and `Reflect.vmRun` for a
-    log, on the lazy machine. The budget counts the lazy machine's steps,
-    which are more than the plain machine's (looking up a variable takes
-    steps of its own), so a budget that is enough for `vmRun` may not be
+    log, on the lazy machine. The budget is charged on the lazy machine's
+    steps, an operation its cost as on the plain machine (`steps`). There
+    are more of those steps than the plain machine's (looking up a variable
+    takes steps of its own), so a budget that is enough for `vmRun` may not be
     enough here. When both give a state, `LogCheck.lean` checks on examples
     that it is the same one.
 
@@ -595,7 +602,7 @@ def answer (root : String) (src : ByteArray) (budget : Nat) : Session :=
       match Surface.read src with
       | .error msg => failed ("answer: " ++ renderSyntaxError msg)
       | .ok t =>
-          match runUntil budget (load (compile t)) with
+          match runPriced budget (load (compile t)) with
           | .halted (.value (.data d)) =>
               let s : Session := { budget, left := budget, phase := .resuming r d }
               advance s.fuel s
@@ -652,7 +659,7 @@ def readLog (src : ByteArray) (budget : Nat) : Except String (List Entry) :=
   match Surface.read src with
   | .error msg => .error ("log: " ++ renderSyntaxError msg)
   | .ok t =>
-      match runUntil budget (load (compile t)) with
+      match runPriced budget (load (compile t)) with
       | .halted (.value (.data (.arr ds))) =>
           match dataEntries (.arr []) 0 ds with
           | .error msg => .error msg
@@ -702,7 +709,7 @@ def readOps (src : ByteArray) (budget : Nat) : Except String (List Op) :=
   match Surface.read src with
   | .error msg => .error ("log: " ++ renderSyntaxError msg)
   | .ok t =>
-      match runUntil budget (load (compile t)) with
+      match runPriced budget (load (compile t)) with
       | .halted (.value (.data (.arr ds))) =>
           match dataOps (.arr []) 0 ds with
           | .error msg => .error msg

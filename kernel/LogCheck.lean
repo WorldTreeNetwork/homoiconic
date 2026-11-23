@@ -84,15 +84,17 @@ def list (ps : List (P Ref)) : P Ref := ps.foldr .cons .nil
 
 -- The session's budget counts lazy steps, which are more than the plain
 -- machine's: there is a budget the fold finishes in and the session does not.
+-- Both charge the operation's cost: `add 20 22` costs 10, so the fold needs 50
+-- where it needed 41 when every step cost one.
 #eval do
   let src ← IO.FS.readFile "../examples/ask.hom"
   let log : List Entry := [⟨.nat 1, .nat 20⟩, ⟨.nat 2, .nat 22⟩]
   let fold := match Surface.read src.toUTF8 with
-    | .ok t => (vmRun 41 t log).isSome
+    | .ok t => (vmRun 50 t log).isSome
     | .error _ => false
-  let (text, _) := finish {} 1000 (vmStart src.toUTF8 (logText log) 41)
-  IO.println (line (fold && text.startsWith "no result within 41 steps")
-    "at 41 steps a turn the fold gives a state and the session gives none")
+  let (text, _) := finish {} 1000 (vmStart src.toUTF8 (logText log) 50)
+  IO.println (line (fold && text.startsWith "no result within 50 steps")
+    "at 50 steps a turn the fold gives a state and the session gives none")
 
 def e1 : Entry := ⟨.arr [.nat 7], .nat 20⟩
 def e2 : Entry := ⟨.nat 8, .nat 22⟩

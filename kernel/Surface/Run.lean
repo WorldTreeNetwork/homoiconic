@@ -9,7 +9,8 @@ open Reflect
 
 /-- Read, compile, run the machine for `budget` steps, and render. This runs the
     machine, not `evalFuel`. Each step costs one, and a primitive costs what
-    its table charges (`runPriced`). `runUntil` is `run` (`Reflect.runUntil_eq`). -/
+    its table charges (`runPriced`). A priced run stops where `run` does after some
+    number of steps (`Reflect.runPriced_reach`). -/
 def runText (src : ByteArray) (budget : Nat) : String :=
   match read src with
   | .error msg => renderSyntaxError msg
@@ -22,7 +23,8 @@ def renderAsked (asked : List Data) : String :=
 /-- Read a program and an answers text, run the program against the answers on
     the machine, and render: a line for each request, then how the run ended.
     The answers text is a program whose result is an array; its items are the
-    answers. Each turn, and the answers program, gets `budget` steps. What is
+    answers. Each turn, and the answers program, gets a budget of `budget`, charged
+    as `runPriced` charges it. What is
     reported is a run of the program (`Reflect.converse_finished`,
     `Reflect.converse_waiting`). -/
 def converseText (program answers : ByteArray) (budget : Nat) : String :=
@@ -32,7 +34,7 @@ def converseText (program answers : ByteArray) (budget : Nat) : String :=
     match read answers with
     | .error msg => "answers: " ++ renderSyntaxError msg
     | .ok answersTerm =>
-      match runUntil budget (load (compile answersTerm)) with
+      match runPriced budget (load (compile answersTerm)) with
       | .halted (.value (.data (.arr as))) =>
         let r := converse budget t as
         renderAsked r.1 ++

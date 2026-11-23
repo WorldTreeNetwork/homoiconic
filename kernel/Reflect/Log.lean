@@ -139,7 +139,8 @@ def Vm.map {C R C' R' : Type} (f : R → R') (g : C → C') (v : Vm C R) : Vm C'
 
 variable [Ops]
 
-/-! The executable VM, on the machine. Every machine run gets `budget` steps.
+/-! The executable VM, on the machine. Every machine run gets a budget of `budget`,
+    charged as `runPriced` charges it.
     `none` is a VM one of whose runs did not halt within the budget; it stays
     `none`, and says nothing about the program. -/
 
@@ -157,7 +158,7 @@ def handleRun (budget : Nat) : Option MVm → Entry → Option MVm
       | none => none
 
 def bootRun (budget : Nat) (p : Term) : Option MVm :=
-  match runUntil budget (load (compile p)) with
+  match runPriced budget (load (compile p)) with
   | .halted w =>
     match settleRun budget w with
     | some st => some ⟨st, []⟩

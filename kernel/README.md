@@ -68,7 +68,9 @@ computes is not part of the language. It comes from a table, `Ops`, holding one
 total function `op : Nat → Data → Data`, and every definition and theorem takes
 the table as a parameter. The table also gives `cost`, the steps a budget
 charges before the operation runs; a table that does not say charges one.
-`arithCost` is that charge for `arith`. The interpreter is the same term for
+`arithCost` is that charge for `arith`. Every budgeted run charges it
+(`runPriced`): the run command, `--interp`, the reply bytes, requests,
+channels, the VM, the node and a kept session's lazy machine. The interpreter is the same term for
 every table, so adding an operation is adding a line to a table: no proof
 changes.
 

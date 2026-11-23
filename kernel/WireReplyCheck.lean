@@ -31,6 +31,16 @@ def isValue (b : ByteArray) (n : Nat) : Bool :=
     | .ok .budget => true
     | _ => false
   IO.println (check budgetOk "forever at 5000 steps is the budget reply")
+  -- The reply charges each operation its cost, as `runText` does: a budget of
+  -- 200 stops a product of two 40-digit numbers before it is computed.
+  let big := s!"mul {10^40 - 1} {10^40 - 1}\n"
+  let bp := Surface.sourceBytes big.toUTF8
+  let stopped := match readRunReply (Surface.replyBytes (bp.extract 1 bp.size) 200) with
+    | .ok .budget => true
+    | _ => false
+  IO.println (check stopped "a 40-digit product at 200 steps is the budget reply")
+  IO.println (check (isValue (Surface.replyBytes (bp.extract 1 bp.size) 200000) ((10^40 - 1) ^ 2))
+    "a 40-digit product at 200000 steps is the product")
   let bad := Surface.replyBytes (ByteArray.empty.push 0xff) 10
   let refused := match readRunReply bad with
     | .ok .refused => true

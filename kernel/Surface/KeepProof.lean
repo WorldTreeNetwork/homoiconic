@@ -153,26 +153,32 @@ theorem chase_good (hle : σ'.le σ) : ∀ (n : Nat) {v k x : P Ref}, Good size 
     whether it ends at a state or pauses at one. -/
 theorem steps_good (hle : σ'.le σ) : ∀ (n : Nat) {st : PState Ref} {out : LRun Ref} {left : Nat},
     GoodS size σ st → steps σ' n st = (out, left) →
-    (∀ st', out = .at st' → GoodS size σ st') ∧ ∀ r st', out = .paused r st' → GoodS size σ st'
-  | 0, st, out, left, hg, h => by
-    simp only [steps, Prod.mk.injEq] at h
-    obtain ⟨rfl, _⟩ := h
-    exact ⟨fun _ e => (by cases e; exact hg), fun _ _ e => (by cases e)⟩
-  | n + 1, st, out, left, hg, h => by
-    unfold steps at h
-    split at h
-    · simp only [Prod.mk.injEq] at h
-      obtain ⟨rfl, _⟩ := h
-      exact ⟨fun _ e => (by cases e; exact hg), fun _ _ e => (by cases e)⟩
-    · simp only [Prod.mk.injEq] at h
-      obtain ⟨rfl, _⟩ := h
-      exact ⟨fun _ e => (by cases e; exact hg), fun _ _ e => (by cases e)⟩
-    · split at h
-      · rename_i s' hl
-        exact steps_good hle n (lstep_good hle hg hl) h
-      · simp only [Prod.mk.injEq] at h
-        obtain ⟨rfl, _⟩ := h
-        exact ⟨fun _ e => (by cases e), fun _ _ e => (by cases e; exact hg)⟩
+    (∀ st', out = .at st' → GoodS size σ st') ∧ ∀ r st', out = .paused r st' → GoodS size σ st' := by
+  intro n
+  induction n using Nat.strongRecOn with
+  | _ n ih =>
+    intro st out left hg h
+    have stay : out = .at st →
+        (∀ st', out = .at st' → GoodS size σ st') ∧ ∀ r st', out = .paused r st' → GoodS size σ st' :=
+      fun e => e ▸ ⟨fun _ e => (by cases e; exact hg), fun _ _ e => (by cases e)⟩
+    cases n with
+    | zero =>
+      unfold steps at h
+      simp only [Prod.mk.injEq] at h
+      exact stay h.1.symm
+    | succ n =>
+      unfold steps at h
+      split at h
+      · simp only [Prod.mk.injEq] at h; exact stay h.1.symm
+      · simp only [Prod.mk.injEq] at h; exact stay h.1.symm
+      · split at h
+        · split at h
+          · rename_i s' hl
+            exact ih _ (by omega) (lstep_good hle hg hl) h
+          · simp only [Prod.mk.injEq] at h
+            obtain ⟨rfl, _⟩ := h
+            exact ⟨fun _ e => (by cases e), fun _ _ e => (by cases e; exact hg)⟩
+        · simp only [Prod.mk.injEq] at h; exact stay h.1.symm
 
 variable {s : Session}
 

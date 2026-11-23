@@ -194,7 +194,7 @@ def interpretedP : PSys Data Data where
 /-- `none`: a machine run did not halt within the budget. -/
 def settleRun (budget : Nat) : MOutcome → Option (Status MValue MOutcome)
   | .value (.closure k e) =>
-    match runUntil budget (.running (compile payloadTerm) [.closure k e] [] []) with
+    match runPriced budget (.running (compile payloadTerm) [.closure k e] [] []) with
     | .halted (.value (.data p)) => some (.waiting (.closure k e) p)
     | .halted (.value (.closure _ _)) => some (.finished .wrong)
     | .halted w => some (.finished w)
@@ -202,7 +202,7 @@ def settleRun (budget : Nat) : MOutcome → Option (Status MValue MOutcome)
   | w => some (.finished w)
 
 def turnRun (budget : Nat) (c : MValue) (a : Data) : Option (Status MValue MOutcome) :=
-  match runUntil budget (.running (compile (resumeTerm a)) [c] [] []) with
+  match runPriced budget (.running (compile (resumeTerm a)) [c] [] []) with
   | .halted w => settleRun budget w
   | _ => none
 
@@ -232,7 +232,7 @@ def stepRun (budget : Nat) (cfg : MConfig) : Event → Tried
     | some ⟨.waiting c p, held⟩ =>
       match classify p with
       | .spawn t arg =>
-        match runUntil budget (load (compile (.app t (.lit arg)))) with
+        match runPriced budget (load (compile (.app t (.lit arg)))) with
         | .halted w =>
           match settleRun budget w, turnRun budget c (.arr []) with
           | some child, some st =>
@@ -287,7 +287,7 @@ def schedRun (budget : Nat) : MConfig → List Event → List Event × MConfig �
 
 /-- The first configuration, on the machine. `none`: a run did not halt. -/
 def beginRun (budget : Nat) (p : Term) : Option MConfig :=
-  match runUntil budget (load (compile p)) with
+  match runPriced budget (load (compile p)) with
   | .halted w =>
     match settleRun budget w with
     | some st => some ⟨[⟨st, []⟩], []⟩

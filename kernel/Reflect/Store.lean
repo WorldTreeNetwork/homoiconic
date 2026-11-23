@@ -275,6 +275,21 @@ def lstep (σ : Store R) : PState R → LStep R
   | .running (.checkNat k) env stk frs => lCheckNat σ k env stk frs
   | .running (.prim k) env stk frs => lPrim σ k env stk frs
 
+/-- The charge for the next lazy step, as `stepCost` charges the plain
+    machine. A primitive whose argument is whole data costs what the table
+    says. A step that fetches or hydrates its argument, and every other step,
+    costs one. -/
+def lstepCost : PState R → Nat
+  | .running (.prim _) _ (x :: .nat n :: _) _ =>
+      match x.toData with
+      | some d => Ops.cost n d
+      | none => 1
+  | .running (.prim _) _ (x :: .name n :: _) _ =>
+      match x.toData with
+      | some d => Ops.cost n d
+      | none => 1
+  | _ => 1
+
 /-- Where a lazy run is: at a state, or paused there needing a reference. -/
 inductive LRun (R : Type) where
   | at : PState R → LRun R

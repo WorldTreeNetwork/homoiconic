@@ -408,13 +408,13 @@ theorem driveRun_sound (budget : Nat) : ∀ (as : List Data) (w : MOutcome),
     · rw [driveRun]
       split
       · next hp =>
-        rw [runUntil_eq] at hp
+        obtain ⟨_, hp⟩ := runPriced_reach hp
         exact Drive.wait (S := machine) rfl ⟨_, hp⟩ rfl
       · next hp =>
-        rw [runUntil_eq] at hp
+        obtain ⟨_, hp⟩ := runPriced_reach hp
         exact Drive.payloadFunction (S := machine) rfl ⟨_, hp⟩ rfl
       · next w' hnd hnf hp =>
-        rw [runUntil_eq] at hp
+        obtain ⟨_, hp⟩ := runPriced_reach hp
         obtain ⟨h1, h2⟩ := payload_other (w' := w') (fun d h => hnd d (by rw [h]))
           (fun k e h => hnf k e (by rw [h]))
         exact Drive.payloadFails (S := machine) rfl ⟨_, hp⟩ h1 h2
@@ -428,11 +428,11 @@ theorem driveRun_sound (budget : Nat) : ∀ (as : List Data) (w : MOutcome),
     · rw [driveRun]
       split
       · next hp =>
-        rw [runUntil_eq] at hp
+        obtain ⟨_, hp⟩ := runPriced_reach hp
         dsimp only
         split
         · next w' hr =>
-          rw [runUntil_eq] at hr
+          obtain ⟨_, hr⟩ := runPriced_reach hr
           have h := ih w'
           generalize driveRun budget rest w' = res at h
           obtain ⟨asked, s⟩ := res
@@ -442,10 +442,10 @@ theorem driveRun_sound (budget : Nat) : ∀ (as : List Data) (w : MOutcome),
           | unfinished => trivial
         · trivial
       · next hp =>
-        rw [runUntil_eq] at hp
+        obtain ⟨_, hp⟩ := runPriced_reach hp
         exact Drive.payloadFunction (S := machine) rfl ⟨_, hp⟩ rfl
       · next w' hnd hnf hp =>
-        rw [runUntil_eq] at hp
+        obtain ⟨_, hp⟩ := runPriced_reach hp
         obtain ⟨h1, h2⟩ := payload_other (w' := w') (fun d h => hnd d (by rw [h]))
           (fun k e h => hnf k e (by rw [h]))
         exact Drive.payloadFails (S := machine) rfl ⟨_, hp⟩ h1 h2
@@ -462,7 +462,7 @@ theorem converse_finished {budget : Nat} {p : Term} {answers asked : List Data} 
   unfold converse at h
   split at h
   · next w hw =>
-    rw [runUntil_eq] at hw
+    obtain ⟨_, hw⟩ := runPriced_reach hw
     have hs := driveRun_sound budget answers w
     rw [h] at hs
     obtain ⟨e, he, hi⟩ := interact_machine_exact p answers asked _ ⟨_, w, hw, hs⟩
@@ -478,7 +478,7 @@ theorem converse_waiting {budget : Nat} {p : Term} {answers asked : List Data} {
   unfold converse at h
   split at h
   · next w hw =>
-    rw [runUntil_eq] at hw
+    obtain ⟨_, hw⟩ := runPriced_reach hw
     have hs := driveRun_sound budget answers w
     rw [h] at hs
     obtain ⟨e, he, hi⟩ := interact_machine_exact p answers asked _ ⟨_, w, hw, hs⟩
