@@ -185,5 +185,11 @@ a cut command line read as budget 0, and 500 MiB or 512 MiB less 4 KiB given
 at boot silenced the image while Cloud Hypervisor exited 0. On the fixed tree
 a stray object in `out/lean` was not linked, 4 Mi nested arrays were refused
 in the kernel's text, and 8 Mi nested arrays or a flat 16 MiB array still ran
-out of memory (`homoiconic-q59.61`). `evidence/check-boot-bytes.log` is the
-whole `check.sh` run with the new boot-bytes cases.
+out of memory (`homoiconic-q59.61`). Tree `79faa08` (these fixes rebased on
+`f1ff2f6`), exported with `git archive` to `~/hom-79faa08`: `build.sh
+examples/factorial.hom`, `build-net.sh`, `check.sh`, `check-net.sh`,
+`check-quic.sh` and `check-wire.sh` each exited 0. Their logs are
+`evidence/boot-bytes-79faa08-*.log` (`check.sh`'s has 52 lines of `ok`), with
+exit codes and image hashes in `evidence/run-79faa08.txt`; the QUIC run's
+logs beside them are left as they were. `source.sha256`, `objects.sha256`
+and `versions.txt` are the ones this build wrote.

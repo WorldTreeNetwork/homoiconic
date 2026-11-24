@@ -1,0 +1,39 @@
+# Before the fixes: image built from 709b13a (~/hom-709b13a), booted on morphie with Cloud Hypervisor started directly.
+with cloud-hypervisor v54.0, image from 709b13a
+== 16 MiB of bytes 81 (finding 2): cloud-hypervisor status 0
+  serial: INTERNAL PANIC: out of memory
+  serial: reflect: exit 1
+== the same as a Linux process: status 0
+  out: bytes error: the bytes end inside a value
+== factorial at 4294967295 levels, budget 0 (finding 3): cloud-hypervisor status 0
+  serial: 
+  serial: reflect: processor fault 14 code 0x0000000000000002 at 0x000000000111d152 address 0x000000001efffff8 stack 0x000000001f000000 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+== a budget word of 1100 zeros then x (finding 4): cloud-hypervisor status 0
+  serial: no result within 0 steps
+  serial: reflect: exit 0
+== the same as a Linux process:
+  out: reflect: the step budget must be a whole number
+== 512 MiB less 4 KiB of zeros (finding 1): cloud-hypervisor status 0
+  ch: cloud-hypervisor:   1.474072s: <vcpu0> ERROR:vmm/src/cpu.rs:1509 -- VCPU generated error: VcpuRun(Failed to run vcpu
+  ch:     Unexpected exit reason on vcpu run: InternalError)
+== 500 MiB of zeros (finding 1): cloud-hypervisor status 0
+  ch: cloud-hypervisor:   1.322131s: <vcpu0> ERROR:vmm/src/cpu.rs:1509 -- VCPU generated error: VcpuRun(Failed to run vcpu
+  ch:     Unexpected exit reason on vcpu run: InternalError)
+== 480 MiB of zeros (lands above the image): cloud-hypervisor status 0
+  serial: reflect: the program given at boot is too large
+== exactly 16 MiB of zeros: cloud-hypervisor status 0
+  serial: bytes error: there are bytes after the value
+  serial: reflect: exit 0
+
+# After the fixes: the same commits before the rebase onto origin/main (~/hom-wip-q5960), through given.sh.
+tree /home/dorje/hom-wip-q5960, cloud-hypervisor v54.0
+ok   a copy of an object dropped into out/lean is not linked (the build succeeds; linked, its symbols would clash)
+== 4 Mi arrays of one nested around 0 (valid data, no program): status 0
+  serial: bytes error: the value is not a program
+  serial: reflect: exit 0
+== 8 Mi arrays of one nested around 0 (valid data, no program): status 0
+  serial: INTERNAL PANIC: out of memory
+  serial: reflect: exit 1
+== one array of 16777211 zeros, 16 MiB in all (valid data, no program): status 0
+  serial: INTERNAL PANIC: out of memory
+  serial: reflect: exit 1
