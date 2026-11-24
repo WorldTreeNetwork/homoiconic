@@ -1,0 +1,12 @@
+- [ ] `kernel/Reflect/Crossing.lean`: `Side`, `Entry`, `Mix`, `combine`, `accept`
+- [ ] `kernel/Reflect/CrossingProof.lean`, `kernel/CrossingContract.lean`: `accepted_network`, `combine_exact`, `combine_events`, axioms printed, no `sorry`
+- [ ] `kernel/Surface/Cross.lean`: the guest (state, step, packets, batches, record text), the record reader, `check`
+- [ ] `kernel/CrossCheck.lean`: two guests in one process; both `take` orders of `examples/cross-race.hom` give two records and two results; tampered records refused, each with its reason
+- [ ] Exports `reflect_cross_*` in `kernel/Surface/Host.lean`; `Surface.Remote` and `reflect_remote_*` removed; `host/check.sh` runs the contract and the check
+- [ ] `unikernel/net.zig`: program bytes from `/boot/program`, `reflect.spawn`, `reflect.take`, `reflect.budget`, repeated exchanges, the record on serial
+- [ ] `unikernel/cross-check.zig` and `unikernel/check-wire.sh`: two real guests, both orders, the records replay to what the guests reported, tampered records refused
+- [ ] Controls: each refusal check fails with its check undone, log in `unikernel/evidence/`
+- [ ] Entity names from `add-entity-keys` in the record, signature checked by the host (or a bead if that change has not landed)
+- [ ] morphie: build.sh, build-net.sh, check.sh, check-net.sh, check-quic.sh, check-wire.sh; logs and hashes in `unikernel/evidence/`
+- [ ] Fresh-context advise read (Fable): accept
+- [ ] Fold: specs, `ARCHITECTURE.md`, `docs/PROOFS.md`, `docs/LEARNINGS.md`
