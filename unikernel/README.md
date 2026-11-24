@@ -194,3 +194,25 @@ examples/factorial.hom`, `build-net.sh`, `check.sh`, `check-net.sh`,
 exit codes and image hashes in `evidence/run-79faa08.txt`; the QUIC run's
 logs beside them are left as they were. `source.sha256`, `objects.sha256`
 and `versions.txt` are the ones this build wrote.
+
+2026-11-24 (UTC) on morphie, Cloud Hypervisor 54.0 (`homoiconic-q59.58`,
+`q59.59`, `q59.62`), tree `e275842` exported with `git archive` to
+`~/hom-e275842`: `build.sh examples/factorial.hom`, `build-net.sh`,
+`check.sh`, `check-net.sh`, `check-quic.sh` and `check-wire.sh` each exited 0.
+The six logs in `evidence/` are this run's, with exit codes and image hashes
+in `evidence/run-e275842.txt`; `source.sha256` and `objects.sha256` are the
+ones this build wrote (the Lean side changed). `reflect-net.elf` is sha256
+`4c66c447…ae82ea`, the same before and after the
+checks. `check-quic.log` has eighteen `ok` lines: the guest's answer to a
+first flight is 1200 bytes, a reply the client acknowledges went out once,
+a `silent` client's reply was sent 9 more times and stopped at 6.3 s, and a
+forged first flight of 1200 bytes drew 3 datagrams and 3600 bytes.
+`evidence/check-quic-controls-q59.58-59.log` is `check-quic.sh` on copies
+of the tree before commit with each fix undone: no ACK-only packet fails
+`quic-self` (exit 20) and the guest sends the reply 13 times in the counted
+window; a client that does not acknowledge leaves 13; no padding fails
+`quic-self` (exit 29) and the guest's first answer is 748 bytes.
+`evidence/levels-controls-q59.62.log` shows the level bound undone on each
+side, on the Mac. The first export of these fixes, `2fc1ec2`, failed
+`check.sh` at the list of kernel symbols the program names, which now
+includes `reflect_max_levels` (fixed in `e275842`).

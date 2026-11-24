@@ -1,7 +1,7 @@
-Build completed successfully (48 jobs).
+Build completed successfully (49 jobs).
 1/3 pvclock.test.time runs forward far past 2^32 shifted ticks...OK
 2/3 pvclock.test.a 3 GHz counter gives a second per 3e9 ticks, for a day...OK
 3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
 All 3 tests passed.
 quic self ok
-built /home/dorje/hom-9de1838/unikernel/out-net/reflect-net.elf
+built /home/dorje/hom-e275842/unikernel/out-net/reflect-net.elf

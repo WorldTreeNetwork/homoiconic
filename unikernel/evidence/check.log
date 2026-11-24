@@ -15,12 +15,31 @@ ok   bytes at boot: factorial, through none
 ok   bytes at boot: factorial, through two interpreters
 ok   bytes at boot: the quine
 ok   bytes at boot: a budget of 5000 steps
+ok   bytes at boot: 10000 steps are enough through none
+ok   bytes at boot: 10000 steps are not enough through one
+ok   bytes at boot: 100000 steps are enough through one
+ok   bytes at boot: 100000 steps are not enough through two
+ok   bytes at boot: eight interpreters
+ok   bytes at boot: the largest budget
 ok   bytes at boot: a megabyte that is no program
 ok   bytes at boot: one byte past a program
+ok   bytes at boot: exactly 16 MiB
+ok   bytes at boot: 16 MiB of arrays never closed
 ok   bytes at boot: a budget that is not a number
-ok   bytes at boot: more than 16 MiB is refused
+ok   bytes at boot: a budget of 2^64
+ok   bytes at boot: levels that are not a number
+ok   bytes at boot: nine levels
+ok   bytes at boot: 2^32 levels
+ok   bytes at boot: a command line of 1023 bytes
+ok   bytes at boot: a command line of 1101 bytes is refused
+ok   bytes at boot: the launch refuses more than 16 MiB
+ok   bytes at boot: the image refuses more than 16 MiB
+ok   bytes at boot: the launch refuses a file that would land on the image
+ok   started directly, a file that lands on the image silences it
 ok   one image ran every program given at boot
 ok   the same image with nothing given at boot
+ok   bytes at boot: two files are refused
+ok   bytes at boot: a list of files outside memory is refused
 ok   an unanswered system call is reported
 ok   a source nested too deep ends in a report of a full stack
 ok   a write into the page under the stack faults, and the memory under it is untouched
