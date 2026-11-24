@@ -22,8 +22,8 @@ def expect (what text part : String) : IO Unit :=
 
 def records (path : String) (far takeNew : Bool) : IO (ByteArray × String × String) := do
   let p ← bytesOf path
-  let (a, b) := simulate p 100000 40 far takeNew
-  pure (p, a.record, b.record)
+  let (a, b) := simulated p 100000 40 far takeNew
+  pure (p, a, b)
 
 def accepted (what path : String) (far takeNew : Bool) (parts : List String) : IO Unit := do
   let (p, a, b) ← records path far takeNew
@@ -95,6 +95,8 @@ def main : IO Unit := do
   expect "a taking dropped" (chk (lie (entries (drop 6) a)) b) "refused: the logs do not combine"
   expect "an acknowledgement dropped" (chk a (lie (entries (drop 5) b))) "refused: the logs do not combine"
   expect "a putting-out dropped" (chk a (lie (entries (drop 3) b))) "refused: the logs do not combine"
+  expect "a crossing number that is not the count"
+    (chk a (lie (replace b ", [1, 0, 0]]" ", [1, 0, 5]]"))) "refused: the logs do not combine"
   expect "an entry that names a held process"
     (chk (lie (entries (fun es => es.take 2 ++ ["entry [0, [0, [0, 0, 4]]]"] ++ es.drop 2) a)) b)
     "refused: the logs do not combine"
@@ -109,8 +111,8 @@ def main : IO Unit := do
   let (q, _, _) ← records "../examples/cross-name.hom" true false
   expect "another program" (check q a.toUTF8 b.toUTF8) "refused: "
   -- A budget too small for a turn: nothing is put out, and the record still replays.
-  let (s, t) := simulate p 30 40 true false
+  let (s, t) := simulated p 30 40 true false
   expect "a budget that stops the first turn: nothing is recorded"
-    (check p s.record.toUTF8 t.record.toUTF8) "accepted\nschedule: []\nplaces a: [0]\nplaces b: []\nprocess 0: waiting on [0]; holds []"
+    (check p s.toUTF8 t.toUTF8) "accepted\nschedule: []\nplaces a: [0]\nplaces b: []\nprocess 0: waiting on [0]; holds []"
 
 #eval main

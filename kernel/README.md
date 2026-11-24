@@ -22,6 +22,8 @@ lake env lean MachineContract.lean   # the machine theorems, exact statements
 lake env lean RequestContract.lean   # the request theorems, exact statements
 lake env lean StoreContract.lean     # the stored-state theorems, exact statements
 lake env lean ChannelContract.lean   # the channel theorems, exact statements
+lake env lean CrossingContract.lean  # the crossing theorems, exact statements
+lake env lean CrossCheck.lean        # two guests in one process, their records, the check, and tampered records
 lake env lean RootContract.lean      # equal states are saved under one root, exact statements
 lake env lean ReflectRun.lean        # the scenarios, executed
 lake env lean Surface/Check.lean     # the reader and renderer against examples

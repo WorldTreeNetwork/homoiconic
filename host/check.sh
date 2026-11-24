@@ -50,7 +50,7 @@ if grep -q "^FAIL" "$OUT/node.txt" || ! grep -q "^ok" "$OUT/node.txt" || grep -q
 fi
 
 lake env lean CrossCheck.lean > "$OUT/cross.txt"
-if grep -q "^FAIL" "$OUT/cross.txt" || [ "$(grep -c "^ok" "$OUT/cross.txt")" -ne 47 ] || grep -q "error" "$OUT/cross.txt"; then
+if grep -q "^FAIL" "$OUT/cross.txt" || [ "$(grep -c "^ok" "$OUT/cross.txt")" -ne 48 ] || grep -q "error" "$OUT/cross.txt"; then
     cat "$OUT/cross.txt" >&2
     exit 1
 fi
@@ -69,7 +69,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 OBJS=""
 for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store Reflect/Crossing \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece Wire/Reply \
-              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Remote Surface/Cross Surface/Host; do
+              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Cross Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
         -c "$OUT/$name.c" "$module.lean"

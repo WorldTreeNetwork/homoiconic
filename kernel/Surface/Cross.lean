@@ -52,10 +52,15 @@ structure Pending where
   held : List Nat
 
 structure Guest where
+  /-- `a` is the guest that is given the program. -/
   side : Side
-  me : String
-  peer : String
-  budget : Nat
+  /-- This guest opens the exchanges, and closes the run. -/
+  caller : Bool
+  /-- The budget of each machine run. The guest with the program is given it;
+      the other takes it from the first batch that carries one. 0: not known. -/
+  budget : Nat := 0
+  /-- Side `a` before it is given its program. -/
+  waiting : Bool := false
   /-- Every start request goes to the peer. -/
   far : Bool
   /-- Among the peer's sends that can be taken, take the newest first. -/
@@ -92,6 +97,15 @@ def packetLimit : Nat := 6000
 def Guest.note (g : Guest) (n : Note) : Guest := { g with log := n :: g.log }
 
 def Guest.post (g : Guest) (pkt : Data) : Guest := { g with sent := g.sent.push pkt }
+
+/-- The process waits to send on a name it holds. -/
+def wantsSend (q : Proc MValue MOutcome) : Bool :=
+  match q.status with
+  | .waiting _ p =>
+    match classify p with
+    | .send ch _ => q.held.contains ch
+    | _ => false
+  | _ => false
 
 /-- The configuration with every held or stuck process hidden, so that the
     scheduler neither chooses it nor finds it as a partner. -/
@@ -183,14 +197,6 @@ def Guest.ask (g : Guest) (i : Nat) : Option Guest :=
     | none => none
   | _ => none
 
-def wantsSend (q : Proc MValue MOutcome) : Bool :=
-  match q.status with
-  | .waiting _ p =>
-    match classify p with
-    | .send ch _ => q.held.contains ch
-    | _ => false
-  | _ => false
-
 /-- A local event `ev` of process `i`, run as one machine runs it. -/
 def Guest.happen (g : Guest) (i : Nat) (ev : Event) : Guest :=
   match stepRun g.budget g.cfg ev with
@@ -231,17 +237,18 @@ def Guest.work : Nat → Guest → Guest
 
 def workLimit : Nat := 256
 
-/-- Nothing to do and nothing the peer has not counted. -/
+/-- Nothing to do and nothing the peer has not counted. A guest that still
+    waits for its program is not idle. -/
 def Guest.idle (g : Guest) : Bool :=
-  g.resting && g.inbox.isEmpty && g.counted == g.sent.size
+  !g.waiting && g.resting && g.inbox.isEmpty && g.counted == g.sent.size
 
-/-- The guest with the program closes when it is idle and the peer's last
-    batch was quiet. The other closes when told. -/
+/-- The guest that opens the exchanges closes when it is idle and the peer's
+    last batch was quiet. The other closes when told. -/
 def Guest.closing (g : Guest) : Bool :=
-  g.closed || (g.side = .a && g.idle && g.peerQuiet)
+  g.closed || (g.caller && g.idle && g.peerQuiet)
 
-/-- The batch for the peer: a flag, how many of its packets were accepted, and
-    the packets it has not counted, as many as fit in `room` bytes. -/
+/-- The batch for the peer: a flag, how many of its packets were accepted, the
+    budget, and the packets it has not counted, as many as fit in `room` bytes. -/
 def Guest.batch (g : Guest) (room : Nat) : ByteArray :=
   let flag := if g.closing then 2 else if g.idle then 1 else 0
   let pkts := (List.range (g.sent.size - g.counted)).foldl (fun (acc : List Data × Nat × Bool) d =>
@@ -252,14 +259,15 @@ def Guest.batch (g : Guest) (room : Nat) : ByteArray :=
       if acc.2.2 || acc.2.1 + size > room then (acc.1, acc.2.1, true)
       else (acc.1 ++ [.arr [.nat seq, pkt]], acc.2.1 + size, false)
     | none => acc) ([], 64, false)
-  Wire.write (.arr [.nat flag, .nat g.got, .arr pkts.1])
+  Wire.write (.arr [.nat flag, .nat g.got, .nat g.budget, .arr pkts.1])
 
 /-- Take a batch from the peer. Packets are only queued here. -/
 def Guest.take (g : Guest) (bytes : ByteArray) : Guest :=
   match Wire.read bytes with
-  | .ok (.arr [.nat flag, .nat got, .arr pkts]) =>
+  | .ok (.arr [.nat flag, .nat got, .nat budget, .arr pkts]) =>
     let g := { g with counted := max g.counted (min got g.sent.size),
-                      peerQuiet := flag ≥ 1 && pkts.isEmpty }
+                      peerQuiet := flag ≥ 1 && pkts.isEmpty,
+                      budget := if g.budget == 0 then budget else g.budget }
     let g := pkts.foldl (fun (g : Guest) p =>
       match p with
       | .arr [.nat seq, pkt] =>
@@ -269,22 +277,26 @@ def Guest.take (g : Guest) (bytes : ByteArray) : Guest :=
     if flag == 2 then { g with closed := true } else g
   | _ => g
 
-/-- Begin a guest. The guest with the program is side `a`. -/
-def start (program : ByteArray) (me peer : String) (budget : Nat) (hasProgram far takeNew : Bool) :
-    Guest :=
-  let g : Guest := { side := if hasProgram then .a else .b, me, peer, budget, far, takeNew }
-  if hasProgram then
-    match Wire.readProgram program with
-    | .error msg => { g with error := "bytes error: " ++ msg }
-    | .ok t =>
-      match beginRun budget t with
-      | some cfg => { g with cfg }
-      | none => { g with error := s!"no result within {budget} steps of a turn" }
-  else g
+/-- Begin a guest with no process. The guest that will be given the program
+    is side `a`, and waits for it. -/
+def start (hasProgram caller far takeNew : Bool) : Guest :=
+  { side := if hasProgram then .a else .b, caller, far, takeNew, waiting := hasProgram }
+
+/-- Give the waiting guest its program, in its byte form, and the budget of
+    each machine run. The program is begun as the first process. -/
+def Guest.give (g : Guest) (program : ByteArray) (budget : Nat) : Guest :=
+  if !g.waiting then g else
+  match Wire.readProgram program with
+  | .error msg => { g with error := "bytes error: " ++ msg }
+  | .ok t =>
+    match beginRun budget t with
+    | some cfg => { g with cfg, budget, waiting := false, resting := false }
+    | none => { g with error := s!"no result within {budget} steps of a turn" }
 
 /-- 0: there is work. 1: resting. 2: closed. 3: failed. -/
 def Guest.state (g : Guest) : UInt8 :=
-  if g.error != "" then 3 else if g.closed then 2 else if g.resting && g.inbox.isEmpty then 1 else 0
+  if g.error != "" then 3 else if g.closed then 2
+  else if g.waiting || (g.resting && g.inbox.isEmpty) then 1 else 0
 
 /-! The record. -/
 
@@ -313,9 +325,9 @@ def recordText (me peer : String) (budget : Nat) (bodies : List Data) (procs : L
 
 /-- What a guest hands over: its name, its peer's, the budget, its log, the
     head, and a line for each of its processes. -/
-def Guest.record (g : Guest) : String :=
+def Guest.record (g : Guest) (me peer : String) : String :=
   if g.error != "" then "error " ++ g.error ++ "\n" else
-  recordText g.me g.peer g.budget (g.log.reverse.map noteData) (g.cfg.procs.map procLine)
+  recordText me peer g.budget (g.log.reverse.map noteData) (g.cfg.procs.map procLine)
 
 structure Record where
   me : String := ""
@@ -455,7 +467,8 @@ def reseal (record : ByteArray) : String :=
 
 def roomLimit : Nat := 8000
 
-/-- One exchange: `a` works and sends, `b` takes, works and answers. -/
+/-- One exchange: the caller works and sends, the other takes, works and
+    answers. -/
 def exchange (ab : Guest × Guest) : Guest × Guest :=
   let a := ab.1.work workLimit
   let b := (ab.2.take (a.batch roomLimit)).work workLimit
@@ -465,9 +478,15 @@ def pump : Nat → Guest × Guest → Guest × Guest
   | 0, ab => ab
   | n + 1, ab => if ab.1.closed then ab else pump n (exchange ab)
 
-/-- Run a program on two guests until they close, or `limit` exchanges. -/
+/-- Run a program on two guests until they close, or `limit` exchanges. The
+    first of the pair is the caller, which has no process; the second is given
+    the program. -/
 def simulate (program : ByteArray) (budget limit : Nat) (far takeNew : Bool) : Guest × Guest :=
-  pump limit (start program "a" "b" budget true far takeNew,
-    start ByteArray.empty "b" "a" budget false false false)
+  pump limit (start false true false false, (start true false far takeNew).give program budget)
+
+/-- The two records of `simulate`: the guest with the program first. -/
+def simulated (program : ByteArray) (budget limit : Nat) (far takeNew : Bool) : String × String :=
+  let ba := simulate program budget limit far takeNew
+  (ba.2.record "a" "b", ba.1.record "b" "a")
 
 end Surface.Cross

@@ -2,7 +2,6 @@ import Surface.Run
 import Surface.Bytes
 import Surface.Keep
 import Surface.Chan
-import Surface.Remote
 import Surface.Cross
 
 namespace Surface.Host
@@ -57,17 +56,20 @@ unsafe def reflectReplyBytes (program length out capacity : USize) (budget : UIn
     value the image holds between calls and cannot look inside, as a kept
     session is; a call that takes it uses it up. -/
 
-/-- C ABI: begin a guest. `flags` bit 0: this guest has the program, given in
-    its byte form, and starts it as its first process. Bit 1: its start
-    requests go to the peer. Bit 2: of the peer's sends it can take, it takes
-    the newest first. `me` and `peer` are the two guests' names, as text. -/
+/-- C ABI: begin a guest with no process. `flags` bit 0: this guest will be
+    given the program (`reflect_cross_give`). Bit 1: its start requests go to
+    the peer. Bit 2: of the peer's sends it can take, it takes the newest
+    first. Bit 3: it opens the exchanges and closes the run. -/
 @[export reflect_cross_start]
-unsafe def crossStart (program length me meLength peer peerLength : USize) (budget : UInt64)
-    (flags : UInt8) : Cross.Guest :=
-  Cross.start (copyBytes program length)
-    ((String.fromUTF8? (copyBytes me meLength)).getD "")
-    ((String.fromUTF8? (copyBytes peer peerLength)).getD "")
-    budget.toNat (flags &&& 1 == 1) (flags &&& 2 == 2) (flags &&& 4 == 4)
+def crossStart (flags : UInt8) : Cross.Guest :=
+  Cross.start (flags &&& 1 == 1) (flags &&& 8 == 8) (flags &&& 2 == 2) (flags &&& 4 == 4)
+
+/-- C ABI: give the guest its program, in its byte form, and the budget of
+    each machine run. It is begun as the first process. A guest that is not
+    waiting for a program is unchanged. -/
+@[export reflect_cross_give]
+unsafe def crossGive (g : Cross.Guest) (program length : USize) (budget : UInt64) : Cross.Guest :=
+  g.give (copyBytes program length) budget.toNat
 
 /-- C ABI: work until nothing is possible, or `Cross.workLimit` steps. -/
 @[export reflect_cross_work]
@@ -87,10 +89,14 @@ unsafe def crossBatch (g : Cross.Guest) (out capacity : USize) : USize :=
 @[export reflect_cross_state]
 def crossState (g : Cross.Guest) : UInt8 := g.state
 
-/-- C ABI: the guest's record, as text. -/
+/-- C ABI: the guest's record, as text. `me` and `peer` are the two guests'
+    names, as text. -/
 @[export reflect_cross_record]
-unsafe def crossRecord (g : Cross.Guest) (out capacity : USize) : USize :=
-  storeBytes out capacity g.record.toUTF8
+unsafe def crossRecord (g : Cross.Guest) (me meLength peer peerLength out capacity : USize) :
+    USize :=
+  storeBytes out capacity (g.record
+    ((String.fromUTF8? (copyBytes me meLength)).getD "")
+    ((String.fromUTF8? (copyBytes peer peerLength)).getD "")).toUTF8
 
 /-- C ABI: check two guests' records against a program's bytes. `a` is the
     record of the guest that had the program. Answers `accepted` and the
@@ -105,29 +111,6 @@ unsafe def crossCheck (program length a aLength b bLength out capacity : USize) 
 @[export reflect_cross_reseal]
 unsafe def crossReseal (record length out capacity : USize) : USize :=
   storeBytes out capacity (Cross.reseal (copyBytes record length)).toUTF8
-
-/-! The fixed remote program of `add-network-channels`. The network guests
-    call these until they carry crossings (`add-recorded-crossing`). -/
-
-/-- C ABI: the wire bytes a guest sends on a remote name. -/
-@[export reflect_remote_offer]
-unsafe def reflectRemoteOffer (out capacity : USize) : USize :=
-  storeBytes out capacity Surface.Remote.offerBytes
-
-/-- C ABI: offer bytes in, the reply-channel message out. -/
-@[export reflect_remote_take]
-unsafe def reflectRemoteTake (offer length out capacity : USize) : USize :=
-  storeBytes out capacity (Surface.Remote.takeBytes (copyBytes offer length))
-
-/-- C ABI: the delivery order, as the text of a schedule. -/
-@[export reflect_remote_log]
-unsafe def reflectRemoteLog (out capacity : USize) : USize :=
-  storeBytes out capacity Surface.Remote.logText.toUTF8
-
-/-- C ABI: 1 when replaying that schedule on one machine gives the same result. -/
-@[export reflect_remote_same]
-unsafe def reflectRemoteSame (_: USize) : USize :=
-  if Surface.Remote.same then 1 else 0
 
 /-- Build-only hook: a Lean abort the network check can ask for. -/
 @[export reflect_abort_alloc]

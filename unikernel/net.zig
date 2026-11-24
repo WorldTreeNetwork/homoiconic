@@ -13,9 +13,18 @@ extern fn reflect_reply_bytes(program: [*]const u8, length: usize, out: [*]u8, c
 extern fn reflect_abort_alloc(unused: usize) usize;
 extern fn reflect_command_line() [*]const u8;
 extern fn reflect_boot_take(out: [*]u8, capacity: usize) usize;
-extern fn reflect_remote_offer(out: [*]u8, capacity: usize) usize;
-extern fn reflect_remote_take(offer: [*]const u8, length: usize, out: [*]u8, capacity: usize) usize;
-extern fn reflect_remote_log(out: [*]u8, capacity: usize) usize;
+// A guest of a run on two machines. The guest is a Lean value held here
+// between calls; every call that takes it uses it up, so a call that only
+// reads it is given a second hold first (`kernel_retain`).
+const Guest = *anyopaque;
+extern fn reflect_cross_start(flags: u8) Guest;
+extern fn reflect_cross_give(g: Guest, program: [*]const u8, length: usize, budget: u64) Guest;
+extern fn reflect_cross_work(g: Guest) Guest;
+extern fn reflect_cross_take(g: Guest, batch: [*]const u8, length: usize) Guest;
+extern fn reflect_cross_batch(g: Guest, out: [*]u8, capacity: usize) usize;
+extern fn reflect_cross_state(g: Guest) u8;
+extern fn reflect_cross_record(g: Guest, me: [*]const u8, me_len: usize, peer: [*]const u8, peer_len: usize, out: [*]u8, capacity: usize) usize;
+extern fn kernel_retain(g: Guest) void;
 
 const Endpoint = struct {
     ip: [4]u8,
@@ -29,6 +38,8 @@ const Endpoint = struct {
     /// A QUIC word was given: this guest has an entity key and an allow-list,
     /// and answers nothing on the plain UDP port.
     guarded: bool,
+    spawn_far: bool,
+    take_new: bool,
 };
 const std = @import("std");
 const quic_mod = @import("quic.zig");
@@ -97,6 +108,12 @@ export fn net_serve() noreturn {
             putDec(ep.peer_port);
             say("\n");
         }
+        // The guest with `reflect.wire_port` is given the program; the one
+        // with `reflect.peer` opens the exchanges.
+        var flags: u8 = if (ep.wire_port != 0) 1 else 8;
+        if (ep.spawn_far) flags |= 2;
+        if (ep.take_new) flags |= 4;
+        cross = reflect_cross_start(flags);
         q_wire = true;
     }
     while (true) {
@@ -138,6 +155,10 @@ fn parse(s: []const u8) ?Endpoint {
     var peer_port: u16 = 0;
     var has_peer = false;
     var has_allow = false;
+    var spawn_far = false;
+    var saw_spawn = false;
+    var take_new = false;
+    var saw_take = false;
     var i: usize = 0;
     while (i < s.len) {
         while (i < s.len and s[i] == ' ') i += 1;
@@ -175,6 +196,14 @@ fn parse(s: []const u8) ?Endpoint {
             if (has_allow) return null;
             allow = entity.Allow.parseList(word["reflect.allow=".len..]) orelse return null;
             has_allow = true;
+        } else if (eql(word, "reflect.spawn=far") or eql(word, "reflect.spawn=near")) {
+            if (saw_spawn) return null;
+            saw_spawn = true;
+            spawn_far = eql(word, "reflect.spawn=far");
+        } else if (eql(word, "reflect.take=new") or eql(word, "reflect.take=old")) {
+            if (saw_take) return null;
+            saw_take = true;
+            take_new = eql(word, "reflect.take=new");
         } else return null;
     }
     // One QUIC connection: the service, the wire server or the peer, not two.
@@ -183,6 +212,8 @@ fn parse(s: []const u8) ?Endpoint {
     // A QUIC word needs the list of names it admits, and the list needs one.
     const guarded = saw_quic or saw_wire or has_peer;
     if (guarded != has_allow) return null;
+    // The crossing words mean something only on an end of the crossing.
+    if ((saw_spawn or saw_take) and !(saw_wire or has_peer)) return null;
     return .{
         .ip = ip orelse return null,
         .port = port orelse return null,
@@ -193,6 +224,8 @@ fn parse(s: []const u8) ?Endpoint {
         .has_peer = has_peer,
         .hook = hook,
         .guarded = guarded,
+        .spawn_far = spawn_far,
+        .take_new = take_new,
     };
 }
 
@@ -598,11 +631,7 @@ fn quicTick(nic: Nic, ep: Endpoint) void {
 
 var peer_mac: [6]u8 = .{0} ** 6;
 var peer_known = false;
-var wire_sent = false;
-var wire_done = false;
 var peer_said = false;
-var offer_buf: [2048]u8 = undefined;
-var offer_len: usize = 0;
 
 fn noteArp(frame: []const u8, ep: Endpoint) void {
     if (!ep.has_peer or frame.len < 42) return;
@@ -666,48 +695,199 @@ fn wireTick(nic: Nic, ep: Endpoint) void {
     wirePump(nic, ep);
 }
 
+// The crossing. Lean makes and reads every byte that crosses (the batches)
+// and the record; this file opens connections, moves the bytes and prints.
+var cross: Guest = undefined;
+var cross_buf: [8192]u8 = undefined;
+var record_buf: [1 << 18]u8 = undefined;
+var cross_printed = false;
+var cross_closed_at: u64 = 0;
+var cross_peer: entity.Name = .{0} ** 32; // the entity the batches come from
+var cross_peer_known = false;
+var x_open = false; // the caller has an exchange in flight
+var x_sent = false;
+var x_begun: u64 = 0;
+var x_last: u64 = 0;
+var x_ever = false;
+const x_gap: u64 = 20_000_000;
+const x_limit: u64 = 8_000_000_000;
+
+fn crossState() u8 {
+    kernel_retain(cross);
+    return reflect_cross_state(cross);
+}
+
+/// Work until Lean says nothing is possible, a bounded number of calls.
+fn crossSettle() void {
+    var calls: u32 = 0;
+    while (crossState() == 0 and calls < 64) : (calls += 1) cross = reflect_cross_work(cross);
+}
+
+fn crossBatch() []const u8 {
+    kernel_retain(cross);
+    const n = reflect_cross_batch(cross, &cross_buf, cross_buf.len);
+    if (n == 0 or n > cross_buf.len) halt("a batch does not fit");
+    return cross_buf[0..n];
+}
+
+/// The record: a `sig` line, this entity's public key and its Ed25519
+/// signature over the record's text as Lean gave it, then one line for each
+/// line of that text. Each side is named by its entity's name.
+fn crossPrint() void {
+    const mine = entity.text(&me.name);
+    const theirs = entity.text(&cross_peer);
+    const peer: []const u8 = if (cross_peer_known) theirs.slice() else "";
+    kernel_retain(cross);
+    const n = reflect_cross_record(cross, mine.slice().ptr, mine.slice().len, peer.ptr, peer.len, &record_buf, record_buf.len);
+    if (n > record_buf.len) halt("the record does not fit");
+    const sig = me.pair.sign(record_buf[0..n], null) catch halt("the record was not signed");
+    say("reflect: cross sig ");
+    putHex(&me.public);
+    say(" ");
+    putHex(&sig.toBytes());
+    say("\n");
+    var at: usize = 0;
+    while (at < n) {
+        var end = at;
+        while (end < n and record_buf[end] != '\n') end += 1;
+        say("reflect: cross ");
+        say(record_buf[at..end]);
+        say("\n");
+        at = end + 1;
+    }
+    say("reflect: cross done\n");
+    cross_printed = true;
+}
+
+fn putHex(bytes: []const u8) void {
+    const digits = "0123456789abcdef";
+    for (bytes) |b| {
+        const two = [2]u8{ digits[b >> 4], digits[b & 0xf] };
+        say(&two);
+    }
+}
+
 fn wirePump(nic: Nic, ep: Endpoint) void {
+    const state = crossState();
+    if (state == 3 and !cross_printed) {
+        crossPrint();
+        halt("the crossing failed");
+    }
     if (ep.wire_port != 0) {
         if (!q_answered and qconn.peer_fin) {
-            const n = reflect_remote_take(qconn.readApp().ptr, qconn.readApp().len, &answer_buf, answer_buf.len);
-            if (n != 0 and n <= answer_buf.len) _ = qconn.writeApp(answer_buf[0..n]);
+            const got = qconn.readApp();
+            if (got.len >= 4 and eql(got[0..4], "RFL1")) {
+                // The program, from a client: one run frame. Lean reads the
+                // bytes; this checks the frame as the UDP service does.
+                const reply = giveProgram(got);
+                if (reply.len != 0) _ = qconn.writeApp(reply);
+            } else if (q_peer) {
+                // A batch. Batches are taken from one entity only: the
+                // first on the list that sent one.
+                if (!cross_peer_known) {
+                    cross_peer = qconn.peer_name;
+                    cross_peer_known = true;
+                }
+                if (eql(&cross_peer, &qconn.peer_name)) {
+                    cross = reflect_cross_take(cross, got.ptr, got.len);
+                    crossSettle();
+                    _ = qconn.writeApp(crossBatch());
+                    if (crossState() == 2 and cross_closed_at == 0) cross_closed_at = mono();
+                }
+            }
             q_answered = true;
+        } else if (state == 0) {
+            cross = reflect_cross_work(cross);
         }
         var out: [1500]u8 = undefined;
         const n = qconn.send(&out, mono());
         if (n > 0 and q_peer) sendUdp(q_frame[0..42], nic, ep, out[0..n], ep.wire_port);
+        // The record is printed once the closing answer has had time to leave.
+        if (!cross_printed and cross_closed_at != 0 and mono() -| cross_closed_at > 300_000_000) crossPrint();
         return;
     }
     if (!peer_known) return;
-    if (!wire_sent and qconn.accepted) {
-        offer_len = reflect_remote_offer(&offer_buf, offer_buf.len);
-        if (offer_len == 0 or offer_len > offer_buf.len) halt("no remote offer");
-        if (!qconn.writeApp(offer_buf[0..offer_len])) halt("the offer was not sent");
-        wire_sent = true;
+    const now = mono();
+    if (state == 2) {
+        if (x_ever) {
+            var out: [1500]u8 = undefined;
+            const n = qconn.send(&out, now);
+            if (n > 0) sendTo(nic, ep, &peer_mac, &ep.peer_ip, ep.peer_port, 9000, out[0..n]);
+        }
+        if (!cross_printed and now -| x_last > 300_000_000) crossPrint();
+        return;
+    }
+    if (!x_open) {
+        if (state == 0) {
+            cross = reflect_cross_work(cross);
+            return;
+        }
+        if (x_ever and now -| x_last < x_gap) {
+            // Let the acknowledgement of the last answer leave.
+            var out: [1500]u8 = undefined;
+            const n = qconn.send(&out, now);
+            if (n > 0) sendTo(nic, ep, &peer_mac, &ep.peer_ip, ep.peer_port, 9000, out[0..n]);
+            return;
+        }
+        qconn = quic_mod.Conn.openClient(rdrand64, &me, &allow);
+        x_open = true;
+        x_sent = false;
+        x_ever = true;
+        x_begun = now;
+    }
+    if (!x_sent and qconn.accepted) {
+        // The other guest is the entity the first exchange reached. A later
+        // exchange that reaches another name on the list is dropped.
+        if (!cross_peer_known) {
+            cross_peer = qconn.peer_name;
+            cross_peer_known = true;
+        }
+        if (!eql(&cross_peer, &qconn.peer_name)) {
+            x_open = false;
+            x_last = now;
+            return;
+        }
+        if (!qconn.writeApp(crossBatch())) halt("a batch was not sent");
+        x_sent = true;
     }
     var out: [1500]u8 = undefined;
-    const n = qconn.send(&out, mono());
+    const n = qconn.send(&out, now);
     if (n > 0) sendTo(nic, ep, &peer_mac, &ep.peer_ip, ep.peer_port, 9000, out[0..n]);
     // The peer is not on this guest's list, or took none of this guest's
-    // handshake: said once.
-    if (!peer_said and !wire_done and (qconn.refused or qconn.gaveUp(mono()))) {
-        say(if (qconn.refused) "reflect: the peer is not allowed\n" else "reflect: the peer gave no answer\n");
-        peer_said = true;
+    // handshake: said once. The exchange is given up and opened again later.
+    if (qconn.refused or qconn.gaveUp(now)) {
+        if (!peer_said) {
+            say(if (qconn.refused) "reflect: the peer is not allowed\n" else "reflect: the peer gave no answer\n");
+            peer_said = true;
+        }
+        x_open = false;
+        x_last = now;
+        return;
     }
-    if (!wire_done and qconn.peer_fin) {
+    if (x_sent and qconn.peer_fin) {
         const got = qconn.readApp();
-        var expect: [256]u8 = undefined;
-        const want = reflect_remote_take(offer_buf[0..offer_len].ptr, offer_len, &expect, expect.len);
-        if (want == got.len and eql(got, expect[0..want])) {
-            say("reflect: remote ok\nreflect: log ");
-            var logb: [1024]u8 = undefined;
-            const ln = reflect_remote_log(&logb, logb.len);
-            const show = if (ln > logb.len) logb.len else ln;
-            say(logb[0..show]);
-            say("\n");
-        } else say("reflect: remote differs\n");
-        wire_done = true;
+        cross = reflect_cross_take(cross, got.ptr, got.len);
+        x_open = false;
+        x_last = mono();
+    } else if (now -| x_begun > x_limit) {
+        // No answer: the same batch goes again on a new connection.
+        x_open = false;
+        x_last = now;
     }
+}
+
+/// A run frame on the wire port gives the waiting guest its program and its
+/// budget. The answer is a run reply frame with no body.
+fn giveProgram(payload: []const u8) []const u8 {
+    if (payload.len < frame_len) return "";
+    if (payload[6] != 0 or payload[7] != 0) return "";
+    if (payload[4] != 0 or payload[5] != 0) return "";
+    const id = be64(payload[8..16]);
+    const budget = be64(payload[16..24]);
+    if (budget == 0 or budget > budget_max) return fillAnswer(1, 3, id, budget, "");
+    const body = payload[frame_len..];
+    cross = reflect_cross_give(cross, body.ptr, body.len, budget);
+    return fillAnswer(1, 0, id, budget, "");
 }
 
 fn quicPump(nic: Nic, ep: Endpoint) void {
