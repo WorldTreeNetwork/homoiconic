@@ -197,6 +197,24 @@ op is an event with an identifier.
 | `sealed_op_same`, `sealed_op_first` | The same two statements for ops, whose identifier is the name of the mark and the event as written |
 | `plan_step`, `step_plan` | An event happens exactly when the runs of its plan end somewhere and the plan gives the next configuration from there |
 
+### Crossing
+
+A run on two guests. Each guest logs its local events and its halves of the
+crossings; `combine` walks two logs into one schedule, and `accept` replays it.
+
+| Theorem | Says |
+|---|---|
+| `accepted_network` | A record the check accepts is a run of the one-machine network from the program: the schedule the two logs make leads the program, by direct evaluation, to a configuration whose compiled form is the one the check reports. This is `replay_true` applied to the merge; the check accepts by replaying |
+| `combine_merged` | The walk does only what the table of placements allows (`Merged`, a relation defined apart from the order the walk chooses) |
+| `merged_exact` | A walk keeps each guest's log whole and in its order |
+| `merged_once`, `Walk.once` | In a walk no crossing is taken twice |
+
+Axioms: `propext`, and `Quot.sound` for the first (`kernel/CrossingContract.lean`).
+Nothing is proved of a guest: that two guests following `Surface.Cross` produce
+logs that combine, and that the replay ends where they report, is tested by
+`kernel/CrossCheck.lean` and on two real guests by `unikernel/check-wire.sh`.
+That the walk finds a schedule whenever the table allows one is not proved.
+
 ### Stored state
 
 A store holds pieces under references and may lack any of them. A piece
@@ -324,6 +342,12 @@ theorems; `advance` is tested against it.
   guard is outside it. The Linux comparison shares the runtime adaptation, so
   it cannot find a defect they share. The clock is a stand-in from the tick
   counter; nothing a program computes depends on it.
+- **That a guest did what its record says.** A record is checked, not
+  believed. An accepted record is a run of the program and its process lines
+  are that run's; a guest that remakes its chain can hand over a record of
+  another run. A record's names are addresses and nothing signs it until
+  entity keys land (`homoiconic-q59.66`). Across machines a name is a number in
+  a packet, taken as sent: that it cannot be forged is a hypothesis.
 - **That a channel name cannot be guessed.** A name is a kind of data, so a
   number no longer hands a channel over, but a name value is not a key: a
   process can have one it does not hold, spliced into its code or answered

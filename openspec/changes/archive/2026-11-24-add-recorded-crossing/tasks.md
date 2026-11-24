@@ -1,0 +1,12 @@
+- [x] `kernel/Reflect/Crossing.lean`: `Side`, `Note`, `Mix`, `combine`, `accept`
+- [x] `kernel/Reflect/CrossingProof.lean`, `kernel/CrossingContract.lean`: `accepted_network`, `combine_exact`, `combine_events`, axioms printed, no `sorry`
+- [x] `kernel/Surface/Cross.lean`: the guest (state, step, packets, batches, record text), the record reader, `check`
+- [x] `kernel/CrossCheck.lean`: two guests in one process; both `take` orders of `examples/cross-race.hom` give two records and two results; tampered records refused, each with its reason
+- [x] Exports `reflect_cross_*` in `kernel/Surface/Host.lean`; `Surface.Remote` and `reflect_remote_*` removed; `host/check.sh` runs the contract and the check
+- [x] `unikernel/net.zig`: the program as one `RFL1` run frame on the wire port (the boot file is the entity key's, `add-entity-keys`), `reflect.spawn`, `reflect.take`, repeated exchanges, the record on serial
+- [x] `unikernel/cross-check.zig` and `unikernel/check-wire.sh`: two real guests, both orders, the records replay to what the guests reported, tampered records refused, each with its reason asserted; `remote-check` and `RemoteCheck.lean` gone from `build-net.sh` and `check-wire.sh`
+- [x] Controls: each refusal check fails with its check undone, log in `unikernel/evidence/`
+- [ ] Entity names from `add-entity-keys` in the record, signature checked by the host. Not done: that change's code had not landed. Bead `homoiconic-q59.66`; the record carries addresses and is not signed
+- [x] morphie: build.sh, build-net.sh, check.sh, check-net.sh, check-quic.sh, check-wire.sh; logs and hashes in `unikernel/evidence/`
+- [x] Fresh-context advise read (Fable), 2026-11-24: send-back with ten findings, the merge found sound; all ten answered in `design.md` and the code (the head, the strict mark, the hold in `Mix`, the turn kept at `out`, the idle rule, `Merged` and `merged_once`, reasons asserted)
+- [x] Fold: specs, `ARCHITECTURE.md`, `docs/PROOFS.md`, `docs/LEARNINGS.md`
