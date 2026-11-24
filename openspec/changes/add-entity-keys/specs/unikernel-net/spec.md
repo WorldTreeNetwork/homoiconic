@@ -1,0 +1,261 @@
+# unikernel-net delta: a key per entity
+
+## ADDED Requirements
+
+### Requirement: An entity is named by its key
+
+An entity SHALL have an Ed25519 key pair (RFC 8032): a 32-byte seed and a 32-byte public key. Its name SHALL be the 32 bytes `Blake3(P ‖ public key)`, where `P` is the 19 bytes `a2 63 61 6c 67 67 65 64 32 35 35 31 39 63 6b 65 79 58 20`, so that the hashed bytes are the dCBOR of `{"alg": "ed25519", "key": <public key>}`. This is the fingerprint of identikey-protocol (`docs/standards/identikey-auth-challenge-v1.md` §5). The text form of a name SHALL be base58 of those 32 bytes with the alphabet `123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz`, no prefix and no checksum, each leading zero byte written as `1`. A reader of the text form SHALL take only text that decodes to exactly 32 bytes and that the writer would have written for them (`unikernel/entity.zig` `nameOf`, `text`, `parse`). `unikernel/out-net/entity name <key-file>` SHALL print the text form of the name of the key in a 32-byte file and exit 0, and SHALL exit 2 for any other file. No image and no program SHALL hold a key or a name that it accepts without being given it: the constant key and certificate of `unikernel/quic.zig` are deleted, and nothing has a built-in name or allow-list. The seeds in `unikernel/quic-self.zig`, its own sequence and identikey's published fixture seed, are test input to a program that is not linked into an image. Only `ed25519` is built; a `p256` identikey identity has no name here yet.
+
+#### Scenario: The identikey vector
+
+- GIVEN the seed of 32 bytes `11`, identikey-protocol's fixture seed
+- WHEN `unikernel/out-net/quic-self` derives the key and its name
+- THEN the public key is `d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737` and the name in text is `6mUFfKo4KPLqjeAVqthhCZB82jgWjbo3RPJAAWdTynq1`, which identikey-protocol's `ClassicalPublicKey::fingerprint` printed for that key on 2026-11-24 (exit 40 otherwise)
+
+#### Scenario: Base58 both ways
+
+- GIVEN `quic-self`
+- WHEN it writes and reads back the names of its keys, 32 zero bytes and 32 bytes `ff`, and reads text with a character outside the alphabet, text of 31 and 33 bytes' worth, and a 32-byte value written with one more leading `1`
+- THEN every name reads back to itself and every other text is refused (exit 41 otherwise)
+
+### Requirement: The entity key is the file given at boot
+
+A guest whose command line has `reflect.quic_port`, `reflect.wire_port` or `reflect.peer` SHALL take its entity key from the one file Cloud Hypervisor was given with `--initramfs`: exactly 32 bytes, the Ed25519 seed. It SHALL take the bytes through the layer's export `reflect_boot_take`, which copies them out, clears the layer's copy and forgets the file, so that `/boot/program` does not open afterwards (`unikernel/kernel.zig`); it SHALL clear its copy of the bytes once the key pair is made (`unikernel/net.zig` `takeKey`). The key pair holds the seed, so the seed stays in guest memory for the whole boot, in that one place. With no file it SHALL print `reflect: no entity key`, with a file of another length `reflect: the entity key is not 32 bytes`, and with 32 zero bytes `reflect: the entity key is all zero`, and power off, each before `reflect: ready` and before the device is touched. It SHALL NOT fall back to any other key. A guest that has a key SHALL print `reflect: entity <name>` in the text form, once, before `reflect: ready`. The same file SHALL give the same name on every boot, and the guest SHALL keep nothing between boots. A guest with none of the three words SHALL serve UDP as before; a file given to it is cleared and not used. The image and its hash SHALL NOT depend on any key.
+
+What this does and does not protect SHALL be stated as it is. The launcher chooses the guest's image, memory and command line and can read that memory while it runs; so can root on the host and anyone who can read the key file or a snapshot. The launcher and the host therefore hold every key they give a guest, and a peer that trusts a name trusts the host that entity runs on. Nothing is attested. Giving the key as a file keeps it out of the tree, the image, the image's hash, the process list and the hypervisor's log, and nothing more. The key SHALL NOT be given on the command line. What a host that is on no list can still reach is ARP, the IPv4 and UDP checks and the QUIC handshake up to the allow check: hand-written Zig built without safety checks, in the address space that holds the key. There is no rotation and no revocation: a new key is a new name, and a host that was given a key keeps a working copy.
+
+#### Scenario: Two keys are two identities
+
+- GIVEN one `reflect-net.elf` and two key files made from `/dev/urandom`
+- WHEN a guest is booted with each
+- THEN the two `reflect: entity` lines differ, each equals `entity name` of its file, and a client that expects the first name refuses the guest with the second key (`unikernel/check-quic.sh`)
+
+#### Scenario: The same key is the same identity
+
+- GIVEN a guest that was booted with a key file and stopped
+- WHEN another guest is booted with the same file
+- THEN it prints the same `reflect: entity` line and the client that expects that name is served (`check-quic.sh`)
+
+#### Scenario: No key, no QUIC
+
+- GIVEN a command line with `reflect.quic_port` and `reflect.allow`
+- WHEN the guest is booted with no `--initramfs`, with a file of 31 bytes, and with a file of 32 zero bytes
+- THEN serial shows `reflect: no entity key`, `reflect: the entity key is not 32 bytes` and `reflect: the entity key is all zero` in turn, each with no `reflect: ready` and no `reflect: quic`, and Cloud Hypervisor exits (`check-quic.sh`)
+
+### Requirement: Each end proves its entity key and admits only allowed names
+
+The command line MAY carry `reflect.allow=<name>[,<name>...]`, at most once, with one to eight names in the text form and no name twice. It SHALL be given with exactly one of `reflect.quic_port`, `reflect.wire_port` and `reflect.peer` and not otherwise; a missing, repeated or malformed word SHALL be refused as other bad configuration is (`reflect: the network address is not valid`, `net.zig` `parse`). There is no setting that admits every name.
+
+The TLS 1.3 handshake inside QUIC SHALL use the signature scheme `ed25519` (0x0807) and raw public keys (RFC 7250). The ClientHello SHALL offer only `ed25519` and only raw public keys for both ends (extensions 19 and 20, value 2), and the server's EncryptedExtensions SHALL select them. Each Certificate message SHALL hold one entry, the 44-byte SubjectPublicKeyInfo of an Ed25519 key (`30 2a 30 05 06 03 2b 65 70 03 21 00` and the key); any other entry SHALL refuse the connection. The server SHALL send a CertificateRequest with an empty context and one extension, `signature_algorithms` holding `08 07`, and the client SHALL answer the server's flight with Certificate, CertificateVerify and Finished (`unikernel/quic.zig` `buildServerFlight`, `onServerFlight`, `onClientFlight`). The ClientHello's extensions 19 and 20 SHALL each be the list `01 02` and the EncryptedExtensions' the one byte `02`. The ClientHello and ServerHello randoms SHALL be 32 random bytes.
+
+The messages SHALL cover what RFC 8446 says they cover. The server's CertificateVerify SHALL be a signature over 64 spaces, `TLS 1.3, server CertificateVerify`, a zero byte and the hash of the transcript from ClientHello through the server's Certificate; the client's SHALL use `TLS 1.3, client CertificateVerify` and the transcript through the server's Finished and the client's Certificate (section 4.4.3). The server's Finished SHALL cover the transcript through its CertificateVerify and the client's the transcript through the client's CertificateVerify (section 4.4.4). The application secrets SHALL come from the transcript through the server's Finished and nothing after it (section 7.1). A reader SHALL refuse the connection for a Certificate whose context is not empty, that has no entry, a second entry or entry extensions, a CertificateVerify whose scheme is not `08 07` or whose signature is not 64 bytes, a message out of this order, a Finished that differs (compared in constant time), and bytes after Finished.
+
+A client SHALL, before it sends its own key or any application data, take the name of the server's key, require it to be in its allow-list, verify the CertificateVerify signature over the transcript with that key, and check the server's Finished. A server SHALL take the name of the client's key, require it to be in its allow-list, verify the client's CertificateVerify over the transcript and check the client's Finished, and only then make its 1-RTT keys. STREAM frames SHALL be taken only from 1-RTT packets and CRYPTO frames only from Initial and Handshake packets (RFC 9000 section 12.4); a packet with a frame its space does not allow SHALL be dropped whole, with none of its frames used. `readApp` SHALL give nothing, and the end of the peer's stream SHALL NOT be noted, on a connection whose handshake was not accepted (`quic.zig` `takeFrames`, `readApp`). Before this change a STREAM frame in an Initial packet, whose keys anyone can make, was taken: a serving guest ran its bytes, and a client could be handed a forged reply. On a connection whose handshake was accepted, `Conn.peer_name` SHALL be the other end's name; it is set at no other point.
+
+An end that fails any of these checks SHALL mark the connection refused, SHALL send nothing more on it, an acknowledgement included, and SHALL take nothing more from it. A serving guest's refused connection SHALL give way to the next new Initial at once. There is no CONNECTION_CLOSE, so the other end is not told and gives its flight up after ten sends. A guest prints nothing when it refuses a client.
+
+What a name on a connection means SHALL be stated as it is: the other end signed this handshake's transcript with that entity's key, which shows the entity or the host it was given to (the requirement "The entity key is the file given at boot"). A key cannot hand a lesser key to a guest; there is no delegation. The handshake is checked against this stack's own client and `quic-self`, not against another QUIC implementation.
+
+#### Scenario: A client that is not allowed
+
+- GIVEN a running guest with a QUIC port whose `reflect.allow` names one key
+- WHEN `quic-client ... denied` connects with another key, and then the allowed client connects at once
+- THEN the first client accepts the guest, gets no reply, sees its own flight given up and exits 0, and the allowed client, started half a second after it, is served within 2 seconds, while the first is still resending (`check-quic.sh`)
+
+#### Scenario: Refusals in one process
+
+- GIVEN `quic-self`, where `Conn.signer` makes an end sign with another key than the one it presents and `Conn.fault` makes it break one rule
+- WHEN a client expects another name than the server's (exit 42 unless refused); a server does not allow the client's name (43); a server presents an allowed key and signs with another (44); a client does the same (45); the right key signs a transcript hash with one bit changed, as server (46) and as client (47); a client sends only its Finished, with no Certificate and no CertificateVerify (48); and a Finished has one bit changed, from the server (49) and from the client (50)
+- THEN in each case the end that checks is marked refused and sends nothing more, a refusing server has made no 1-RTT keys, and no application byte is read on either end
+
+#### Scenario: Stream data before the handshake, in one process
+
+- GIVEN `quic-self` and `Conn.earlyStream`, which puts a STREAM frame with FIN beside the CRYPTO frame of a flight
+- WHEN a client's Initial flight, a server's Initial flight and a server's Handshake flight each carry one
+- THEN the receiving end's `readApp` is empty, the end of the stream is not noted, and the datagram changed nothing (exit 51 otherwise)
+
+#### Scenario: Stream data before the handshake, on a guest
+
+- GIVEN a guest booted with a QUIC port, a key, an allow-list and `reflect.hook=alloc`, which stops it at its first run request
+- WHEN `quic-client ... early` sends a first flight whose Initial packet also carries a STREAM frame with FIN holding a run request, and 3 seconds later the allowed client sends factorial
+- THEN the guest is up and has printed no `reflect: allocation failure` after the first, and prints it and powers off at the second (`check-quic.sh`)
+
+#### Scenario: A QUIC word without an allow-list
+
+- GIVEN the command line `reflect.ip=192.168.249.2 reflect.port=4444 reflect.quic_port=4445`, with no `reflect.allow`, and a key file
+- WHEN the guest starts
+- THEN serial shows `reflect: the network address is not valid` and no `reflect: ready`, and Cloud Hypervisor exits (`check-quic.sh`)
+
+### Requirement: The host client proves its key and pins the guest's name
+
+The host client `unikernel/out-net/quic-client <ip> <port> <budget> <program-file> <key-file> <server-name> [loss|wrong|denied|early|spoof <local-ip>|initial|silent]` SHALL read its entity key from a 32-byte file and SHALL accept only a guest whose name is `<server-name>`. Its connection IDs and its X25519 secret SHALL come from the operating system's `getrandom`. It SHALL send no application data on a refused connection (`quic.zig` `onServerFlight`, `writeApp`). It SHALL write only the guest's reply frame to standard output and exit 0 when it gets one; it SHALL exit 3 when it refuses the guest, 6 when a flight of its own is given up before any reply, 4 when nothing arrives within 60 seconds, and 2 for a wrong call, an unreadable program file, or a key file or name that is not well formed. With `wrong` it SHALL exit 0 only when it refuses the guest. With `denied` it SHALL exit 0 only when it accepted the guest and its flight was then given up with no reply, so a guest that never answered does not pass. With `early` it SHALL put its request in a STREAM frame in its Initial packet (`Conn.earlyStream`), send that first flight once, and exit 0 without waiting. With `spoof <local-ip>` it SHALL also bind a second socket to that address and play the second host of the requirement "A datagram that does not open changes nothing", and SHALL exit 5 when that socket receives anything, when the reply is not resent to the client while it is silent, or when the garbage was not sent. With `initial` it SHALL write the first datagram of a handshake to standard output and send nothing. It SHALL acknowledge the reply in a packet of its own before it exits, through its loss and reordering when `loss` is given; with `silent` it SHALL take the reply and leave without acknowledging it.
+
+#### Scenario: A wrong name is refused
+
+- GIVEN a running guest with a QUIC port
+- WHEN `quic-client ... wrong` connects expecting the name of another key
+- THEN the client refuses the handshake, sends neither its key nor a program, and exits 0 (`check-quic.sh`; `quic-self` checks the same in one process)
+
+### Requirement: A guest with a QUIC word does not answer plain UDP
+
+A guest whose command line has `reflect.quic_port`, `reflect.wire_port` or `reflect.peer` SHALL drop every datagram to `reflect.port`, a ping included, and SHALL evaluate nothing for it (`net.zig` `handle`). `reflect.port` SHALL still be required on the command line. A program reaches such a guest only over QUIC, from an entity on its allow-list. A guest with none of the three words SHALL serve `reflect.port` as before.
+
+#### Scenario: A ping beside QUIC
+
+- GIVEN a running guest with a QUIC port
+- WHEN a well-formed `RFL1` ping is sent to its `reflect.port`
+- THEN nothing comes back within 2 seconds, and factorial over QUIC is still served (`check-quic.sh`)
+
+### Requirement: The owner of an entity holds its key
+
+The entity key SHALL be a plain 32-byte file that its owner can make with any tool, and its name SHALL be computable from that file alone, offline (`entity name`, or identikey-protocol's fingerprint). The guest SHALL NOT make, change, send or store a key, and nothing in this capability SHALL require a service to hold a key or to recover one. An owner who stops using a launcher or this image keeps the key and the name.
+
+#### Scenario: A key made by hand
+
+- GIVEN `head -c 32 /dev/urandom > key`
+- WHEN `entity name key` is run on the build host and a guest is booted with that file
+- THEN the guest's `reflect: entity` line carries the name the tool printed (`check-quic.sh`)
+
+## MODIFIED Requirements
+
+### Requirement: An optional port serves one authenticated QUIC stream
+<!-- base: a93acac8383cace3c80a0d45a539be9c6d58df7c openspec/specs/unikernel-net/spec.md -->
+
+The command line MAY carry `reflect.quic_port=<port>`, at most once, with a port in 1..65535; a repeated or malformed word, the word together with `reflect.wire_port` or `reflect.peer`, or the word without `reflect.allow`, SHALL be refused as other bad configuration is (`reflect: the network address is not valid`). Without the word, and without the remote-channel words, the guest SHALL serve UDP exactly as before and SHALL NOT start the clock. With it the guest SHALL have an entity key or stop before `reflect: ready` (the requirement "The entity key is the file given at boot"), and after `reflect: ready` it SHALL start the paravirtual clock, open a QUIC server connection and print `reflect: quic <port>` on serial (`unikernel/net.zig` `net_serve`, `parse`). The QUIC layer (`unikernel/quic.zig`) SHALL speak QUIC version 1 with TLS 1.3, the cipher suite TLS_AES_128_GCM_SHA256, X25519 key exchange and Ed25519 raw public keys in both directions (the requirement "Each end proves its entity key and admits only allowed names"), with 8-byte connection IDs and random values from `RDRAND`. It SHALL carry one bidirectional stream. The guest SHALL read a stream only on a connection whose handshake was accepted, which a client on the allow-list reaches and no other. The client's stream, ended by FIN, SHALL be one `RFL1` frame of at most 1200 bytes, judged by the frame rules of the UDP service: a ping answered by a pong, a well-framed run with an out-of-range budget answered with status 3 and not evaluated, a run whose reply exceeds 1176 bytes answered with status 2, and anything else answered with nothing. A valid run SHALL call `reflect_reply_bytes` once, and the guest SHALL write the answering frame on the stream with FIN (`net.zig` `quicPump`, `answerBytes`). Zig SHALL NOT read the program or the outcome. The guest SHALL serve one QUIC connection at a time. After it has answered, the next datagram that opens as a new Initial SHALL start a new server connection, so a budget reply leaves the guest serving; when a connection gives way is the requirement "A datagram that does not open changes nothing". The build-only allocation hook SHALL apply to a QUIC run as it does to a UDP run.
+
+#### Scenario: Factorial, a budget reply, and the guest still up
+
+- GIVEN a guest booted with a key file and `reflect.ip=192.168.249.2 reflect.port=4444 reflect.quic_port=4445 reflect.allow=<the client's name>` on a TAP
+- WHEN `unikernel/out/quic-client` sends factorial with budget 100000000, then `examples/forever.hom` with budget 5000, then factorial again over new handshakes
+- THEN the first two reply frames have kind 1 and status 0, and each payload equals, byte for byte, what `unikernel/out/reply run` gives for the same program and budget in a Linux process (`unikernel/check-quic.sh`)
+
+#### Scenario: Two QUIC services on one command line
+
+- GIVEN a key file and the command line `reflect.ip=192.168.249.2 reflect.port=4444 reflect.quic_port=4445 reflect.allow=<a name>` with `reflect.wire_port=4446` added, and separately with `reflect.peer=192.168.249.3:4446` added
+- WHEN the guest starts
+- THEN serial shows `reflect: the network address is not valid` and no `reflect: ready`, and Cloud Hypervisor exits (`check-quic.sh`)
+
+### Requirement: A datagram that does not open changes nothing
+<!-- base: a93acac8383cace3c80a0d45a539be9c6d58df7c openspec/specs/unikernel-net/spec.md -->
+
+A datagram to a QUIC port SHALL change the guest's connection, and where the guest sends, only when one of its packets opens: its AEAD tag checks under keys of the connection it is given to (`quic.zig` `recv`, `open`). A server connection SHALL install the Initial keys named by a first Initial only if that packet opens, and either end SHALL take the peer's connection ID only from an Initial that opened (`quic.zig` `longPacket`). The guest SHALL send a server connection's packets to the address its first opened Initial came from and SHALL NOT move that address afterwards for any packet; there is no connection migration (`net.zig` `quicDatagram`). Once it has that address, a server connection SHALL be given datagrams only from that IPv4 address and UDP port; a datagram from anywhere else SHALL NOT reach it, whatever it would open, and can only start a connection under the policy below.
+
+A server connection SHALL give way to a new one only under this policy. The datagram SHALL be at least 1200 bytes and begin with a QUIC version 1 Initial with 8-byte connection IDs whose destination ID is not the present connection's (`quic.zig` `newInitial`); the present connection SHALL have answered its stream, or refused its client, or have opened no packet for 2 seconds by the paravirtual clock (`net.zig` `q_idle`); and the Initial SHALL open under the Initial keys of its own destination ID on a connection built aside, which replaces the present one only then. A first Initial in a datagram shorter than 1200 bytes SHALL start nothing. Every other long-header packet that does not open under the present connection's keys, of any type and from any address, SHALL be dropped with no effect. The guest's own connection to a peer (`reflect.peer`) SHALL never be replaced.
+
+What this does not give SHALL be stated as it is. Initial keys are derived from the connection ID in the packet, so opening as an Initial shows a well-formed QUIC client and nothing about who sent it. A client is authenticated when its handshake finishes and not before (the requirement "Each end proves its entity key and admits only allowed names"), so a host that keeps sending well-formed Initials, allowed or not, can still take the one connection each time it is free and hold it: for 2 seconds after its last packet that opened, and a packet that opens again, a new one or a replay, starts the 2 seconds again, so it holds the connection for as long as it sends and shuts every other client out, an allowed one included (`homoiconic-q59.63`). One that sends a well-formed Initial after the guest has answered ends that connection's resending of the reply. What a host that cannot open packets can no longer do is move, stall or reset an exchange in progress. Packets are not checked for replay.
+
+#### Scenario: A second address during an exchange
+
+- GIVEN a running guest with a QUIC port and a client whose handshake has been accepted
+- WHEN `quic-client ... spoof <local-ip>` sends, from a second address, a short-header datagram, a full-size Initial, a small Initial and a Handshake packet of random bytes and then the well-formed first datagram of another handshake, sends nothing for half a second, and then sends its program
+- THEN the second address receives nothing from the guest, and the client's reply equals the Linux process's (`check-quic.sh`)
+
+#### Scenario: Garbage long headers after the reply
+
+- GIVEN the same exchange, with the guest's first copy of the reply discarded by the client as a lost datagram would be
+- WHEN the same four garbage datagrams are sent from the client's address and then from the second address before the guest resends, and the client then sends nothing for half a second
+- THEN the guest resends the reply to the client within that time, the second address still receives nothing, and a later handshake is served (`check-quic.sh`)
+
+#### Scenario: An abandoned handshake
+
+- GIVEN a guest whose last client refused the handshake and sent no more
+- WHEN another client connects at once
+- THEN its Initials are dropped until the unfinished connection has been idle for 2 seconds, and then it is served (`check-quic.sh`, the step after the wrong pin)
+
+#### Scenario: Garbage in one process
+
+- GIVEN `unikernel/out/quic-self`
+- WHEN a full-size Initial, a Handshake packet and a short-header datagram of random bytes are given to both ends before every step of a clean exchange and of a lossy one
+- THEN no garbage datagram opens, the client's ID for the server does not change, both exchanges finish, and a real first flight cut to 1199 bytes starts nothing on a server
+
+### Requirement: The client distinguishes transport from execution
+<!-- base: a93acac8383cace3c80a0d45a539be9c6d58df7c openspec/specs/unikernel-net/spec.md -->
+
+The UDP client in `unikernel/check-net.sh` SHALL match source endpoint, reply kind, correlation ID, status and echoed budget. It SHALL use a bounded OS deadline, reject oversized/truncated responses and report timeout or transport failure separately from Lean's reply bytes. It SHALL NOT retry automatically or claim exactly-once delivery, authentication, confidentiality or a native wall-clock bound from a machine-step budget. What the QUIC client checks is the requirement "The host client proves its key and pins the guest's name".
+
+#### Scenario: Wrong reply and loss
+
+- GIVEN replies from the wrong endpoint, with the wrong ID, or no reply
+- WHEN the client waits
+- THEN unmatched replies are ignored and a deadline expires unsuccessfully; no bytes are presented as a successful matching outcome
+
+### Requirement: QUIC survives loss and reordering
+<!-- base: a93acac8383cace3c80a0d45a539be9c6d58df7c openspec/specs/unikernel-net/spec.md -->
+
+Each packet number space SHALL keep its unacknowledged flight and resend it, waiting 20 ms shifted left by the number of tries so far, at most by 6 (1.28 s), until the flight is finished or has been sent 10 times. After the tenth send, 6.36 s after the first, the flight SHALL be given up and not sent again (`quic.zig` `due`, `seal`, `max_tries`). Received CRYPTO and STREAM data SHALL be placed by offset, so packets that arrive out of order are used once the gap is filled (`holePut`).
+
+An acknowledgement SHALL finish only the flight of the packet number space it arrived in, and only when one of its ranges holds a packet number that flight went out as, from its first send to its latest (`quic.zig` `ack`, `acked`; RFC 9002 section 3). No other packet of a space is sent while its flight is on, so every number in that span is a copy of the flight. The same number in another space is another packet. The flights that no acknowledgement in their own space reaches SHALL finish as RFC 9001 has them finish: a server's Initial flight when the server opens a Handshake packet, after which it opens no Initial (section 4.9.1); a client's Initial flight when the client sends a Handshake packet; a client's Handshake flight when its 1-RTT packet is acknowledged (section 4.1.2); and a server's Handshake flight when the client's Finished checks.
+
+A packet with a CRYPTO or STREAM frame that opens SHALL leave an acknowledgement owed in its space. Every packet an end sends carries its space's ACK frame and pays what is owed. When a space owes an acknowledgement and has no flight on, the end SHALL send a packet in that space with only an ACK frame, once, which asks for nothing back and is not resent (`quic.zig` `ack_due`, `ackOnly`, `send`). A client that has its Finished to send owes nothing more in the Initial space. So the host client acknowledges the reply before it exits, and the guest that sent the offer acknowledges the answer (`quic-client.zig`, `net.zig` `wirePump`); the guest stops resending a reply when that acknowledgement arrives. A long header's Length SHALL be written in its shortest form, and every variable-length integer read SHALL be stepped over by its own encoded width, so a longer form than needed also reads.
+
+What this does not give SHALL be stated as it is. An acknowledgement is sent once; when it is lost the guest resends the reply to a client that has gone, up to the 10 sends over 6.36 s, unless another connection takes its place first. There is no congestion control or connection close, and stream data is limited to 8192 bytes each way. A connection is not closed for being idle or for a flight given up: it stays, sending nothing, until another takes its place, which an unfinished one allows after 2 idle seconds. An end whose flight is given up is not told why. `quic-client` exits 6 when a flight of its own is given up before any reply has come, and 4 at its 60 seconds otherwise; a guest that called a peer prints `reflect: the peer gave no answer`.
+
+#### Scenario: Loss and reordering against the guest
+
+- GIVEN a running guest with a QUIC port
+- WHEN `quic-client ... loss` drops every fifth datagram it sends and holds one back to send after the next
+- THEN factorial still comes back, byte for byte the Linux process's reply (`check-quic.sh`)
+
+#### Scenario: Loss in one process
+
+- GIVEN `unikernel/out/quic-self`, which `unikernel/build-net.sh` runs
+- WHEN it checks the RFC 9001 initial keys, a clean exchange, an exchange that drops every fifth datagram and swaps pairs in both directions, and a wrong pin
+- THEN it prints `quic self ok` and the build continues
+
+#### Scenario: An acknowledgement in another space
+
+- GIVEN `quic-self`, a server whose Initial and Handshake flights have both gone out as packet 0, and a client that was given the Initial packet of that datagram and not the Handshake packet
+- WHEN the client's resent first flight, an Initial that acknowledges Initial packet 0, reaches the server
+- THEN the server's next datagram is its Handshake flight alone, and the exchange finishes (exit 21 when the acknowledgement finished the Handshake flight too); the client, whose flight that packet 0 acknowledged, sent its acknowledgement of the server's Initial as an Initial of at least 1200 bytes
+
+#### Scenario: A reply the client acknowledges is sent once
+
+- GIVEN a finished exchange
+- WHEN the client's next datagram, in `quic-self`, reaches the server, and a real guest is watched on its TAP for 10 seconds from just before `quic-client` connects in `check-quic.sh`
+- THEN that datagram is one 1-RTT packet, the server sends nothing more for two minutes of its clock and the client nothing more (exits 30 to 32 otherwise); the guest sends exactly one datagram with a 1-RTT packet in it, the reply
+
+#### Scenario: A reply nobody acknowledges
+
+- GIVEN a finished exchange whose client's acknowledgement is lost, in `quic-self`, or a guest whose client was `quic-client ... silent`, which takes the reply and leaves without acknowledging it
+- WHEN the server is left for two minutes of its clock in `quic-self`, and a real guest is watched on its TAP for 11 seconds after that client has left in `check-quic.sh`
+- THEN in `quic-self` the server resends the reply fewer than 10 times and nothing after the first 70 seconds, and the client sends nothing after its one acknowledgement; the guest sends at least one and at most 9 more datagrams and none after the eighth second
+
+### Requirement: The QUIC check uses a real guest
+<!-- base: a93acac8383cace3c80a0d45a539be9c6d58df7c openspec/specs/unikernel-net/spec.md -->
+
+`unikernel/check-quic.sh` SHALL require KVM and Cloud Hypervisor v54.0, build with `build-net.sh` (which runs `quic-self`), create its own TAP, make three key files from `/dev/urandom` and take their names from `unikernel/out-net/entity name`, boot the network image with `reflect.quic_port`, the first key as the file given at boot and `reflect.allow` naming the second, wait up to 90 seconds for `reflect: quic <port>` on serial, and run factorial, the 5000-step budget, factorial on a new handshake, a client that expects another name (`wrong`), loss straight after it, a client whose key is not allowed (`denied`) with the allowed client started half a second after it and served within 2 seconds, a ping to `reflect.port` that must go unanswered, the second address (`spoof`, from a second address it gives its TAP), factorial again, the first flight with a bad and then a good UDP checksum, whose answer it requires to be at least 1200 bytes, factorial once more, factorial while it counts on the TAP the datagrams that carry the reply, factorial for a `silent` client, a watch on the TAP for the resends of that unacknowledged reply to stop, a first flight from a forged address, and factorial after it, comparing reply payloads with `unikernel/out/reply`. Before that boot it SHALL boot the two refused command lines, a command line with a QUIC port and no `reflect.allow`, a guest with a QUIC port and no file given at boot, a guest given a 31-byte file, a guest given 32 zero bytes, a guest with `reflect.hook=alloc` that an `early` client must leave running and the allowed client must stop, and a guest given the third key, whose entity line it requires to differ from the first key's and which the client that expects the first name must refuse. After the serving guest it SHALL boot the first key again and require the same entity line and factorial from the same pinned client. It SHALL require that the serving guest printed nothing but its entity line and its two start lines, print one `ok` line a step, and stop its guest and remove its TAP on exit, pass or fail.
+
+#### Scenario: The check passes
+
+- GIVEN morphie with Cloud Hypervisor 54.0
+- WHEN `sh unikernel/check-quic.sh` runs
+- THEN it prints twenty-seven `ok` lines and `quic guest ok`, and exits 0 (`unikernel/evidence/check-quic.log`)
+
+### Requirement: Two guests carry a remote channel over QUIC
+<!-- base: a93acac8383cace3c80a0d45a539be9c6d58df7c openspec/specs/unikernel-net/spec.md -->
+
+The command line MAY carry `reflect.wire_port=<port>` or `reflect.peer=<a.b.c.d>:<port>`, each at most once, not both, neither with `reflect.quic_port`, and each with `reflect.allow`; a repeated, malformed or combined word, or either without `reflect.allow`, SHALL be refused as other bad configuration is (`unikernel/net.zig` `parse`). A guest has one QUIC connection, and these three words each claim it. A guest with either SHALL have an entity key or stop as a QUIC guest does, and SHALL start the paravirtual clock as a QUIC guest does, or power off with `reflect: no monotonic clock`. A guest with `reflect.wire_port` SHALL print `reflect: wire <port>`, serve QUIC on that port with its entity key to a client whose name is in `reflect.allow`, and answer the first stream it receives, once per connection, with the bytes of the Lean export `reflect_remote_take` on what it received; bytes from Lean that are empty or longer than 1200 SHALL send nothing. A guest with `reflect.peer` SHALL print `reflect: peer <ip>:<port>`, find the peer's MAC by ARP, connect from UDP port 9000 as a QUIC client with its entity key that accepts only a server whose name is in `reflect.allow`, and once the handshake is accepted send the bytes of `reflect_remote_offer`. When the peer's stream ends it SHALL compare what came back with `reflect_remote_take` of its own offer, computed in its own Lean, and print `reflect: remote ok` and `reflect: log ` followed by the text of `reflect_remote_log` when they are equal, or `reflect: remote differs` when they are not (`net.zig` `wirePump`). When it refuses the server it SHALL print `reflect: the peer is not allowed`, once, and when a flight of its own is given up before an answer it SHALL print `reflect: the peer gave no answer`, once. It sends no offer to a server it refused. A server that refuses it never opens the offer it sent, which was sealed for that server after the server's name was checked. In both cases it stays up. Zig SHALL pass these bytes, compare them only for equality, and SHALL NOT decode them. The offer is the one program built into Lean (`Surface.Remote.program`, the text of `examples/remote.hom`); a peer guest sends nothing else.
+
+#### Scenario: Two guests on one bridge
+
+- GIVEN two key files, guest B booted with the second and `reflect.ip=192.168.249.3 reflect.port=4444 reflect.wire_port=4446 reflect.allow=<A's name>`, and guest A with the first and `reflect.ip=192.168.249.2 reflect.port=4444 reflect.peer=192.168.249.3:4446 reflect.allow=<B's name>`, each on its own TAP on one bridge
+- WHEN A connects to B
+- THEN B's serial shows `reflect: wire 4446`, and within 90 seconds A's serial shows `reflect: remote ok` and a `reflect: log ` line (`unikernel/check-wire.sh`)
+
+### Requirement: The wire check uses two real guests
+<!-- base: a93acac8383cace3c80a0d45a539be9c6d58df7c openspec/specs/unikernel-net/spec.md -->
+
+`unikernel/check-wire.sh` SHALL require KVM and Cloud Hypervisor v54.0, build with `build-net.sh`, run `kernel/RemoteCheck.lean` and require `ok   a remote closure replays to 42` with no `FAIL` line, run `unikernel/out/remote-check` (which links the same Lean objects as the guests and exits 0 only when `reflect_remote_same` gives 1), make three key files from `/dev/urandom`, and then boot the two guests of the scenario above on two TAPs on its own bridge. After they pass it SHALL boot the pair twice more: with A allowing the third key's name in place of B's, requiring `reflect: the peer is not allowed` on A's serial and no `reflect: remote ok`; and with B allowing the third key's name in place of A's, requiring `reflect: the peer gave no answer` on A's serial and no `reflect: remote ok`. It SHALL remove the TAPs and the bridge on exit. It stops the guests when every step passes; when a step fails they are left to their 180-second timeout.
+
+#### Scenario: The check passes
+
+- GIVEN morphie with Cloud Hypervisor 54.0
+- WHEN `sh unikernel/check-wire.sh` runs
+- THEN it prints `wire guests ok` and exits 0 (`unikernel/evidence/check-wire.log`)
+
+## REMOVED Requirements
+
+### Requirement: The client pins the guest certificate
+<!-- base: a93acac8383cace3c80a0d45a539be9c6d58df7c openspec/specs/unikernel-net/spec.md -->
+
+Replaced by "The host client proves its key and pins the guest's name" and "Each end proves its entity key and admits only allowed names". The certificate, its SHA-256 pin and the constant key are gone.
