@@ -24,7 +24,7 @@ An entry of a guest's log SHALL be one of five (`Reflect.Entry`): `did ev`, a lo
 
 ### Requirement: An accepted record is a run of the one-machine network
 
-For every operation table, when the schedule `combine a b` gives is run by `schedRun budget` from `beginRun budget p` and ends `.ran` at a configuration, that configuration SHALL be the compiled form of one `Network sourceP p` reaches by that schedule (`accepted_network`). When `combine a b` gives a schedule, the entries placed, in order, SHALL be an interleaving of `a` and `b` that keeps each whole and in order (`combine_exact`), and the schedule SHALL be the events of those entries (`combine_events`). `kernel/CrossingContract.lean` SHALL state them, SHALL print their axioms, and the axioms SHALL be among `propext`, `Classical.choice` and `Quot.sound`.
+For every operation table, when the schedule `combine a b` gives is run by `schedRun budget` from `beginRun budget p` and ends `.ran` at a configuration, that configuration SHALL be the compiled form of one `Network sourceP p` reaches by that schedule (`accepted_network`). When `combine a b` gives a schedule, the walk SHALL be one the table allows (`Merged`), and the entries placed, in order, SHALL keep `a` whole and in order and `b` whole and in order (`combine_merged`, `merged_exact`). `kernel/CrossingContract.lean` SHALL state them, SHALL print their axioms, and the axioms SHALL be among `propext`, `Classical.choice` and `Quot.sound`.
 
 #### Scenario: Axioms
 
@@ -34,7 +34,7 @@ For every operation table, when the schedule `combine a b` gives is run by `sche
 
 ### Requirement: The check replays and compares
 
-`Surface.Cross.check` SHALL read two records and a program's bytes, require that each record names the other and that the budgets agree, combine the logs, replay the schedule with that budget, and compare each process a guest reported with the process at its global place in the replay. It SHALL answer `accepted` only when all of these pass, and otherwise `refused` with the first reason. What the guests do is tested, not proved: no theorem speaks of a guest's step.
+`Surface.Cross.check` SHALL read two records and a program's bytes, require that each record names the other and that the budgets agree, combine the logs, replay the schedule with that budget, and compare each process a guest reported with the process at its global place in the replay. It SHALL refuse a mark that is not `[0, parent, order]`, and a record whose entry count or head name is not its log's. It SHALL answer `accepted` only when all of these pass, and otherwise `refused` with the first reason. The comparison is of lines: a finished value, or a payload, and the names held; what a waiting process does next is not compared. What the guests do is tested, not proved: no theorem speaks of a guest's step.
 
 #### Scenario: Delivery order decides, and each order replays to its own result
 

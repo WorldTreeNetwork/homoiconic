@@ -24,7 +24,7 @@ The command line MAY carry `reflect.wire_port=<port>` or `reflect.peer=<a.b.c.d>
 
 ### Requirement: The wire check replays the guests' records
 
-`unikernel/check-wire.sh` SHALL require KVM and Cloud Hypervisor v54.0, build with `build-net.sh`, run `kernel/CrossCheck.lean` with no `FAIL` line, boot two guests for each program and setting, collect both records from serial, and run `unikernel/out-net/cross-check` on the program's bytes and the two records. It SHALL require `accepted` and the expected result for each run, two different schedules for the two `take` settings of `examples/cross-race.hom`, and `refused` for records with an entry moved, dropped and repeated.
+`unikernel/check-wire.sh` SHALL require KVM and Cloud Hypervisor v54.0, build with `build-net.sh`, run `kernel/CrossCheck.lean` with no `FAIL` line, boot two guests for each program and setting, collect both records from serial, and run `unikernel/out-net/cross-check` on the program's bytes and the two records. It SHALL require `accepted` and the expected result for each run, two different schedules for the two `take` settings of `examples/cross-race.hom`, and, for records with an entry moved, dropped from the middle, dropped from the end and repeated, `refused` with the reason of the check that catches each.
 
 #### Scenario: The check passes
 
