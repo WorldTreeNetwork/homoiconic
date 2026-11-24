@@ -19,3 +19,17 @@ Must-fix findings, and what was done:
 Notes taken: the seed stays in memory inside the key pair (said so); 32 zero bytes are refused; the `denied` check must not pass against a dead guest and the give-way after a refusal is timed; the name vector is now a value identikey's own code printed; the hello randoms are random; Finished is compared in constant time; no rotation or revocation (said so).
 
 Not done: a run against another TLS 1.3 stack with raw public keys. Stated in the spec as not checked.
+
+## 2026-11-24, second read: send-back, on text and check lists only
+
+Fresh context, Claude Fable 5.2, given this directory with the first review in it. "The design is sound and buildable, and M1 to M5 are each addressed in the design and deltas. Five things need fixing first; all are edits to text and check lists, none changes the design." The handshake table had no error in order, coverage or encoding against RFC 8446, RFC 7250 and RFC 9001.
+
+| | Finding | Done |
+|---|---|---|
+| F1 | The control for "stream data before the handshake" would not fail on a guest: with the space rule alone removed, the second gate (`peer_fin` only when accepted) keeps the guest up. | Design §8 states both controls, and that the second gate has no check of its own. |
+| F2 | "Dropped whole" was not defined against "opens"; today every side effect (`opens`, keys, connection ID, address validation, `mark`) happens before frames are read. | The design and the delta define it: a packet that fails its frame check, and any packet for a refused connection, counts as not opened, with the list of what that means. Frames are walked before anything changes. |
+| F3 | The design claimed a check for each reader rule; only four faults existed. A standard client's empty Certificate was unchecked. | `Conn.tamper` and cases 52 to 67 in `quic-self`, each direction, each with a control. |
+| F4 | `tasks.md` and `proposal.md` were not revised. | Revised. |
+| F5 | RFC 9000 §12.4 allows CRYPTO in 1-RTT; the SHALL cited it for the opposite. | The citation is for STREAM only; the CRYPTO rule is said to be stricter than the RFC, with what that costs against a standard server. |
+
+Notes taken: the give-way check is timed at 0.1 s and 1 s and its control text corrected; `early` exits 2 when it sent nothing; exit 6 waits out the last send; the sentence about the seed says what is and is not cleared; dates are UTC.
