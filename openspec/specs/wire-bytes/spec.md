@@ -126,9 +126,9 @@ Saving SHALL cut a value from the leaves up, store each part whose byte form is 
 
 What saving leaves and the root it gives SHALL be a function of the value a partial piece stands for, when every reference in the piece is one saving made. `Wire.Made size σ p q` SHALL say so: the partial piece `p` resolves to the whole piece `q` in the store `σ`, and each reference in `p`, and in the pieces `σ` holds under them, is the reference cutting at `size` gives the value it stands for. It SHALL be proved, with no axiom beyond Lean's own, that a piece with no reference in it is `Made` (`Made.whole`); that two pieces `Made` for one value are cut to the same piece and saved under the same root, whatever their stores hold (`cut_function`, `same_root`); that what `cut` leaves is `Made` for the same value in any store that holds the old pieces and the pieces it stored (`cut_made`); that a step of the lazy machine, on any part of the store, keeps every reference one that saving made (`lstep_good`); and that the root resolves to the value in such a store (`save_resolves`). The hash SHALL be used as the function it is: these statements assume nothing of it, and do not say that different values have different roots. The proofs are in `kernel/Wire/PieceProof.lean` and the exact statements in `kernel/RootContract.lean`, which `host/check.sh` runs.
 
-Three things are not proved. A store that holds two different pieces under one hash does not exist, so `cut_made`, `save_resolves` and `save_opened` say nothing when two stored pieces collide. That a piece read from its bytes is the piece that was written is tested (`kernel/KeepCheck.lean`). And the session of a VM and of a node is tested: `Surface.Keep.full` and `parts` are `partial`, so Lean proves nothing of them, and `openState` and `openNode` are not covered. The session of one turn of a program is proved to hold and save only references that saving made; see the next requirement.
+Three things are not proved. A store that holds two different pieces under one hash does not exist, so `cut_made`, `save_resolves` and `save_opened` say nothing when two stored pieces collide. That a piece read from its bytes is the piece that was written is tested (`kernel/KeepCheck.lean`). And that the piece a session saves stands for the state the request and log theorems speak of is tested, for a turn, a VM and a node alike: nothing is proved of what a session computes. `Surface.Keep.full` is `partial`, so Lean proves nothing of it but its type. Every session is proved to hold and save only references that saving made; see the next two requirements.
 
-A root is not always a reference saving would make inside a value: the top is stored whatever its size, and a part of at most `size` bytes is otherwise left in place. So the statement does not hold of a piece that holds the root of a small piece. Until 2026-11-23 `Surface.Keep.answer` started a turn from the root itself, and a waiting program that keeps hold of the function it was resumed from was then saved under another root than the same value held whole (`homoiconic-q59.47`: `fn f -> f 5 (fn x -> ask 7 (fn y -> f))`, whose first turn waits with a function of 36 bytes, answered with 0, was saved under `af0852f8…` and held whole under `c53dc525…`). A turn no longer does that; see the next requirement. A VM and a node are opened through the pieces under the root, so the root does not enter their state; that is read off `openState` and `openNode` and borne out by `kernel/LogCheck.lean` and `kernel/NodeCheck.lean`, not proved.
+A root is not always a reference saving would make inside a value: the top is stored whatever its size, and a part of at most `size` bytes is otherwise left in place. So the statement does not hold of a piece that holds the root of a small piece. Until 2026-11-23 `Surface.Keep.answer` started a turn from the root itself, and a waiting program that keeps hold of the function it was resumed from was then saved under another root than the same value held whole (`homoiconic-q59.47`: `fn f -> f 5 (fn x -> ask 7 (fn y -> f))`, whose first turn waits with a function of 36 bytes, answered with 0, was saved under `af0852f8…` and held whole under `c53dc525…`). A turn no longer does that; see the next requirement. A VM and a node are opened through the pieces under the root, so the root does not enter their state; since 2026-11-24 that is proved (`openState_good`, `openNode_good`, in the requirement after the next).
 
 #### Scenario: The statements are checked
 
@@ -147,7 +147,7 @@ What this leaves unproved of `keep`, each a hypothesis of a statement above and 
 - `give_turn` assumes that the pieces the session holds, with the piece just read among them, are part of the store. That needs reading a piece's bytes to give the piece that was written, which is tested, and the session's map to give back what was put in it, for which Lean 4.35 has no lawful equality and hash on `ByteArray`.
 - `answer_turn` assumes the root's name reads back to the root (`unhex` of `hex`), and takes from `save_opened` that the store holds each saved piece under its reference, which fails only when two pieces share a hash.
 - That the function a turn saves is the one the request theorems speak of (`Reflect.lazy_turn_complete`) is not joined to this. What is proved is about its references: whatever value it resolves to, its root is that value's root.
-- A VM and a node (`vmStart`, `vmFrom`, `nodeStart`, `nodeFrom`) are not covered: `Inv` is false of their phases (`homoiconic-q59.54`).
+- `Inv` is false of the phases of a VM and of a node. They are covered by `Held`, in the requirement after this one.
 
 #### Scenario: A program that keeps hold of the function it was resumed from
 
@@ -160,6 +160,32 @@ What this leaves unproved of `keep`, each a hypothesis of a statement above and 
 - GIVEN `kernel/RootContract.lean`
 - WHEN it is checked
 - THEN `save_opened`, `advance_turn`, `start_turn`, `answer_turn`, `give_turn` and `waits_root` hold as written and each depends on no axiom but `propext`, `Classical.choice` and `Quot.sound`
+
+### Requirement: A VM's and a node's session save only references saving made
+
+`Surface.Keep.parts` SHALL take a bound on the references the whole list passes through, the number of pieces the session holds and one more, and SHALL give `none` for a list that passes through more. Only a list that meets a reference twice does, and such a list has no end. `parts` SHALL NOT be `partial`. Until 2026-11-24 it was, with a bound on each run of references and none on the list; on a list with an end the two give the same parts, which is argued here and not proved, since Lean proves nothing of the old one. `host/check.sh` printed the same before and after the change, apart from its build lines and the lines of the new statements.
+
+It SHALL be proved, with no axiom beyond Lean's own, that a session of any kind, a turn, a VM handling a log or a node applying one, begun from a program (`start`, `vmStart`, `nodeStart`) or from a kept root (`answer`, `vmFrom`, `nodeFrom`) and carried on by `give`, holds only references saving made in every phase, and at its end has saved a waiting function, a VM's state or a node every reference of which saving made, or has stored nothing (`Held`, `Kept`, `advance_kept`, `vmStart_kept`, `vmFrom_kept`, `nodeStart_kept`, `nodeFrom_kept`, `give_kept`). On the way it SHALL be proved that reading a kept state and a kept node through a part of the store gives only such functions (`openState_good`, `openNode_good`, with `parts_good`), and that the runs `Reflect.plan` gives an event take only functions the configuration held and leave a configuration that holds those and where the runs ended (`plan_good`). So the root a VM or a node reports is the root of the value its piece resolves to (`Wire.good_root`). The proofs are in `kernel/Surface/KeepLogProof.lean` and the exact statements in `kernel/RootContract.lean`.
+
+`restart_same_root` asks that each piece be `Made` for the state `log_restart` speaks of. `Made` is two things (`Wire.made_iff`): every reference was made by saving (`Good`), and the piece resolves to the state (`Unf`). `restart_root` SHALL state it with the two apart. The first is what `Kept` gives of what a session saved. For a node, `wholeNode` SHALL be the node as a piece with no reference in it, `made_node` SHALL say when a session's node piece stands for it, and `node_same_root`, `node_restart_same_root` and `node_restart_root` SHALL say of a node what `state_same_root`, `restart_same_root` and `restart_root` say of a VM.
+
+What this leaves unproved of a VM and a node, each a hypothesis of a statement above and none an axiom:
+
+- The `Unf` half: that the piece a session saves resolves to the state `Reflect.Logged` or `Reflect.Ran` gives the program and the log. This is the session against the log theorems: that `steps`, `chase`, `full`, `openState` and `openNode` compute what `Reflect.handleRun` and `Reflect.plan`'s jobs compute. `restart_root` and `node_restart_root` take it as a hypothesis, so a restart having the replay's root is not proved of a session from its start; it is tested (`kernel/LogCheck.lean`, `kernel/NodeCheck.lean`). `full` would have to stop being `partial` for it.
+- `give_kept` has `give_turn`'s hypothesis, and `vmFrom_kept` and `nodeFrom_kept` have `answer_turn`'s two: the root's name reads back to the root, and the piece under the root, as `Wire.opened` holds it, has only references saving made, which `save_opened` gives for a root saving gave.
+- `vmStart_kept` and `nodeStart_kept` assume nothing.
+
+#### Scenario: The statements are checked
+
+- GIVEN `kernel/RootContract.lean`
+- WHEN it is checked
+- THEN `advance_kept`, `vmStart_kept`, `vmFrom_kept`, `nodeStart_kept`, `nodeFrom_kept`, `give_kept`, `openState_good`, `openNode_good`, `plan_good`, `restart_root`, `made_node`, `node_same_root`, `node_restart_same_root` and `node_restart_root` hold as written and each depends on no axiom but `propext`, `Classical.choice` and `Quot.sound`
+
+#### Scenario: The sessions behave as before
+
+- GIVEN `kernel/LogCheck.lean` and `kernel/NodeCheck.lean`, with the malformed pieces they try
+- WHEN they run with `parts` bounded
+- THEN every line is the line printed before the change
 
 ### Requirement: A text is stored whole
 
