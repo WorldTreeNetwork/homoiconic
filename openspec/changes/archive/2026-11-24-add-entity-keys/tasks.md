@@ -13,4 +13,4 @@
 - [x] Each check shown to fail with its fix undone (`unikernel/evidence/entity-keys-controls.log`)
 - [x] Final run on morphie from a `git archive` export: `build.sh`, `build-net.sh`, `check.sh`, `check-net.sh`, `check-quic.sh`, `check-wire.sh`; logs and manifests in `unikernel/evidence/`
 - [x] `host/check.sh` passes locally
-- [ ] Mjolnir: change opened, vendored client updated, spawn gives each guest a key and names, acceptance rerun on morphie; or a precise bead
+- [x] Mjolnir: `add-unikernel-entity-keys` opened, built and folded there (mjolnir `71d90c5`): vendored client from `e9a4c86`, spawn takes the owner's `entity_key` and an `allow` list, Mjolnir has a client key of its own; its acceptance passed on morphie against this image, 47 PASS. `mjolnir-6h01` closed; `mjolnir-0wm4` filed for the deploy that does not build the two Zig binaries
