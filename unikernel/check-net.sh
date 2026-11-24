@@ -121,10 +121,12 @@ def udp(payload, dst=guest_ip, dport=port, bad_sum=False, src=host_ip):
 def recv_app(deadline=3):
     end = time.time() + deadline
     while time.time() < end:
+        # The socket's timeout is shorter than a long run: keep waiting
+        # until the deadline, not the first quiet interval.
         try:
             pkt = s.recv(2048)
         except socket.timeout:
-            return None
+            continue
         if len(pkt) < 42 or pkt[12:14] != b"\x08\x00" or pkt[23] != 17:
             continue
         if pkt[26:30] != guest_ip or pkt[30:34] != host_ip:
