@@ -2,8 +2,9 @@
 //! and exchanges with garbage datagrams given to both ends at every step.
 //! Then what a server sends and stops sending: an acknowledgement in one
 //! packet number space leaves the flight of another, a first flight nobody
-//! follows is answered with at most three times its bytes, and a reply
-//! nobody acknowledges is given up.
+//! follows is answered with at most three times its bytes and in datagrams
+//! of at least 1200 bytes, a reply the client acknowledges is sent once, and
+//! a reply nobody acknowledges is given up.
 const std = @import("std");
 const quic = @import("quic.zig");
 
@@ -174,7 +175,9 @@ fn spaces() u8 {
     const a0 = client.send(&a, 0);
     if (a0 == 0 or !server.recv(a[0..a0], 0)) return 20;
     // The client resends before the answer comes, and the resend is lost:
-    // the answer acknowledges packet 0, the client waits on packet 1.
+    // the answer acknowledges packet 0, a copy of the client's flight, which
+    // is then done. The client acknowledges the server's Initial in an
+    // Initial of its own, padded to 1200 bytes, which asks for nothing back.
     var lost: [1500]u8 = undefined;
     if (client.send(&lost, 50 * ms) == 0) return 20;
     const dn = server.send(&d, 50 * ms);
@@ -182,7 +185,7 @@ fn spaces() u8 {
     if (cut >= dn) return 20; // Initial and Handshake left in one datagram
     if (!client.recv(d[0..cut], 50 * ms)) return 20;
     const a2 = client.send(&a, 140 * ms);
-    if (a2 == 0 or a[0] & 0xf0 != 0xc0 or firstLen(a[0..a2]) != a2) return 20; // one Initial
+    if (a2 < quic.min_initial or a[0] & 0xf0 != 0xc0 or firstLen(a[0..a2]) != a2) return 20; // one Initial
     if (!server.recv(a[0..a2], 140 * ms)) return 20;
     const r = server.send(&d, 140 * ms);
     if (r == 0) return 21; // the Initial acknowledgement cleared the Handshake flight
@@ -210,6 +213,8 @@ fn unvalidated() u8 {
         const n = server.send(&d, now);
         total += n;
         if (n != 0) sends += 1;
+        // Every datagram with the Initial flight is 1200 bytes or more.
+        if (n != 0 and n < quic.min_initial) return 29;
     }
     if (sends < 2) return 23; // it does resend to a client that may have lost the flight
     if (total > quic.amplification * a0) return 24;
@@ -220,8 +225,29 @@ fn unvalidated() u8 {
     return drive(&client, &server, now, false, false, false);
 }
 
-/// The client never acknowledges the reply. The server resends it and then
-/// gives it up; the client, whose flights were all acknowledged, is silent.
+/// The client acknowledges the reply in a packet of its own, once, and the
+/// server sends nothing more.
+fn acknowledged() u8 {
+    const pin = pinned();
+    var client = quic.Conn.openClient(rnd, &pin);
+    var server = quic.Conn.openServer(rnd);
+    const done = drive(&client, &server, 0, false, false, false);
+    if (done != 0) return done;
+    var d: [1500]u8 = undefined;
+    const a = client.send(&d, 10_000 * ms);
+    if (a == 0 or d[0] & 0x80 != 0) return 30; // a 1-RTT acknowledgement
+    if (!server.recv(d[0..a], 10_000 * ms)) return 30;
+    var now: u64 = 10_000 * ms;
+    while (now < 130_000 * ms) : (now += 10 * ms) {
+        if (client.send(&d, now) != 0) return 31; // one acknowledgement, not answered
+        if (server.send(&d, now) != 0) return 32; // the reply is not sent again
+    }
+    return 0;
+}
+
+/// The client never acknowledges the reply: its acknowledgement is lost. The
+/// server resends it and then gives it up; the client acknowledged once and
+/// is silent since.
 fn givesUp() u8 {
     const pin = pinned();
     var client = quic.Conn.openClient(rnd, &pin);
@@ -229,6 +255,7 @@ fn givesUp() u8 {
     const done = drive(&client, &server, 0, false, false, false);
     if (done != 0) return done;
     var d: [1500]u8 = undefined;
+    if (client.send(&d, 10_000 * ms) == 0) return 26; // lost
     var sends: usize = 0;
     var last: u64 = 0;
     var now: u64 = 10_000 * ms;
@@ -261,6 +288,8 @@ pub fn main() u8 {
     if (own != 0) return own;
     const bound = unvalidated();
     if (bound != 0) return bound;
+    const once = acknowledged();
+    if (once != 0) return once;
     const quiet = givesUp();
     if (quiet != 0) return quiet;
     std.debug.print("quic self ok\n", .{});

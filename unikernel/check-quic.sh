@@ -3,10 +3,11 @@
 # with the guest still answering, a wrong peer key, loss plus reordering,
 # and a second host that sends what it likes: garbage and a new handshake in
 # the middle of an exchange, garbage long headers after the reply, and a
-# first flight with a bad UDP checksum. Then what the guest stops sending: a
-# reply nobody acknowledges is given up, and a first flight from an address
-# that is never heard from again is answered with at most three times its
-# bytes. Before all that, the command lines that ask for two QUIC services at
+# first flight with a bad UDP checksum. Then what the guest sends and stops
+# sending: its answer to a first flight is at least 1200 bytes, a reply the
+# client acknowledges is sent once, a reply nobody acknowledges is given up,
+# and a first flight from an address that is never heard from again is
+# answered with at most three times its bytes, in datagrams of 1200 or more. Before all that, the command lines that ask for two QUIC services at
 # once, which the guest refuses.
 set -eu
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
@@ -177,6 +178,7 @@ def send(bad):
     u[6:8] = struct.pack("!H", cs)
     s.send(guest_mac + host_mac + b"\x08\x00" + bytes(ip) + bytes(u))
 
+# The UDP payload bytes of the first datagram the guest sends back, or 0.
 def answered(seconds):
     end = time.time() + seconds
     while time.time() < end:
@@ -184,20 +186,26 @@ def answered(seconds):
         try:
             pkt = s.recv(4096)
         except socket.timeout:
-            return False
+            return 0
         if len(pkt) >= 42 and pkt[12:14] == b"\x08\x00" and pkt[23] == 17 and pkt[26:30] == guest_ip \
                 and struct.unpack("!H", pkt[34:36])[0] == qport and struct.unpack("!H", pkt[36:38])[0] == sport:
-            return True
-    return False
+            return struct.unpack("!H", pkt[38:40])[0] - 8
+    return 0
 
 send(bad=True)
 if answered(1.0):
     sys.exit("a first flight with a bad UDP checksum was answered")
 send(bad=False)
-if not answered(3.0):
+got = answered(3.0)
+if not got:
     sys.exit("the same first flight with a good checksum was not answered")
+# RFC 9000 section 14.1: a datagram with a server's ack-eliciting Initial is
+# expanded to at least 1200 bytes.
+if got < 1200:
+    sys.exit("the answer to a first flight is %d bytes, under 1200" % got)
+print("     the answer to a first flight of %d bytes is %d bytes" % (len(payload), got))
 PY
-echo "ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered"
+echo "ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered in 1200 bytes or more"
 
 # That handshake is left unfinished too; the guest still serves.
 factorial fact4
@@ -266,10 +274,45 @@ def watch(seconds, todo=()):
             continue
         if len(pkt) >= 42 and pkt[12:14] == b"\x08\x00" and pkt[23] == 17 and pkt[26:30] == guest_ip \
                 and struct.unpack("!H", pkt[34:36])[0] == qport:
+            ulen = struct.unpack("!H", pkt[38:40])[0]
             seen.append((time.time() - start, pkt[30:34], struct.unpack("!H", pkt[36:38])[0],
-                         struct.unpack("!H", pkt[38:40])[0] - 8))
+                         ulen - 8, pkt[42:34 + ulen]))
 
-if mode == "quiet":
+def var(b, o):
+    w = 1 << (b[o] >> 6)
+    v = b[o] & 0x3f
+    for i in range(1, w):
+        v = (v << 8) | b[o + i]
+    return v, w
+
+# Whether a datagram carries a 1-RTT packet: its long-header packets are
+# stepped over by their Length fields, which header protection leaves alone.
+def one_rtt(d):
+    i = 0
+    while i < len(d):
+        if d[i] & 0x80 == 0:
+            return True
+        o = i + 23
+        if d[i] & 0x30 == 0:
+            t, w = var(d, o)
+            o += w + t
+        n, w = var(d, o)
+        i = o + w + n
+    return False
+
+if mode == "once":
+    # An exchange runs while this listens. The guest sends the reply, the
+    # only 1-RTT packet it has, and the client acknowledges it: no resend in
+    # the time the guest would take to give a reply up.
+    seen = watch(10.0)
+    replies = [e for e in seen if one_rtt(e[4])]
+    if not replies:
+        sys.exit("no reply was seen")
+    if len(replies) != 1:
+        sys.exit("the guest sent the reply %d times, the last at %.1f s"
+                 % (len(replies), replies[-1][0] - replies[0][0]))
+    print("     the reply went out once; %d datagrams in all" % len(seen))
+elif mode == "quiet":
     # The exchange before this left a reply the client never acknowledged.
     seen = watch(11.0)
     if not seen:
@@ -292,11 +335,30 @@ elif mode == "forged":
                  % (len(payload), total, len(there)))
     if len(seen) != len(there):
         sys.exit("the guest sent to an address other than the first flight's")
+    small = [e[3] for e in there if e[3] < 1200]
+    if small:
+        sys.exit("the guest answered a first flight in datagrams under 1200 bytes: %s" % small)
     print("     %d datagrams and %d bytes for a first flight of %d bytes" % (len(there), total, len(payload)))
 else:
-    sys.exit("watch: quiet or forged")
+    sys.exit("watch: once, quiet or forged")
 PY
 }
+
+# A client that acknowledges the reply is sent it once.
+watch once > "$OUT/once.txt" 2>&1 &
+wpid=$!
+sleep 1
+factorial once
+if ! wait "$wpid"; then
+    cat "$OUT/once.txt" >&2
+    exit 1
+fi
+cat "$OUT/once.txt"
+echo "ok   a reply the client acknowledges is sent once"
+
+# A client that takes the reply and leaves without acknowledging it.
+factorial silent silent
+echo "ok   factorial for a client that does not acknowledge the reply"
 
 # Nobody acknowledged that reply: the client had it and left. The guest
 # resends it a bounded number of times and then says nothing.

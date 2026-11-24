@@ -1,5 +1,7 @@
 //! Host QUIC client. Verifies the guest certificate, sends one RFL1 payload,
-//! and writes the reply bytes to stdout. `loss` drops and reorders datagrams.
+//! acknowledges the reply in a packet of its own, and writes the reply bytes
+//! to stdout. `loss` drops and reorders datagrams, the acknowledgement too.
+//! `silent` takes the reply and leaves without acknowledging it.
 //! `wrong` expects the peer key to be refused.
 //! `spoof <local-ip>` plays a second host at <local-ip> beside the exchange:
 //! once the handshake is accepted it sends the guest garbage and a well-formed
@@ -163,7 +165,8 @@ pub fn main(init: std.process.Init.Minimal) u8 {
     const wrong = std.mem.eql(u8, mode, "wrong");
     const spoof = std.mem.eql(u8, mode, "spoof");
     const only_initial = std.mem.eql(u8, mode, "initial");
-    if (mode.len != 0 and !loss and !wrong and !spoof and !only_initial) return 2;
+    const silent = std.mem.eql(u8, mode, "silent");
+    if (mode.len != 0 and !loss and !wrong and !spoof and !only_initial and !silent) return 2;
     if (spoof and v.len < 7) return 2;
     var pin: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(quic.certificate(), &pin, .{});
@@ -204,7 +207,8 @@ pub fn main(init: std.process.Init.Minimal) u8 {
     var stage: u8 = 0;
     const start = now();
     while (now() - start < 60_000_000_000) {
-        pump(&c, fd, &dst, loss);
+        // Once the reply is in, what there is to send is its acknowledgement.
+        if (!(silent and c.peer_fin)) pump(&c, fd, &dst, loss);
         if (spoof and heard(sfd)) return 5;
         if (spoof and stage == 0 and c.accepted) {
             // Mid-connection, from the second address: garbage, and the
@@ -226,6 +230,12 @@ pub fn main(init: std.process.Init.Minimal) u8 {
         if (c.peer_fin) {
             const got = c.readApp();
             if (wrong) return 3;
+            // The acknowledgement went out in the pump above, or is held
+            // there to be sent after something else: nothing else follows.
+            if (hold_n != 0 and !silent) {
+                _ = sendto(fd, hold[0..hold_n].ptr, hold_n, 0, &dst, @sizeOf(Sock));
+                hold_n = 0;
+            }
             if (spoof and (stage != 2 or !quiet(&c, fd, sfd, 500_000_000))) return 5;
             var off: usize = 0;
             while (off < got.len) {

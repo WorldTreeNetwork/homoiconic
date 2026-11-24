@@ -1,0 +1,54 @@
+# check-quic.sh with each fix of homoiconic-q59.58 and q59.59 undone in turn, on copies of tree
+# 992d859 (the q59.58/59 tree before commit), morphie, Cloud Hypervisor 54.0, 2026-11-24.
+# The build goes on past a failing quic-self. Each check-quic.sh stops (set -e) at the line
+# after its last ok; the '===== ... check-quic.sh exit 0' lines are the status of the grep
+# the control script piped through, not check-quic.sh's, and the 'files changed' stat is
+# against the copy's removed out-net directory.
+===== control no-ack-only:  3115 files changed, 2 insertions(+), 26975 deletions(-)
+quic-self exit 20
+built /home/dorje/hom-wip-992d85940c-ctl-no-ack-only/unikernel/out-net/reflect-net.elf
+ok   refused: reflect.quic_port with reflect.wire_port=4446
+ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+ok   factorial over QUIC equals the Linux process
+ok   a 5000-step budget reply equals the Linux process
+ok   factorial again on a new handshake
+ok   a wrong pin is refused by the client
+ok   factorial after an abandoned handshake, with loss and reordering
+ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+ok   factorial again after the garbage
+     the answer to a first flight of 1200 bytes is 1200 bytes
+ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered in 1200 bytes or more
+ok   factorial after the unfinished raw handshake
+the guest sent the reply 13 times, the last at 7.3 s
+===== control no-ack-only: check-quic.sh exit 0
+===== control client-no-ack:  3115 files changed, 2 insertions(+), 26976 deletions(-)
+quic self ok
+built /home/dorje/hom-wip-992d85940c-ctl-client-no-ack/unikernel/out-net/reflect-net.elf
+ok   refused: reflect.quic_port with reflect.wire_port=4446
+ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+ok   factorial over QUIC equals the Linux process
+ok   a 5000-step budget reply equals the Linux process
+ok   factorial again on a new handshake
+ok   a wrong pin is refused by the client
+ok   factorial after an abandoned handshake, with loss and reordering
+ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+ok   factorial again after the garbage
+     the answer to a first flight of 1200 bytes is 1200 bytes
+ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered in 1200 bytes or more
+ok   factorial after the unfinished raw handshake
+the guest sent the reply 13 times, the last at 7.3 s
+===== control client-no-ack: check-quic.sh exit 0
+===== control no-padding:  3115 files changed, 2 insertions(+), 26976 deletions(-)
+quic-self exit 29
+built /home/dorje/hom-wip-992d85940c-ctl-no-padding/unikernel/out-net/reflect-net.elf
+ok   refused: reflect.quic_port with reflect.wire_port=4446
+ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+ok   factorial over QUIC equals the Linux process
+ok   a 5000-step budget reply equals the Linux process
+ok   factorial again on a new handshake
+ok   a wrong pin is refused by the client
+ok   factorial after an abandoned handshake, with loss and reordering
+ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+ok   factorial again after the garbage
+the answer to a first flight is 748 bytes, under 1200
+===== control no-padding: check-quic.sh exit 0

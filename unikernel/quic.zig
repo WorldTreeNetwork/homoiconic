@@ -43,7 +43,9 @@ pub fn newInitial(dgram: []const u8, current: *const [8]u8) bool {
 }
 
 const Keys = struct { key: [16]u8 = .{0} ** 16, iv: [12]u8 = .{0} ** 12, hp: [16]u8 = .{0} ** 16, on: bool = false, pn: u32 = 0 };
-const Pend = struct { on: bool = false, frames: [1400]u8 = undefined, len: usize = 0, pn: u32 = 0, at: u64 = 0, tries: u8 = 0 };
+/// A flight: its frames, and the packet numbers it has gone out as so far,
+/// `first` to `pn`. No other packet of its space is sent while it is on.
+const Pend = struct { on: bool = false, frames: [1400]u8 = undefined, len: usize = 0, first: u32 = 0, pn: u32 = 0, at: u64 = 0, tries: u8 = 0 };
 const Holey = struct { buf: [8192]u8 = .{0} ** 8192, got: [8192]u8 = .{0} ** 8192, n: usize = 0 };
 
 pub const Conn = struct {
@@ -70,6 +72,10 @@ pub const Conn = struct {
     rx_pn: [3]u64 = .{0} ** 3, // bit i set => pn (base+i) seen; base in rx_base
     rx_base: [3]u32 = .{0} ** 3,
     rx_any: [3]bool = .{ false, false, false },
+    /// A packet that asks for an acknowledgement (one with a frame other than
+    /// ACK and PADDING) opened in this space and no packet sent since has
+    /// acknowledged it.
+    ack_due: [3]bool = .{ false, false, false },
     client_hello: [1024]u8 = undefined,
     client_hello_len: usize = 0,
     server_flight: [4096]u8 = undefined,
@@ -134,15 +140,46 @@ pub const Conn = struct {
         return true;
     }
 
+    /// One datagram, or 0 when there is nothing to send. A space sends its
+    /// flight when it is due, and otherwise a packet with only an ACK frame
+    /// when one is owed and no flight of its own is on (`ackOnly`): an end
+    /// with nothing more to say still acknowledges what it was sent, so the
+    /// other end stops resending it.
     pub fn send(c: *Conn, out: []u8, now: u64) usize {
-        var n: usize = 0;
+        var flight: [3]bool = undefined;
+        var go: [3]bool = undefined;
         var s: usize = 0;
         while (s < 3) : (s += 1) {
-            if (!c.due(s, now)) continue;
-            const wrote = c.seal(s, out[n..], now) orelse continue;
+            flight[s] = c.due(s, now);
+            go[s] = flight[s] or c.ackOnly(s);
+        }
+        // A server expands a datagram that carries its Initial flight to
+        // 1200 bytes (RFC 9000 section 14.1) with PADDING in the Initial
+        // packet, so that packet is sized by what follows it.
+        var after: usize = 0;
+        if (c.server and flight[0]) {
+            s = 1;
+            while (s < 3) : (s += 1) {
+                if (go[s]) after += c.packetSize(s, flight[s], 0);
+            }
+        }
+        var n: usize = 0;
+        s = 0;
+        while (s < 3) : (s += 1) {
+            if (!go[s]) continue;
+            const pad_to: usize = if (s == 0 and c.server and flight[0]) min_initial -| after else 0;
+            const wrote = c.seal(s, out[n..], now, flight[s], pad_to, if (s == 0) after else 0) orelse continue;
             n += wrote;
         }
         return n;
+    }
+
+    /// Whether space `s` owes an acknowledgement it can send on its own.
+    /// A client that has its Finished to send is done with the Initial
+    /// space (RFC 9001 section 4.9.1) and acknowledges nothing more in it.
+    fn ackOnly(c: *Conn, s: usize) bool {
+        if (s == 0 and !c.server and c.client_fin_sent) return false;
+        return c.ack_due[s] and !c.pend[s].on and c.spaceKeys(s).on;
     }
 
     pub fn writeApp(c: *Conn, data: []const u8) bool {
@@ -211,7 +248,7 @@ pub const Conn = struct {
             if (o > pkt.len) return null;
         }
         const ln = getVar(pkt[o..]) orelse return null;
-        o += varLen(ln.v);
+        o += ln.len;
         if (o + ln.v > pkt.len) return null;
         const total = o + ln.v;
         const space: usize = if (kind == 0) 0 else if (kind == 2) 1 else return total;
@@ -242,6 +279,7 @@ pub const Conn = struct {
         if (space == 1 and c.server and !c.validated) {
             c.validated = true;
             c.pend[0].on = false;
+            c.ack_due[0] = false;
             c.open_initial.on = false;
         }
         c.mark(space, plain.pn);
@@ -286,18 +324,51 @@ pub const Conn = struct {
         return .{ .pn = pn, .data = c.plain[0 .. tag_at - body] };
     }
 
-    fn seal(c: *Conn, space: usize, out: []u8, now: u64) ?usize {
+    /// The bytes of a packet in `space` with `n` bytes of frames, padded
+    /// to at least `pad_to`, and the bytes of its header (`h`) and of its
+    /// Length field (`len`, 0 for a short header). The Length is written in
+    /// its shortest form; a padded packet has a Length of at least 64, two
+    /// bytes, so it may come out a little over `pad_to`.
+    const Size = struct { total: usize, h: usize, len: usize };
+    fn size(space: usize, n: usize, pad_to: usize) Size {
+        if (space == 2) {
+            const total = 9 + 4 + n + 16;
+            return .{ .total = @max(total, pad_to), .h = 9, .len = 0 };
+        }
+        const h0: usize = if (space == 0) 23 + 1 else 23;
+        const body = 4 + n + 16;
+        const plain = h0 + varLen(body) + body;
+        if (plain >= pad_to) return .{ .total = plain, .h = h0 + varLen(body), .len = varLen(body) };
+        const rest = @max(pad_to - h0 - 2, 64);
+        return .{ .total = h0 + 2 + rest, .h = h0 + 2, .len = 2 };
+    }
+
+    /// The bytes of the packet `seal` would make in `space` now.
+    fn packetSize(c: *Conn, space: usize, flight: bool, pad_to: usize) usize {
+        var frame: [32]u8 = undefined;
+        var n = ackFrame(&frame, c, space);
+        if (flight) n += c.pend[space].len;
+        return size(space, n, pad_to).total;
+    }
+
+    /// Seal one packet in `space` into `out`: the flight when `flight`, else
+    /// an ACK frame alone, which changes nothing about the flight. `after`
+    /// is how many bytes the datagram will carry after this packet, for the
+    /// limit on what an address not yet validated is sent.
+    fn seal(c: *Conn, space: usize, out: []u8, now: u64, flight: bool, pad_to: usize, after: usize) ?usize {
         const k = c.spaceKeys(space);
         const p = &c.pend[space];
-        if (!k.on or !p.on) return null;
+        if (!k.on or (flight and !p.on)) return null;
         var frames: [1500]u8 = undefined;
         var n: usize = ackFrame(frames[0..], c, space);
-        @memcpy(frames[n..][0..p.len], p.frames[0..p.len]);
-        n += p.len;
+        if (n == 0 and !flight) return null;
+        if (flight) {
+            @memcpy(frames[n..][0..p.len], p.frames[0..p.len]);
+            n += p.len;
+        }
         const pn = k.pn;
         const long = space < 2;
         var hdr: [64]u8 = undefined;
-        var h: usize = 0;
         const dcid = c.peer_cid;
         const scid = c.local_cid;
         if (long) {
@@ -308,37 +379,35 @@ pub const Conn = struct {
             @memcpy(hdr[6..14], &dcid);
             hdr[14] = 8;
             @memcpy(hdr[15..23], &scid);
-            h = 23;
-            if (space == 0) {
-                hdr[h] = 0;
-                h += 1;
-            }
-            const rest = 4 + n + 16;
-            h += putVar(hdr[h..], rest);
+            if (space == 0) hdr[23] = 0; // no token
         } else {
             hdr[0] = 0x40 | 0x03;
             @memcpy(hdr[1..9], &dcid);
-            h = 9;
         }
-        const total = h + 4 + n + 16;
-        const pad = if (space == 0 and !c.server and total < 1200) 1200 else total;
+        // Every datagram a client sends with an Initial packet is 1200 bytes
+        // or more; a server's Initial flight is padded so its datagram is
+        // (`send`).
+        const want = if (space == 0 and !c.server) @max(pad_to, min_initial) else pad_to;
+        const sz = size(space, n, want);
+        const pad = sz.total;
+        const h = sz.h;
         if (pad > out.len or pad > 1400) return null;
+        if (long) {
+            hdr[h - sz.len] = 0;
+            _ = putVar(hdr[h - sz.len .. h], pad - h);
+        }
         // An address that has not been validated is sent no more than
-        // `amplification` times what came from it. A packet over the limit
-        // is not sent and not counted as a try; it goes when more arrives.
-        if (c.server and !c.validated and c.tx_bytes + pad > amplification * c.rx_bytes) return null;
+        // `amplification` times what came from it, counting the rest of the
+        // datagram. A packet over the limit is not sent and not counted as a
+        // try; it goes when more arrives.
+        if (c.server and !c.validated and c.tx_bytes + pad + after > amplification * c.rx_bytes) return null;
         k.pn += 1;
         @memset(out[0..pad], 0);
         @memcpy(out[0..h], hdr[0..h]);
         std.mem.writeInt(u32, out[h..][0..4], pn, .big);
         var sealed: [1400]u8 = undefined;
         @memcpy(sealed[0..n], frames[0..n]);
-        @memset(sealed[n .. pad - (h + 4) - 16], 0);
-        // PADDING already zero. Length field must cover the padding.
-        if (pad != total and long) {
-            const rest = pad - h;
-            _ = putVar(out[h - varLen(rest) ..], rest);
-        }
+        @memset(sealed[n .. pad - (h + 4) - 16], 0); // PADDING
         var nonce: [12]u8 = k.iv;
         var s: usize = 0;
         while (s < 4) : (s += 1) nonce[8 + s] ^= out[h + s];
@@ -353,15 +422,23 @@ pub const Conn = struct {
         out[0] ^= mask[0] & keep;
         s = 0;
         while (s < 4) : (s += 1) out[h + s] ^= mask[1 + s];
-        p.pn = pn;
-        p.at = now;
-        p.tries += 1;
-        // A flight nobody acknowledges is given up, not resent for ever.
-        if (p.tries >= max_tries) p.on = false;
         c.tx_bytes += pad;
+        // Every packet carries the space's ACK frame, so nothing is owed now.
+        c.ack_due[space] = false;
+        if (flight) {
+            if (p.tries == 0) p.first = pn;
+            p.pn = pn;
+            p.at = now;
+            p.tries += 1;
+            // A flight nobody acknowledges is given up, not resent for ever.
+            if (p.tries >= max_tries) p.on = false;
+        }
         // A client that sends a Handshake packet has the ServerHello, so its
         // Initial flight arrived: that space is finished (RFC 9001 4.9.1).
-        if (!c.server and space == 1) c.pend[0].on = false;
+        if (!c.server and space == 1) {
+            c.pend[0].on = false;
+            c.ack_due[0] = false;
+        }
         return pad;
     }
 
@@ -379,34 +456,36 @@ pub const Conn = struct {
             }
             if (t == 0x06) {
                 const off = getVar(data[i + 1 ..]) orelse return;
-                const o1 = i + 1 + varLen(off.v);
+                const o1 = i + 1 + off.len;
                 const ln = getVar(data[o1..]) orelse return;
-                const o2 = o1 + varLen(ln.v);
+                const o2 = o1 + ln.len;
                 if (o2 + ln.v > data.len) return;
                 const dest = if (space == 0) &c.init_rx else &c.hs_rx;
                 holePut(dest, off.v, data[o2 .. o2 + ln.v]);
+                c.ack_due[space] = true;
                 i = o2 + ln.v;
                 continue;
             }
             if (t >= 0x08 and t <= 0x0f) {
                 var o = i + 1;
                 const id = getVar(data[o..]) orelse return;
-                o += varLen(id.v);
+                o += id.len;
                 var off: u64 = 0;
                 if (t & 0x04 != 0) {
                     const v = getVar(data[o..]) orelse return;
                     off = v.v;
-                    o += varLen(v.v);
+                    o += v.len;
                 }
                 var ln: u64 = 0;
                 if (t & 0x02 != 0) {
                     const v = getVar(data[o..]) orelse return;
                     ln = v.v;
-                    o += varLen(v.v);
+                    o += v.len;
                 } else ln = data.len - o;
                 if (o + ln > data.len) return;
                 holePut(&c.app_rx, off, data[o .. o + ln]);
                 if (t & 0x01 != 0) c.peer_fin = true;
+                c.ack_due[space] = true;
                 i = o + ln;
                 continue;
             }
@@ -546,20 +625,27 @@ pub const Conn = struct {
     fn ack(c: *Conn, space: usize, data: []const u8, at: usize) ?usize {
         var o = at + 1;
         const largest = getVar(data[o..]) orelse return null;
-        o += varLen(largest.v);
+        o += largest.len;
         const delay = getVar(data[o..]) orelse return null;
-        o += varLen(delay.v);
+        o += delay.len;
         const count = getVar(data[o..]) orelse return null;
-        o += varLen(count.v);
+        o += count.len;
         const first = getVar(data[o..]) orelse return null;
-        o += varLen(first.v);
-        c.acked(space, @truncate(largest.v));
+        o += first.len;
+        if (first.v > largest.v) return null;
+        var hi = largest.v;
+        var lo = largest.v - first.v;
+        c.acked(space, lo, hi);
         var n: u64 = 0;
         while (n < count.v) : (n += 1) {
             const gap = getVar(data[o..]) orelse return null;
-            o += varLen(gap.v);
+            o += gap.len;
             const ln = getVar(data[o..]) orelse return null;
-            o += varLen(ln.v);
+            o += ln.len;
+            if (gap.v + 2 > lo or ln.v > lo - gap.v - 2) return null;
+            hi = lo - gap.v - 2;
+            lo = hi - ln.v;
+            c.acked(space, lo, hi);
         }
         return o;
     }
@@ -567,9 +653,14 @@ pub const Conn = struct {
     /// An acknowledgement is for the packet number space it arrived in and
     /// no other (RFC 9002 section 3): the same number in another space is
     /// another packet, which may be lost.
-    fn acked(c: *Conn, space: usize, pn: u32) void {
+    ///
+    /// The range `lo` to `hi` acknowledges the flight when it holds any
+    /// packet number the flight went out as: every packet of the space from
+    /// its first send to its last was a copy of it, so any copy arriving is
+    /// the flight arriving.
+    fn acked(c: *Conn, space: usize, lo: u64, hi: u64) void {
         const p = &c.pend[space];
-        if (!p.on or p.tries == 0 or p.pn != pn) return;
+        if (!p.on or p.tries == 0 or hi < p.first or lo > p.pn) return;
         p.on = false;
         // A client whose 1-RTT packet is acknowledged holds a confirmed
         // handshake (RFC 9001 section 4.1.2): the server took its Finished,

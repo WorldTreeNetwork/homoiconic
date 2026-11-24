@@ -1,0 +1,12 @@
+# Negative controls for homoiconic-q59.62 on a copy of the tree, macOS host, 2026-11-24.
+== control 1: run.zig without its refusal (the Lean bound kept)
+0
+74:    _ = most;
+run --interp=9: exit 0, stdout 'levels error: the interpreter levels must be at most 8', stderr ''
+(host/check.sh wants exit 2, no stdout, stderr 'run: the interpreter levels must be at most 8': fails)
+== control 2: Surface.interpBytes/interpText without the bound
+0
+Build completed successfully (16 jobs).
+FAIL levels: more than 8 levels are not refused, or 8 are
+375 of 376 checks passed
+Surface/Check.lean:195:0: error: 1 check(s) failed
