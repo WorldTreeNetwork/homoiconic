@@ -6,7 +6,7 @@
 - [x] `unikernel/net.zig`: the program as one `RFL1` run frame on the wire port (the boot file is the entity key's, `add-entity-keys`), `reflect.spawn`, `reflect.take`, repeated exchanges, the record on serial
 - [x] `unikernel/cross-check.zig` and `unikernel/check-wire.sh`: two real guests, both orders, the records replay to what the guests reported, tampered records refused, each with its reason asserted; `remote-check` and `RemoteCheck.lean` gone from `build-net.sh` and `check-wire.sh`
 - [x] Controls: each refusal check fails with its check undone, log in `unikernel/evidence/`
-- [ ] Entity names from `add-entity-keys` in the record, signature checked by the host. Not done: that change's code had not landed. Bead `homoiconic-q59.66`; the record carries addresses and is not signed
+- [x] Entity names from `add-entity-keys` in the record, and the record signed by the guest's entity key and checked by `cross-check` (that change's code landed during this build; `homoiconic-q59.66` was opened for it and closed here)
 - [x] morphie: build.sh, build-net.sh, check.sh, check-net.sh, check-quic.sh, check-wire.sh; logs and hashes in `unikernel/evidence/`
 - [x] Fresh-context advise read (Fable), 2026-11-24: send-back with ten findings, the merge found sound; all ten answered in `design.md` and the code (the head, the strict mark, the hold in `Mix`, the turn kept at `out`, the idle rule, `Merged` and `merged_once`, reasons asserted)
 - [x] Fold: specs, `ARCHITECTURE.md`, `docs/PROOFS.md`, `docs/LEARNINGS.md`

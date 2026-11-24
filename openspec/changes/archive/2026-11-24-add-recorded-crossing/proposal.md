@@ -20,7 +20,7 @@
 
 - That a guest ran the Lean it claims to. A record is checked, not believed: a guest that lies is caught only where its log stops being a schedule, or its report differs from the replay.
 - That a name cannot be forged across machines. The names handed over with a crossing are a list of numbers in the packet, and the receiving guest takes them as sent. The replay computes them again, so a wrong list is refused when the record is checked, not when it is received.
-- That a signature names an entity. The host checks it (`add-entity-keys`, `homoiconic-q59.49`); the kernel does not.
+- That a signature names an entity. Zig checks it outside the kernel (`unikernel/cross-check.zig`, keys from `add-entity-keys`); the kernel does not.
 - Liveness. A crossing put out may never be taken.
 
 No new UI because this is a kernel, image and check change.

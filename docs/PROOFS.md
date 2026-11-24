@@ -345,8 +345,9 @@ theorems; `advance` is tested against it.
 - **That a guest did what its record says.** A record is checked, not
   believed. An accepted record is a run of the program and its process lines
   are that run's; a guest that remakes its chain can hand over a record of
-  another run. A record's names are addresses and nothing signs it until
-  entity keys land (`homoiconic-q59.66`). Across machines a name is a number in
+  another run. A record is signed by its guest's entity key, which says who
+  handed it over and not that it is true; the signature is checked by Zig,
+  outside the kernel. Across machines a name is a number in
   a packet, taken as sent: that it cannot be forged is a hypothesis.
 - **That a channel name cannot be guessed.** A name is a kind of data, so a
   number no longer hands a channel over, but a name value is not a key: a
