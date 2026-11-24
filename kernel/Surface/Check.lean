@@ -3,6 +3,7 @@ import Surface.Expect
 import Surface.Run
 import Surface.Bytes
 import Surface.Chan
+import Reflect.MachineSpace
 
 /-!
 Run with `lake env lean Surface/Check.lean` from `kernel/`. Checks every entry
@@ -170,6 +171,24 @@ def main : IO UInt32 := do
     total := total + 1
     if !roundTrip d then
       IO.println s!"FAIL roundtrip {repr d}: `{renderData d}` does not read back"
+      fails := fails + 1
+  -- `forever.hom` reads to the term `Reflect.MachineSpace` proves cycles, and
+  -- a tail loop keeps no frame per call at any interpreter level: after two
+  -- million steps the stack and frames are as shallow as after a few hundred
+  -- (`homoiconic-q59.65`; with a frame per tail call level 0 holds 222222).
+  total := total + 2
+  let forever ← IO.FS.readBinFile "../examples/forever.hom"
+  match read forever with
+  | .error _ =>
+    IO.println "FAIL forever.hom does not read"
+    fails := fails + 2
+  | .ok t =>
+    if reify t != reify loopForever then
+      IO.println "FAIL forever.hom does not read to Reflect.loopForever"
+      fails := fails + 1
+    let depths := [0, 1, 2].map fun k => depth (runPriced 2000000 (load (compile (level k t))))
+    if depths.any (· > 64) then
+      IO.println s!"FAIL forever.hom keeps frames: depth after 2000000 steps at levels 0, 1, 2 is {depths}"
       fails := fails + 1
   -- A syntax error is rendered with the prefix and a line and column.
   total := total + 1

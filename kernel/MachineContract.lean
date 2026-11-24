@@ -47,6 +47,29 @@ example : ∀ [Ops], ∀ t fuel w,
     runPriced fuel (load (compile t)) = .halted w → ∃ o, Direct [] t o ∧ w = MP.injO o :=
   Reflect.machine_exact_priced
 
+-- A tail loop runs in a bounded set of states (`homoiconic-q59.65`): a block
+-- entered in tail position pushes no frame.
+example : ∀ [Ops], ∀ {s : State} {a p : Nat}, 0 < p → run (a + p) s = run a s →
+    ∀ n, ∃ j, j < a + p ∧ run n s = run j s :=
+  Reflect.run_cycle
+
+example : ∀ [Ops], ∀ {s : State} {a p : Nat}, 0 < p → run (a + p) s = run a s →
+    ∀ fuel, ∃ j, j < a + p ∧ runPriced fuel s = run j s :=
+  Reflect.runPriced_cycle
+
+example : ∀ [Ops], run (4 + 4) (load (compile omega)) = run 4 (load (compile omega)) :=
+  Reflect.omega_cycle
+
+example : ∀ [Ops], run (21 + 17) (load (compile loopForever)) = run 21 (load (compile loopForever)) :=
+  Reflect.forever_cycle
+
+example : ∀ fuel,
+    (∃ j, j < 38 ∧ runPriced fuel (load (compile loopForever)) =
+      run j (load (compile loopForever))) ∧
+    (∃ j, j < 1685 ∧ runPriced fuel (load (compile (level 1 loopForever))) =
+      run j (load (compile (level 1 loopForever)))) :=
+  Reflect.forever_bounded
+
 #print axioms Reflect.machine_correct
 #print axioms Reflect.machine_exact
 #print axioms Reflect.machine_never_halts
@@ -62,3 +85,9 @@ example : ∀ [Ops], ∀ t fuel w,
 #print axioms Reflect.runPriced_reach
 #print axioms Reflect.runPriced_unit
 #print axioms Reflect.machine_exact_priced
+#print axioms Reflect.run_cycle
+#print axioms Reflect.runPriced_cycle
+#print axioms Reflect.omega_cycle
+#print axioms Reflect.forever_cycle
+#print axioms Reflect.forever_cycle_interp
+#print axioms Reflect.forever_bounded
