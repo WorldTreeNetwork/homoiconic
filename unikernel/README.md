@@ -44,7 +44,8 @@ below 2^64 and defaults to the one built in. The levels are a whole number from
 0 to 8 and default to 1: the bytes run through `reflect_interp`, the
 interpreter written in the language, on the machine. Level 0 runs the program
 itself; level 2 runs the interpreter in the interpreter. The kernel builds the
-tower before the budget counts a step, so the levels are bounded by `main.zig`,
+tower before the budget counts a step, so the levels are bounded by the
+kernel (`Surface.maxLevels`, which `main.zig` asks for by `reflect_max_levels`),
 not by the budget. A word that is not a number, and a number past these
 limits, each end in a line of their own and `reflect: exit 2`. With no
 `--initramfs` the image runs the source built into it through `reflect_run`.

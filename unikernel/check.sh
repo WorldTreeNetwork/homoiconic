@@ -181,10 +181,11 @@ real="$(nm "$OUT/reflect.elf" | awk '$3 == "initialize_libuv" { print $1 }')"
 mine="$(nm "$OUT/reflect.elf" | awk '$3 == "main.initialize_libuv" { print $1 }')"
 [ -n "$real" ] && [ "$real" = "$mine" ] || fail "initialize_libuv is not the program's empty one"
 echo "ok   the event loop's start is the empty one"
-# The layer names nothing in the kernel, and the program names three things in it.
+# The layer names nothing in the kernel, and the program names five things in
+# it: the initializers, the two runs, and the kernel's bound on levels.
 if nm -u "$OUT/kernel.o" | awk '{ print $2 }' | grep -q "^reflect_\|^circularKernel\|^lean_\|^l_"; then fail "the layer refers to the kernel"; fi
 uses="$(nm -u "$OUT/main.o" | awk '{ print $2 }' | grep "^reflect_\|circularKernel\|^kernel_\|^lean_\|^l_" | sort | tr '\n' ' ')"
-[ "$uses" = "initialize_circularKernel_Surface_Host kernel_finish_initialization reflect_interp reflect_run " ] ||
+[ "$uses" = "initialize_circularKernel_Surface_Host kernel_finish_initialization reflect_interp reflect_max_levels reflect_run " ] ||
     fail "the program refers to: $uses"
 echo "ok   the program calls reflect_run and reflect_interp and nothing else that evaluates or reads"
 (cd "$OUT" && sha256sum --quiet -c objects.sha256) || fail "the objects are not the ones compiled at the start"
