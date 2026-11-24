@@ -67,17 +67,54 @@ same() {
 }
 
 # given <bytes-file> <command-line>: boot the image as it is, with a file handed
-# to it at boot. The command line is `[step-budget [levels]]`.
+# to it at boot, through the documented launch (given.sh). The command line is
+# `[step-budget [levels]]`, split into words as the launch takes them.
 given() {
     rm -f "$OUT/serial.log"
     GIVEN_BYTES="$1"
     GIVEN_WORDS="$2"
+    status=0
+    # shellcheck disable=SC2086
+    CLOUD_HYPERVISOR="$CH" IMAGE="$OUT/reflect.elf" SERIAL="file=$OUT/serial.log" \
+        timeout "$LIMIT" sh "$HERE/given.sh" "$1" $2 > "$OUT/cloud-hypervisor.log" 2>&1 || status=$?
+    [ "$status" = 124 ] && fail "given $1: no power off within $LIMIT seconds"
+    [ "$status" = 0 ] || { cat "$OUT/cloud-hypervisor.log" >&2; fail "given $1: cloud-hypervisor exit $status"; }
+    [ -r "$OUT/serial.log" ] || fail "given $1: the serial port said nothing"
+}
+
+# given_raw <bytes-file> <command-line>: the same, with Cloud Hypervisor started
+# directly, so the image's own refusals can be seen past the launch's.
+given_raw() {
+    rm -f "$OUT/serial.log"
     status=0
     timeout "$LIMIT" "$CH" --kernel "$OUT/reflect.elf" --initramfs "$1" ${2:+--cmdline "$2"} --cpus boot=1 --memory size=512M \
         --serial file="$OUT/serial.log" --console off > "$OUT/cloud-hypervisor.log" 2>&1 || status=$?
     [ "$status" = 124 ] && fail "given $1: no power off within $LIMIT seconds"
     [ "$status" = 0 ] || { cat "$OUT/cloud-hypervisor.log" >&2; fail "given $1: cloud-hypervisor exit $status"; }
     [ -r "$OUT/serial.log" ] || fail "given $1: the serial port said nothing"
+}
+
+# launch_refuses <case> <bytes-file>: the launch refuses the file with its line
+# and status 2, and Cloud Hypervisor is not started.
+launch_refuses() {
+    rm -f "$OUT/serial.log"
+    status=0
+    CLOUD_HYPERVISOR="$CH" IMAGE="$OUT/reflect.elf" SERIAL="file=$OUT/serial.log" \
+        sh "$HERE/given.sh" "$2" > "$OUT/launch.log" 2>&1 || status=$?
+    [ "$status" = 2 ] || fail "$1: the launch ended with $status"
+    printf 'given: the program given at boot is larger than 16 MiB\n' > "$OUT/wanted.txt"
+    cmp "$OUT/wanted.txt" "$OUT/launch.log" || fail "$1: the launch said something else"
+    [ ! -e "$OUT/serial.log" ] || fail "$1: the image was started"
+    echo "ok   $1"
+}
+
+# says <case> <line>...: the serial port says exactly these lines and then
+# `reflect: exit 0`.
+says() {
+    name="$1"
+    shift
+    { printf '%s\n' "$@"; echo "reflect: exit 0"; } > "$OUT/wanted.txt"
+    cmp "$OUT/wanted.txt" "$OUT/serial.log" || fail "$name: expected '$*'"
 }
 
 # same_given <case> [expected-file]: the serial port says what the Linux process
@@ -171,21 +208,82 @@ given "$OUT/factorial.bytes" "1000000000 2"; same_given "bytes at boot: factoria
 given "$OUT/quine.bytes" ""; same_given "bytes at boot: the quine"
 # The budget on the command line is the one that counts.
 given "$OUT/forever.bytes" "5000"; same_given "bytes at boot: a budget of 5000 steps" "$HERE/expected/forever.txt"
-# Bytes that are no program are the kernel's to refuse, and a megabyte of them arrives whole.
+# The levels on the command line are the ones that count: 10000 steps are
+# enough for factorial itself and not through one interpreter, and 100000 are
+# enough through one and not through two.
+given "$OUT/factorial.bytes" "10000 0"; same_given "bytes at boot: 10000 steps are enough through none" "$HERE/expected/factorial.txt"
+given "$OUT/factorial.bytes" "10000 1"; same_given "bytes at boot: 10000 steps are not enough through one"
+says "10000 steps through one" "no result within 10000 steps"
+given "$OUT/factorial.bytes" "100000 1"; same_given "bytes at boot: 100000 steps are enough through one" "$HERE/expected/factorial.txt"
+given "$OUT/factorial.bytes" "100000 2"; same_given "bytes at boot: 100000 steps are not enough through two"
+says "100000 steps through two" "no result within 100000 steps"
+# The most levels there are is 8: the tower is built, and the budget stops it.
+given "$OUT/factorial.bytes" "1000 8"; same_given "bytes at boot: eight interpreters"
+says "eight interpreters" "no result within 1000 steps"
+# The largest budget there is.
+given "$OUT/factorial.bytes" "18446744073709551615 0"; same_given "bytes at boot: the largest budget" "$HERE/expected/factorial.txt"
+# Bytes that are no program are the kernel's to refuse, in the kernel's words,
+# and a megabyte of them arrives whole.
 head -c 1048576 /dev/zero | tr '\0' '\377' > "$OUT/not-a-program.bytes"
 given "$OUT/not-a-program.bytes" ""; same_given "bytes at boot: a megabyte that is no program"
+says "a megabyte that is no program" "bytes error: an indefinite length or a reserved form"
 { cat "$OUT/factorial.bytes"; printf '\0'; } > "$OUT/one-more.bytes"
 given "$OUT/one-more.bytes" ""; same_given "bytes at boot: one byte past a program"
-# A budget that is not a number is refused by the program, as the Linux process refuses it.
+says "one byte past a program" "bytes error: there are bytes after the value"
+# 16 MiB is the most the layer takes, and all of it arrives.
+head -c 16777216 /dev/zero > "$OUT/limit.bytes"
+given "$OUT/limit.bytes" ""; same_given "bytes at boot: exactly 16 MiB"
+says "exactly 16 MiB" "bytes error: there are bytes after the value"
+# 16 MiB of arrays opened and never closed is refused as bytes cut short,
+# before the kernel makes anything of them.
+head -c 16777216 /dev/zero | tr '\0' '\201' > "$OUT/open-arrays.bytes"
+given "$OUT/open-arrays.bytes" ""; same_given "bytes at boot: 16 MiB of arrays never closed"
+says "16 MiB of arrays never closed" "bytes error: the bytes end inside a value"
+# Words that are not numbers, or numbers past the limits, are refused by the
+# program as the Linux process refuses them, each with its own line.
 given "$OUT/factorial.bytes" "many"; refused_given "bytes at boot: a budget that is not a number" "reflect: the step budget must be a whole number"
-# More than the layer keeps room for is refused before the C library starts.
+given "$OUT/factorial.bytes" "18446744073709551616"; refused_given "bytes at boot: a budget of 2^64" "reflect: the step budget must be below 18446744073709551616"
+given "$OUT/factorial.bytes" "1000 x"; refused_given "bytes at boot: levels that are not a number" "reflect: the levels must be a whole number"
+given "$OUT/factorial.bytes" "1000 9"; refused_given "bytes at boot: nine levels" "reflect: the levels must be at most 8"
+given "$OUT/factorial.bytes" "1000 4294967296"; refused_given "bytes at boot: 2^32 levels" "reflect: the levels must be at most 8"
+# A command line is kept whole up to 1023 bytes, and one longer is refused, not cut.
+words="$(awk 'BEGIN { for (i = 0; i < 1019; i++) printf "0"; printf "5000" }')"
+[ "${#words}" = 1023 ] || fail "the long command line is not 1023 bytes"
+given "$OUT/forever.bytes" "$words"; same_given "bytes at boot: a command line of 1023 bytes" "$HERE/expected/forever.txt"
+words="$(awk 'BEGIN { for (i = 0; i < 1100; i++) printf "0"; printf "x" }')"
+given "$OUT/factorial.bytes" "$words"
+only "bytes at boot: a command line of 1101 bytes is refused" "reflect: the command line is longer than 1023 bytes"
+# More than the layer keeps room for is refused by the launch before the
+# hypervisor starts, and by the image when the hypervisor is started without it.
 head -c 16777217 /dev/zero > "$OUT/too-large.bytes"
-given "$OUT/too-large.bytes" ""
-only "bytes at boot: more than 16 MiB is refused" "reflect: the program given at boot is too large"
+launch_refuses "bytes at boot: the launch refuses more than 16 MiB" "$OUT/too-large.bytes"
+given_raw "$OUT/too-large.bytes" ""
+only "bytes at boot: the image refuses more than 16 MiB" "reflect: the program given at boot is too large"
+# A file just under the first memory region: Cloud Hypervisor would put it on
+# top of the image. The launch refuses it; started directly, the image never
+# gets to say anything (Cloud Hypervisor 54.0 reports an internal error from
+# the processor and still exits 0).
+rm -f "$OUT/huge.bytes"
+truncate -s $((512 * 1048576 - 4096)) "$OUT/huge.bytes"
+launch_refuses "bytes at boot: the launch refuses a file that would land on the image" "$OUT/huge.bytes"
+given_raw "$OUT/huge.bytes" ""
+[ ! -s "$OUT/serial.log" ] || fail "huge: the image spoke with a file on top of it"
+grep -q "InternalError" "$OUT/cloud-hypervisor.log" || fail "huge: Cloud Hypervisor did not report the processor's internal error"
+echo "ok   started directly, a file that lands on the image silences it"
+rm -f "$OUT/huge.bytes"
 [ "$before" = "$(sha256sum < "$OUT/reflect.elf")" ] || fail "the image changed between the programs given at boot"
 echo "ok   one image ran every program given at boot"
 # With nothing given, the same image still runs the program built into it.
 boot factorial; same "the same image with nothing given at boot" "$HERE/expected/factorial.txt"
+
+# Cloud Hypervisor hands over one file at most; two files, and a list of files
+# outside memory, are what an image told to see them refuses.
+image "two files" PRETEND=two_modules "$EXAMPLES/factorial.hom"
+given "$OUT/factorial.bytes" ""
+only "bytes at boot: two files are refused" "reflect: more than one file was given at boot"
+image "file list outside memory" PRETEND=module_list_outside "$EXAMPLES/factorial.hom"
+given "$OUT/factorial.bytes" ""
+only "bytes at boot: a list of files outside memory is refused" "reflect: the list of files given at boot is not in usable memory"
 
 # ---- the rules above have to trip ----
 # An image whose layer does not answer a call the C library makes at its start says so.

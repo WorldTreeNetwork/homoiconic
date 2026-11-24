@@ -3,6 +3,7 @@
 //! library and the Lean runtime make. It carries bytes and hands out memory.
 //! It does not read a program and it does not evaluate.
 
+const std = @import("std");
 const options = @import("options");
 
 extern fn enter_program(entry: usize, stack: usize) noreturn;
@@ -321,6 +322,19 @@ fn stop(comptime why: []const u8) noreturn {
     powerOff();
 }
 
+/// Whether `len` bytes at `addr` lie inside one stretch of usable memory in the
+/// hypervisor's map, below the 4 GiB that boot mapped.
+fn inRam(info: *const StartInfo, addr: u64, len: u64) bool {
+    if (addr == 0 or addr > (4 << 30) or (4 << 30) - addr < len) return false;
+    const entries: [*]const MemEntry = @ptrFromInt(info.memmap_paddr);
+    var i: usize = 0;
+    while (i < info.memmap_entries) : (i += 1) {
+        const e = entries[i];
+        if (e.kind == 1 and e.addr <= addr and addr - e.addr <= e.size and e.size - (addr - e.addr) >= len) return true;
+    }
+    return false;
+}
+
 export fn kmain(info: *const StartInfo) noreturn {
     outb(COM1 + 1, 0);
     outb(COM1 + 3, 3);
@@ -377,9 +391,12 @@ export fn kmain(info: *const StartInfo) noreturn {
         }
     }
     if (info.magic == 0x336ec578 and info.cmdline_paddr != 0) {
+        // A command line is kept whole or refused: a cut one could read as
+        // other words than the ones given.
         const src: [*]const u8 = @ptrFromInt(info.cmdline_paddr);
         var n: usize = 0;
         while (n + 1 < command_line.len and src[n] != 0) : (n += 1) command_line[n] = src[n];
+        if (src[n] != 0) stop("the command line is longer than " ++ std.fmt.comptimePrint("{d}", .{command_line.len - 1}) ++ " bytes");
     }
     if (ram_end == 0) stop("the machine gave no memory map");
     if (ram_end > (4 << 30)) ram_end = 4 << 30;
@@ -387,9 +404,14 @@ export fn kmain(info: *const StartInfo) noreturn {
     // Bytes given at boot lie wherever the hypervisor put them, which is where
     // the stack will be. Nothing has been written there yet: this code runs on
     // the boot stack. Move them to just above the image and clear where they were.
-    if (info.magic == 0x336ec578 and info.nr_modules > 1) stop("more than one file was given at boot");
-    if (info.magic == 0x336ec578 and info.nr_modules == 1) {
-        const m = @as(*align(1) const Module, @ptrFromInt(info.modlist_paddr)).*;
+    // Cloud Hypervisor hands over at most one file; the check reaches the other
+    // two refusals with `pretend`.
+    const nr_modules = if (options.pretend == .two_modules and info.nr_modules == 1) 2 else info.nr_modules;
+    const modlist_paddr = if (options.pretend == .module_list_outside) ram_end else info.modlist_paddr;
+    if (info.magic == 0x336ec578 and nr_modules > 1) stop("more than one file was given at boot");
+    if (info.magic == 0x336ec578 and nr_modules == 1) {
+        if (!inRam(info, modlist_paddr, @sizeOf(Module))) stop("the list of files given at boot is not in usable memory");
+        const m = @as(*align(1) const Module, @ptrFromInt(modlist_paddr)).*;
         if (m.size > boot_limit) stop("the program given at boot is too large");
         const len: usize = @intCast(m.size);
         if (m.addr < image_end + len or m.addr > ram_end or ram_end - m.addr < len)

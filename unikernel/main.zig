@@ -8,7 +8,10 @@
 //!
 //! In the image the second form is what bytes given at boot start: the layer
 //! names them `/boot/program` and passes the command line's words after it.
-//! The budget defaults to the one built in, and the levels to 1.
+//! The budget defaults to the one built in, and the levels to 1. The budget is
+//! a whole number below 2^64 and the levels a whole number up to `max_levels`;
+//! a word that is not a whole number, and a number past these, are refused with
+//! a line of their own and status 2 before the kernel is called.
 
 const program = @import("program");
 
@@ -53,16 +56,34 @@ const Run = struct {
     }
 };
 
-/// A whole number in decimal digits and nothing else.
-fn number(comptime T: type, word: [*:0]const u8) ?T {
-    var v: T = 0;
+/// The most interpreters a program is run through. The kernel builds the
+/// tower of interpreters before the budget counts a step, one level inside the
+/// next, so the number of levels is bounded here and not by the budget.
+const max_levels = 8;
+
+/// What a word on the command line is: a whole number in decimal digits and
+/// nothing else, no number at all, or a whole number past `limit`.
+const Number = union(enum) { value: u64, not_number, too_large };
+
+fn number(word: [*:0]const u8, limit: u64) Number {
+    var v: u64 = 0;
+    var past = false;
     var i: usize = 0;
     while (word[i] != 0) : (i += 1) {
-        if (word[i] < '0' or word[i] > '9') return null;
-        v = @import("std").math.mul(T, v, 10) catch return null;
-        v = @import("std").math.add(T, v, word[i] - '0') catch return null;
+        if (word[i] < '0' or word[i] > '9') return .not_number;
+        if (past) continue;
+        const times = @import("std").math.mul(u64, v, 10) catch {
+            past = true;
+            continue;
+        };
+        v = @import("std").math.add(u64, times, word[i] - '0') catch {
+            past = true;
+            continue;
+        };
     }
-    return if (i == 0) null else v;
+    if (i == 0) return .not_number;
+    if (past or v > limit) return .too_large;
+    return .{ .value = v };
 }
 
 /// Every byte of a file.
@@ -98,13 +119,27 @@ pub export fn main(argc: c_int, argv: [*]const [*:0]const u8) c_int {
     }
     if (argc > 1) {
         run.levels = 1;
-        if (argc > 2) run.budget = number(u64, argv[2]) orelse {
-            say("reflect: the step budget must be a whole number\n");
-            return 2;
+        if (argc > 2) run.budget = switch (number(argv[2], @import("std").math.maxInt(u64))) {
+            .value => |v| v,
+            .not_number => {
+                say("reflect: the step budget must be a whole number\n");
+                return 2;
+            },
+            .too_large => {
+                say("reflect: the step budget must be below 18446744073709551616\n");
+                return 2;
+            },
         };
-        if (argc > 3) run.levels = number(u32, argv[3]) orelse {
-            say("reflect: the levels must be a whole number\n");
-            return 2;
+        if (argc > 3) run.levels = switch (number(argv[3], max_levels)) {
+            .value => |v| @intCast(v),
+            .not_number => {
+                say("reflect: the levels must be a whole number\n");
+                return 2;
+            },
+            .too_large => {
+                say("reflect: the levels must be at most " ++ @import("std").fmt.comptimePrint("{d}", .{max_levels}) ++ "\n");
+                return 2;
+            },
         };
         run.input = contents(argv[1]) orelse {
             say("reflect: cannot read the program bytes\n");

@@ -24,16 +24,30 @@ It is not built again for each one.
 
 ```sh
 unikernel/out/reply source examples/factorial.hom > factorial.bytes
-cloud-hypervisor --kernel unikernel/out/reflect.elf --initramfs factorial.bytes \
-    --cmdline "100000000 1" --cpus boot=1 --memory size=512M --serial tty --console off
+CLOUD_HYPERVISOR=/path/to/cloud-hypervisor sh unikernel/given.sh factorial.bytes 100000000 1
 unikernel/out/reflect-linux factorial.bytes 100000000 1     # the same, as a Linux process
 ```
 
-The command line is `[step-budget [levels]]`. The budget defaults to the one
-built in, and the levels to 1: the bytes run through `reflect_interp`, the
+`given.sh` starts Cloud Hypervisor with `--initramfs factorial.bytes
+--cmdline "100000000 1"`, one processor and 512 MiB. Use it rather than
+starting Cloud Hypervisor by hand: it refuses a file larger than 16 MiB before
+the hypervisor starts. Cloud Hypervisor 54.0 copies the file to the top of the
+first memory region without looking at where the image lies, so a file nearly
+as large as the memory lands on the image before any of the image's code runs,
+and the image cannot refuse it. On morphie a file of 500 MiB, or of 512 MiB
+less 4 KiB, gave an empty serial port, `InternalError` from the processor and
+exit status 0.
+
+The command line is `[step-budget [levels]]`, at most 1023 bytes; a longer one
+stops the image with a line instead of being cut. The budget is a whole number
+below 2^64 and defaults to the one built in. The levels are a whole number from
+0 to 8 and default to 1: the bytes run through `reflect_interp`, the
 interpreter written in the language, on the machine. Level 0 runs the program
-itself; level 2 runs the interpreter in the interpreter. With no `--initramfs`
-the image runs the source built into it through `reflect_run`.
+itself; level 2 runs the interpreter in the interpreter. The kernel builds the
+tower before the budget counts a step, so the levels are bounded by `main.zig`,
+not by the budget. A word that is not a number, and a number past these
+limits, each end in a line of their own and `reflect: exit 2`. With no
+`--initramfs` the image runs the source built into it through `reflect_run`.
 
 `--initramfs` is only how Cloud Hypervisor carries a file into guest memory;
 there is no file system. The layer finds the bytes as the one PVH boot module,
@@ -42,11 +56,18 @@ allocators (the hypervisor puts them where the stack goes), clears where they
 were, and serves them as the read-only file `/boot/program`. It starts the
 program with `reflect /boot/program` and the command line's words. It does not
 read the bytes: bytes that are no program are refused by the kernel, in the
-kernel's text. More than 16 MiB, or a second module, stops the image with a line.
+kernel's text. The kernel's reader walks the bytes once without building
+anything before it builds the value, so bytes that open millions of arrays and
+never close them are refused at once as `bytes error: the bytes end inside a
+value`. More than 16 MiB, a second module, or a module list outside usable
+memory stops the image with a line. Cloud Hypervisor hands over one module at
+most; the check reaches the last two lines with `PRETEND=two_modules` and
+`PRETEND=module_list_outside`.
 
 `build.sh` runs Lake, compiles generated C for Surface.Host's local imports,
 and links identical Lean objects into `out/reflect.elf` and
-`out/reflect-linux`. It does not use host/check.sh or host/out artifacts.
+`out/reflect-linux`: exactly the objects `objects.sha256` names, not whatever
+lies in `out/lean`. It does not use host/check.sh or host/out artifacts.
 `versions.txt`, `source.sha256` and `objects.sha256` record provenance.
 Source/toolchain or object changes reject reuse: remove `unikernel/out`
 and rebuild. Build outputs are ignored. Checks start from an empty output
@@ -155,3 +176,14 @@ that tree with each fix of `homoiconic-q59.56` and `q59.57` undone in turn and
 the build told to go on past a failing `quic-self`, so both the `quic-self`
 exit and the guest step that fails are there. The old acknowledgement rule
 fails `quic-self` (exit 21) and no guest step.
+
+2026-11-23 on morphie, Cloud Hypervisor 54.0 (`homoiconic-q59.60`):
+`evidence/boot-bytes-controls.log` shows each finding of the cross-family
+review on an image built from `709b13a`, before the fixes: 16 MiB of bytes
+`81` ran out of memory, 4294967295 levels at budget 0 faulted on a full stack,
+a cut command line read as budget 0, and 500 MiB or 512 MiB less 4 KiB given
+at boot silenced the image while Cloud Hypervisor exited 0. On the fixed tree
+a stray object in `out/lean` was not linked, 4 Mi nested arrays were refused
+in the kernel's text, and 8 Mi nested arrays or a flat 16 MiB array still ran
+out of memory (`homoiconic-q59.61`). `evidence/check-boot-bytes.log` is the
+whole `check.sh` run with the new boot-bytes cases.

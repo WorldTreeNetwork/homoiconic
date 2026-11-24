@@ -118,7 +118,11 @@ The image SHALL reject CPUs without XSAVE before entering musl. It SHALL enable 
 
 When Cloud Hypervisor is started with `--initramfs <file>`, the image SHALL treat that file's bytes as one program's byte form (`wire-bytes`). It SHALL pass exactly those bytes to `reflect_interp` with the byte-form flag set and the text flag clear, SHALL write the text that comes back to the serial port followed by a line end, and SHALL power the machine off. The PVH command line SHALL be `[step-budget [levels]]`: the budget SHALL default to the one built into the image and the levels to 1; level 0 runs the program itself and level k runs it through k interpreters. The program built into the image SHALL NOT run when bytes are given. One image file SHALL serve any number of different byte forms, one per boot, without being built again.
 
-The layer SHALL move the bytes out of the memory the stack and the allocators will use before it lays those out, SHALL NOT hand that memory out while the bytes are still read from it, and SHALL NOT read or change the bytes. Non-Lean code SHALL NOT decide whether the bytes are a program: bytes the kernel refuses SHALL end in the kernel's text and `reflect: exit 0`. More than 16 MiB of bytes, or more than one boot module, SHALL stop the image with a line saying so before the C library starts. A budget or a level count that is not a whole number SHALL end in a line saying so and `reflect: exit 2`. The Linux comparison process SHALL take the same file and the same words, `reflect-linux <bytes-file> [step-budget [levels]]`, and call the same export.
+The layer SHALL move the bytes out of the memory the stack and the allocators will use before it lays those out, SHALL NOT hand that memory out while the bytes are still read from it, and SHALL NOT read or change the bytes. Non-Lean code SHALL NOT decide whether the bytes are a program: bytes the kernel refuses SHALL end in the kernel's text and `reflect: exit 0`. More than 16 MiB of bytes, more than one boot module, or a boot module list that does not lie in usable memory, SHALL stop the image with a line saying so before the C library starts, and the layer SHALL check where the module list lies before it reads it. A PVH command line longer than 1023 bytes SHALL stop the image with a line saying so before the C library starts; the layer SHALL NOT cut it. Bytes that are no value SHALL be refused in the kernel's text however many arrays they open (`wire-bytes`). Bytes that are a value within 16 MiB can still need more memory than the 512 MiB machine has (8 Mi nested arrays of one, or one array of 16 Mi zeros, did on morphie); such a run ends in the Lean runtime's `INTERNAL PANIC: out of memory` and `reflect: exit 1`, not in the kernel's text. That is a known limit, not a guarantee (`homoiconic-q59.61`).
+
+The step budget SHALL be a whole number below 2^64 and the levels a whole number from 0 to 8. A budget or a level count that is not a whole number SHALL end in a line saying so and `reflect: exit 2`. A budget of 2^64 or more SHALL end in `reflect: the step budget must be below 18446744073709551616`, and more than 8 levels in `reflect: the levels must be at most 8`, each followed by `reflect: exit 2`, before the kernel is called: the kernel builds the tower of interpreters before the budget counts a step. The Linux comparison process SHALL take the same file and the same words, `reflect-linux <bytes-file> [step-budget [levels]]`, and call the same export.
+
+Cloud Hypervisor 54.0 loads the ELF file and then copies the `--initramfs` file to the top of the first memory region without looking at where the ELF file lies, so a file nearly that large lands on the image before any of its code runs, and the image cannot refuse it. The documented launch, `unikernel/given.sh <bytes-file> [step-budget [levels]]`, SHALL refuse a file larger than 16 MiB with a line and status 2 before Cloud Hypervisor starts, and SHALL give the machine 512 MiB, so that a file it passes lies above the image. The check SHALL boot bytes through that launch.
 
 #### Scenario: Two programs, one image
 
@@ -132,11 +136,41 @@ The layer SHALL move the bytes out of the memory the stack and the allocators wi
 - WHEN the image boots with factorial and command lines naming 0, 1 and 2 levels, and with forever and the command line `5000`
 - THEN factorial's answer is the same at every level, and forever shows `no result within 5000 steps`
 
+#### Scenario: The levels are not ignored
+
+- GIVEN the factorial byte form
+- WHEN the image boots with the command lines `10000 0`, `10000 1`, `100000 1` and `100000 2`
+- THEN the first and third show factorial's answer, and the second and fourth `no result within` their budget, each as the Linux process shows it: ignoring the level would change at least one of them
+
+#### Scenario: Words past the limits
+
+- GIVEN the factorial byte form
+- WHEN the image boots with the command lines `many`, `18446744073709551616`, `1000 x`, `1000 9` and `1000 4294967296`
+- THEN each ends in its own line, as the Linux process ends: the budget is not a whole number, the budget must be below 2^64, the levels are not a whole number, and twice the levels must be at most 8, each followed by `reflect: exit 2`; and `1000 8` and `18446744073709551615 0` are run
+
+#### Scenario: A long command line
+
+- GIVEN a command line of 1023 bytes that names a budget of 5000, and one of 1101 bytes
+- WHEN the image boots with each
+- THEN the first runs with a budget of 5000, and the second shows only `reflect: the command line is longer than 1023 bytes`
+
 #### Scenario: Bytes that are no program, and too many bytes
 
-- GIVEN a megabyte of bytes that is no program, a program's byte form with one byte added, and a file of 16 MiB and one byte
+- GIVEN a megabyte of bytes that is no program, a program's byte form with one byte added, 16 MiB of zero bytes, 16 MiB of bytes that each open an array of one, and a file of 16 MiB and one byte
 - WHEN the image boots with each
-- THEN the first two end in the text the Linux process prints for them and `reflect: exit 0`, and the third shows only `reflect: the program given at boot is too large`
+- THEN the first four end in the text the Linux process prints for them and `reflect: exit 0`: `bytes error: an indefinite length or a reserved form`, `bytes error: there are bytes after the value` twice, and `bytes error: the bytes end inside a value`; the launch refuses the fifth before Cloud Hypervisor starts, and Cloud Hypervisor started without the launch shows only `reflect: the program given at boot is too large`
+
+#### Scenario: A file that would land on the image
+
+- GIVEN a file 4 KiB smaller than the 512 MiB first memory region
+- WHEN it is given to the launch, and to Cloud Hypervisor directly
+- THEN the launch refuses it and does not start Cloud Hypervisor; started directly, the serial port says nothing and Cloud Hypervisor reports an internal error from the processor
+
+#### Scenario: Two files, and a module list outside memory
+
+- GIVEN images that see the one file Cloud Hypervisor hands over as two files, or see the module list outside usable memory
+- WHEN each boots with the factorial byte form
+- THEN they show only `reflect: more than one file was given at boot` and `reflect: the list of files given at boot is not in usable memory`
 
 #### Scenario: Nothing given
 
