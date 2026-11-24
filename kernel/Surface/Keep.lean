@@ -34,8 +34,11 @@ import Std.Data.HashMap
     and the byte forms are tested, not proved. That a state is saved under one
     root however much of it is held as references is proved, for references
     that saving made (`Surface/KeepProof.lean`, `Wire/PieceProof.lean`). That
-    one turn of a program holds and saves only such references is proved too
-    (`advance_turn`); for a VM and a node it is not.
+    a session holds and saves only such references is proved too: for one
+    turn of a program (`advance_turn`), and for every session, a VM and a
+    node among them (`advance_kept`, `Surface/KeepLogProof.lean`). That what a
+    VM or a node saves stands for the state the log theorems speak of is not
+    proved.
 
     A turn that answers a waiting program does not hold the root as a
     reference when the piece under it is small (`Wire.opened`): saving stores
@@ -210,13 +213,17 @@ def renderNodeProcs : Nat → List (Proc (P Ref) Final) → String
        | .finished .wrong => renderMOutcome .wrong) ++
       "; holds " ++ renderData (.arr (q.held.map .name)) ++ "\n" ++ renderNodeProcs (i + 1) qs
 
+/-- A node as one piece, `[seen, names, processes]`, each process
+    `[held, status]`. -/
+def nodePiece (seen : List Data) (cfg : LConfig) : P Ref :=
+  let procs := plist (cfg.procs.map fun q =>
+    plist [Data.toP (.arr (q.held.map .nat)), statusPiece q.status])
+  plist [Data.toP (.arr seen), Data.toP (.arr (cfg.names.map .nat)), procs]
+
 /-- The log is applied, or an op of it cannot happen: save the node as it
     stands and say where each process is. -/
 def Session.keepNode (s : Session) (part : NodePart) (refused : Option (Nat × Op)) : Session :=
-  let procs := plist (part.cfg.procs.map fun q =>
-    plist [Data.toP (.arr (q.held.map .nat)), statusPiece q.status])
-  let state := plist [Data.toP (.arr part.seen), Data.toP (.arr (part.cfg.names.map .nat)), procs]
-  match save pieceSize state with
+  match save pieceSize (nodePiece part.seen part.cfg) with
   | none => s.finish "error: the node has no byte form"
   | some (root, pieces) =>
       let fresh := s.fresh pieces
@@ -346,15 +353,23 @@ def openState (σ : Store Ref) (n : Nat) (root : P Ref) : Except Ref (Option (Li
   | _, _ => pure none
 
 /-- The parts of a list piece, behind any references. `none` when the piece is
-    not a list. -/
-partial def parts (σ : Store Ref) (n : Nat) (p : P Ref) : Except Ref (Option (List (P Ref))) := do
-  match ← chase σ n p with
-  | (_, .nil) => pure (some [])
-  | (_, .cons h t) =>
-      match ← parts σ n t with
-      | some xs => pure (some (h :: xs))
-      | none => pure none
-  | _ => pure none
+    not a list. The whole list may pass through at most `n` references; a
+    list that passes through more is given as `none`. With `n` above the
+    number of pieces the store holds (`Session.reach`) such a list meets a
+    reference twice, so it has no end. -/
+def parts (σ : Store Ref) : Nat → P Ref → Except Ref (Option (List (P Ref)))
+  | _, .nil => .ok (some [])
+  | n, .cons h t =>
+      match parts σ n t with
+      | .ok (some xs) => .ok (some (h :: xs))
+      | .ok none => .ok none
+      | .error r => .error r
+  | n + 1, .ref r =>
+      match σ r with
+      | some p => parts σ n p
+      | none => .error r
+  | _, _ => .ok none
+termination_by n p => (n, sizeOf p)
 
 def natsOf : Data → Option (List Nat)
   | .arr ds => ds.mapM fun
