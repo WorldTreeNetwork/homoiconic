@@ -2,6 +2,7 @@ import Surface.Run
 import Surface.Bytes
 import Surface.Keep
 import Surface.Chan
+import Surface.Remote
 import Surface.Cross
 
 namespace Surface.Host
@@ -104,6 +105,29 @@ unsafe def crossCheck (program length a aLength b bLength out capacity : USize) 
 @[export reflect_cross_reseal]
 unsafe def crossReseal (record length out capacity : USize) : USize :=
   storeBytes out capacity (Cross.reseal (copyBytes record length)).toUTF8
+
+/-! The fixed remote program of `add-network-channels`. The network guests
+    call these until they carry crossings (`add-recorded-crossing`). -/
+
+/-- C ABI: the wire bytes a guest sends on a remote name. -/
+@[export reflect_remote_offer]
+unsafe def reflectRemoteOffer (out capacity : USize) : USize :=
+  storeBytes out capacity Surface.Remote.offerBytes
+
+/-- C ABI: offer bytes in, the reply-channel message out. -/
+@[export reflect_remote_take]
+unsafe def reflectRemoteTake (offer length out capacity : USize) : USize :=
+  storeBytes out capacity (Surface.Remote.takeBytes (copyBytes offer length))
+
+/-- C ABI: the delivery order, as the text of a schedule. -/
+@[export reflect_remote_log]
+unsafe def reflectRemoteLog (out capacity : USize) : USize :=
+  storeBytes out capacity Surface.Remote.logText.toUTF8
+
+/-- C ABI: 1 when replaying that schedule on one machine gives the same result. -/
+@[export reflect_remote_same]
+unsafe def reflectRemoteSame (_: USize) : USize :=
+  if Surface.Remote.same then 1 else 0
 
 /-- Build-only hook: a Lean abort the network check can ask for. -/
 @[export reflect_abort_alloc]
