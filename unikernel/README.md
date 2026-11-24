@@ -374,3 +374,24 @@ stops honest logs combining. The script there is the next commit's: the
 `evidence/cross-sig-controls.log` is `check-wire.sh` on copies of the tree
 with each check of the record's signature undone in `cross-check.zig`.
 The script is `evidence/cross-sig-controls.sh`. With the signature not verified the moved entry is caught by the link instead; a record with no signature and one signed by another entity are accepted.
+
+**2026-11-24 (UTC), a tail loop's memory (`homoiconic-q59.65`).** On morphie,
+Cloud Hypervisor 54.0, tree `f9f4c81` exported with `git archive` to
+`~/hom-f9f4c81` (its `kernel/`, `unikernel/` and `host/` are those of the
+commit that landed): `build.sh examples/factorial.hom`, `build-net.sh`,
+`check.sh`, `check-net.sh`, `check-quic.sh` and `check-wire.sh` each exited 0.
+Logs are `evidence/q59.65-f9f4c81-*.log` (`check.sh` has 63 lines of `ok`,
+among them forever at the default budget through 0, 1 and 2 interpreters;
+`check-net.sh` sends forever at 100000000 and gets `81 01`, then factorial),
+exit codes and hashes `evidence/run-f9f4c81.txt`. `reflect.elf` built from
+factorial is sha256 `1e84a6d5…dc462c5`; `reflect-net.elf` is `cdd58dc8…3690f0`,
+the same before and after the checks. `source.sha256`, `objects.sha256` and
+`versions.txt` are this build's (the Lean side changed). An earlier run of
+`8300d8f` failed `check-net.sh` at the new case only because the client
+stopped reading on its socket's 3-second timeout; the guest was up (fixed in
+the next commit). `evidence/q59.65-measurements.log` has the numbers in the
+table under "Why 2 MiB", for `8300d8f` and for the control, the same tree with
+`kernel/` from `e9a4c86`; `evidence/q59.65-control-check.log` is `check.sh`
+on that control, failing at `forever at the default budget through 0` with
+`INTERNAL PANIC: out of memory`. `host/check.sh` passed on the Mac, and with
+the baseline binary its new case fails at 1181376 KiB.

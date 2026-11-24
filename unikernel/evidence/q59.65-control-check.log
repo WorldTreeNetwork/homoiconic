@@ -1,0 +1,22 @@
+with cloud-hypervisor v54.0
+ok   factorial
+ok   forever
+ok   not-syntax
+ok   text
+ok   a zero byte in the source
+ok   an answer of 128911 bytes
+ok   the clock stopped
+ok   the event loop's start is the empty one
+ok   the program calls reflect_run and reflect_interp and nothing else that evaluates or reads
+ok   the Lean objects are the ones Lake's C compiled to
+ok   bytes at boot: text, through one interpreter
+ok   bytes at boot: factorial, through one interpreter
+ok   bytes at boot: factorial, through none
+ok   bytes at boot: factorial, through two interpreters
+ok   bytes at boot: the quine
+ok   bytes at boot: a budget of 5000 steps
+/home/dorje/hom-8300d8f-control/unikernel/out/wanted.txt /home/dorje/hom-8300d8f-control/unikernel/out/serial.log differ: char 1, line 1
+FAIL bytes at boot: forever at the default budget through 0: the image and the Linux process differ
+  serial: INTERNAL PANIC: out of memory
+  serial: reflect: exit 1
+exit 1

@@ -1,0 +1,60 @@
+# homoiconic-q59.65 measurements on morphie, 2026-11-24. mmeasure: reflect-linux peaks from getrusage (RUSAGE_CHILDREN), then the image booted through given.sh (512 MiB) at budget 100000000.
+# fixed: tree 8300d8f (same kernel and unikernel sources as f9f4c81)
+580f24533a21197301e6c4ce87bffc028ff98a20d7948a9a97ea18b004a1853b  unikernel/out/reflect.elf
+== Linux process (reflect-linux), peak resident memory
+forever level 0 budget   1000000: exit 0, peak    11 MiB, says: no result within 1000000 steps 
+forever level 0 budget  10000000: exit 0, peak    11 MiB, says: no result within 10000000 steps 
+forever level 0 budget  30000000: exit 0, peak    11 MiB, says: no result within 30000000 steps 
+forever level 0 budget 100000000: exit 0, peak    11 MiB, says: no result within 100000000 steps 
+forever level 1 budget   1000000: exit 0, peak    11 MiB, says: no result within 1000000 steps 
+forever level 1 budget  10000000: exit 0, peak    11 MiB, says: no result within 10000000 steps 
+forever level 1 budget  30000000: exit 0, peak    11 MiB, says: no result within 30000000 steps 
+forever level 1 budget 100000000: exit 0, peak    11 MiB, says: no result within 100000000 steps 
+forever level 2 budget   1000000: exit 0, peak    11 MiB, says: no result within 1000000 steps 
+forever level 2 budget  10000000: exit 0, peak    11 MiB, says: no result within 10000000 steps 
+forever level 2 budget  30000000: exit 0, peak    11 MiB, says: no result within 30000000 steps 
+forever level 2 budget 100000000: exit 0, peak    11 MiB, says: no result within 100000000 steps 
+deep level 0 budget   1000000: exit 0, peak    15 MiB, says: no result within 1000000 steps 
+deep level 0 budget  10000000: exit 0, peak    91 MiB, says: no result within 10000000 steps 
+deep level 0 budget  30000000: exit 0, peak   259 MiB, says: no result within 30000000 steps 
+deep level 0 budget 100000000: exit 0, peak   849 MiB, says: no result within 100000000 steps 
+list level 1 budget   1000000: exit 0, peak    64 MiB, says: no result within 1000000 steps 
+list level 1 budget  10000000: exit 0, peak   176 MiB, says: no result within 10000000 steps 
+list level 1 budget  30000000: exit 0, peak   317 MiB, says: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  
+list level 1 budget 100000000: exit 0, peak   317 MiB, says: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  
+== image (512 MiB), default budget 100000000
+forever level 0: launch exit 0, serial: no result within 100000000 steps|reflect: exit 0|
+forever level 1: launch exit 0, serial: no result within 100000000 steps|reflect: exit 0|
+forever level 2: launch exit 0, serial: no result within 100000000 steps|reflect: exit 0|
+deep level 0: launch exit 0, serial: INTERNAL PANIC: out of memory|reflect: exit 1|
+list level 1: launch exit 0, serial: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+
+# control: tree 8300d8f with kernel/ from e9a4c86 (a frame per tail call)
+77dfb8f348b5af8191b5c450ce201a5cd13e95b4413787313304ffaa6d49b210  unikernel/out/reflect.elf
+== Linux process (reflect-linux), peak resident memory
+forever level 0 budget   1000000: exit 0, peak    19 MiB, says: no result within 1000000 steps 
+forever level 0 budget  10000000: exit 0, peak   121 MiB, says: no result within 10000000 steps 
+forever level 0 budget  30000000: exit 0, peak   349 MiB, says: no result within 30000000 steps 
+forever level 0 budget 100000000: exit 0, peak  1151 MiB, says: no result within 100000000 steps 
+forever level 1 budget   1000000: exit 0, peak    11 MiB, says: no result within 1000000 steps 
+forever level 1 budget  10000000: exit 0, peak    53 MiB, says: no result within 10000000 steps 
+forever level 1 budget  30000000: exit 0, peak   145 MiB, says: no result within 30000000 steps 
+forever level 1 budget 100000000: exit 0, peak   463 MiB, says: no result within 100000000 steps 
+forever level 2 budget   1000000: exit 0, peak    11 MiB, says: no result within 1000000 steps 
+forever level 2 budget  10000000: exit 0, peak    19 MiB, says: no result within 10000000 steps 
+forever level 2 budget  30000000: exit 0, peak    45 MiB, says: no result within 30000000 steps 
+forever level 2 budget 100000000: exit 0, peak   135 MiB, says: no result within 100000000 steps 
+deep level 0 budget   1000000: exit 0, peak    19 MiB, says: no result within 1000000 steps 
+deep level 0 budget  10000000: exit 0, peak   121 MiB, says: no result within 10000000 steps 
+deep level 0 budget  30000000: exit 0, peak   349 MiB, says: no result within 30000000 steps 
+deep level 0 budget 100000000: exit 0, peak  1151 MiB, says: no result within 100000000 steps 
+list level 1 budget   1000000: exit 0, peak    68 MiB, says: no result within 1000000 steps 
+list level 1 budget  10000000: exit 0, peak   228 MiB, says: no result within 10000000 steps 
+list level 1 budget  30000000: exit 0, peak   463 MiB, says: no result within 30000000 steps 
+list level 1 budget 100000000: exit 0, peak   461 MiB, says: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  
+== image (512 MiB), default budget 100000000
+forever level 0: launch exit 0, serial: INTERNAL PANIC: out of memory|reflect: exit 1|
+forever level 1: launch exit 0, serial: INTERNAL PANIC: out of memory|reflect: exit 1|
+forever level 2: launch exit 0, serial: no result within 100000000 steps|reflect: exit 0|
+deep level 0: launch exit 0, serial: INTERNAL PANIC: out of memory|reflect: exit 1|
+list level 1: launch exit 0, serial: INTERNAL PANIC: out of memory|reflect: exit 1|

@@ -1,0 +1,38 @@
+1/3 pvclock.test.time runs forward far past 2^32 shifted ticks...OK
+2/3 pvclock.test.a 3 GHz counter gives a second per 3e9 ticks, for a day...OK
+3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
+All 3 tests passed.
+quic self ok
+built /home/dorje/hom-f9f4c81/unikernel/out-net/reflect-net.elf
+ok   refused: reflect.quic_port with reflect.wire_port=4446
+ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+ok   refused: reflect.quic_port with no reflect.allow
+ok   a guest with no key serves no QUIC
+ok   a guest given 31 bytes serves no QUIC
+ok   a guest given 32 zero bytes serves no QUIC
+ok   stream data in an Initial packet is not acted on; the allowed client's request is
+ok   a guest with another key has another name, and the client that expects the first refuses it
+ok   the guest's name is the one computed from its key file
+ok   factorial over QUIC equals the Linux process
+ok   a 5000-step budget reply equals the Linux process
+ok   factorial again on a new handshake
+ok   a client that expects another name refuses the guest
+ok   factorial after an abandoned handshake, with loss and reordering
+     the allowed client was served in 13 ms
+ok   a client the guest does not allow is refused, and the next client is served at once
+ok   a ping to the plain UDP port of a QUIC guest is not answered
+ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+ok   factorial again after the garbage
+     the answer to a first flight of 1200 bytes is 1200 bytes
+ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered in 1200 bytes or more
+ok   factorial after the unfinished raw handshake
+     the reply went out once; 3 datagrams in all
+ok   a reply the client acknowledges is sent once
+ok   factorial for a client that does not acknowledge the reply
+     8 more datagrams in 11 s, the last at 6.3 s
+ok   a reply nobody acknowledges is resent and then given up
+     3 datagrams and 3600 bytes for a first flight of 1200 bytes
+ok   a first flight from a forged address draws at most three times its bytes
+ok   factorial after the forged first flight
+ok   the same key started again is the same name, and the same client is served
+quic guest ok
