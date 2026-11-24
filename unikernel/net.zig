@@ -514,8 +514,13 @@ fn quicDatagram(frame: []const u8, nic: Nic, ep: Endpoint) void {
     if (ulen < 8 or 42 + (ulen - 8) > frame.len) return;
     const payload = frame[42..][0 .. ulen - 8];
     const now = mono();
+    // A server connection takes datagrams only from the address it answers,
+    // so the bytes it counts as received (quic.zig `rx_bytes`) came from
+    // there. Another address can start a connection below, nothing else.
+    const here = !qconn.server or !q_peer or
+        (eql(frame[26..30], q_frame[26..30]) and eql(frame[34..36], q_frame[34..36]));
     // Nothing a datagram says is used until one of its packets opens (AEAD).
-    if (qconn.recv(payload, now)) {
+    if (here and qconn.recv(payload, now)) {
         // The reply address is the one the connection's first Initial came
         // from. It is not moved afterwards, by any packet.
         if (!q_peer) {

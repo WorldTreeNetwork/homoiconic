@@ -22,6 +22,14 @@ pub fn certificate() []const u8 {
 
 pub const min_initial: usize = 1200;
 
+/// A flight is sent at most this many times and then given up.
+pub const max_tries: u8 = 10;
+/// A resend waits 20 ms shifted left by the tries so far, at most by this.
+const max_shift: u8 = 6;
+/// Before a server has validated the client's address it sends at most this
+/// many times the bytes it has received (RFC 9000 section 8.1).
+pub const amplification: u64 = 3;
+
 /// Whether a datagram has the shape of a client's first flight for a
 /// connection other than `current`: at least 1200 bytes, a version 1 Initial,
 /// 8-byte connection IDs, and a destination ID that is not `current`. Whether
@@ -80,6 +88,12 @@ pub const Conn = struct {
     sent_fin: bool = false,
     opens: u64 = 0,
     dgram: usize = 0,
+    /// A server has opened a Handshake packet: the client reads what is sent
+    /// to its address. Until then `tx_bytes` stays within `amplification`
+    /// times `rx_bytes`, the bytes of the datagrams that opened.
+    validated: bool = false,
+    rx_bytes: u64 = 0,
+    tx_bytes: u64 = 0,
     rand: *const fn () u64,
 
     pub fn openClient(rand: *const fn () u64, pin: *const [32]u8) Conn {
@@ -115,7 +129,9 @@ pub const Conn = struct {
             if (n == 0) break;
             i += n;
         }
-        return c.opens != before;
+        if (c.opens == before) return false;
+        c.rx_bytes += pkt.len;
+        return true;
     }
 
     pub fn send(c: *Conn, out: []u8, now: u64) usize {
@@ -152,7 +168,7 @@ pub const Conn = struct {
         const keys = c.spaceKeys(s);
         if (!keys.on) return false;
         if (p.tries == 0) return true;
-        const wait = @as(u64, 20_000_000) << @min(p.tries, 4);
+        const wait = @as(u64, 20_000_000) << @intCast(@min(p.tries, max_shift));
         return now >= p.at +% wait;
     }
 
@@ -218,6 +234,16 @@ pub const Conn = struct {
         };
         // The peer's connection ID is taken from a packet that opened.
         if (space == 0 and (first or !c.server)) @memcpy(&c.peer_cid, scid);
+        // A Handshake packet that opens on a server was sealed with keys made
+        // from the ServerHello, so the client has it and reads what is sent
+        // to its address: the address is validated (RFC 9000 section 8.1) and
+        // the Initial space is finished, its flight and its opening keys
+        // (RFC 9001 section 4.9.1).
+        if (space == 1 and c.server and !c.validated) {
+            c.validated = true;
+            c.pend[0].on = false;
+            c.open_initial.on = false;
+        }
         c.mark(space, plain.pn);
         c.takeFrames(space, plain.data, now);
         return total;
@@ -269,7 +295,6 @@ pub const Conn = struct {
         @memcpy(frames[n..][0..p.len], p.frames[0..p.len]);
         n += p.len;
         const pn = k.pn;
-        k.pn += 1;
         const long = space < 2;
         var hdr: [64]u8 = undefined;
         var h: usize = 0;
@@ -298,6 +323,11 @@ pub const Conn = struct {
         const total = h + 4 + n + 16;
         const pad = if (space == 0 and !c.server and total < 1200) 1200 else total;
         if (pad > out.len or pad > 1400) return null;
+        // An address that has not been validated is sent no more than
+        // `amplification` times what came from it. A packet over the limit
+        // is not sent and not counted as a try; it goes when more arrives.
+        if (c.server and !c.validated and c.tx_bytes + pad > amplification * c.rx_bytes) return null;
+        k.pn += 1;
         @memset(out[0..pad], 0);
         @memcpy(out[0..h], hdr[0..h]);
         std.mem.writeInt(u32, out[h..][0..4], pn, .big);
@@ -326,6 +356,12 @@ pub const Conn = struct {
         p.pn = pn;
         p.at = now;
         p.tries += 1;
+        // A flight nobody acknowledges is given up, not resent for ever.
+        if (p.tries >= max_tries) p.on = false;
+        c.tx_bytes += pad;
+        // A client that sends a Handshake packet has the ServerHello, so its
+        // Initial flight arrived: that space is finished (RFC 9001 4.9.1).
+        if (!c.server and space == 1) c.pend[0].on = false;
         return pad;
     }
 
@@ -338,7 +374,7 @@ pub const Conn = struct {
                 continue;
             }
             if (t == 0x02 or t == 0x03) {
-                i = c.ack(data, i) orelse return;
+                i = c.ack(space, data, i) orelse return;
                 continue;
             }
             if (t == 0x06) {
@@ -507,7 +543,7 @@ pub const Conn = struct {
         c.pend[1].on = false;
     }
 
-    fn ack(c: *Conn, data: []const u8, at: usize) ?usize {
+    fn ack(c: *Conn, space: usize, data: []const u8, at: usize) ?usize {
         var o = at + 1;
         const largest = getVar(data[o..]) orelse return null;
         o += varLen(largest.v);
@@ -517,7 +553,7 @@ pub const Conn = struct {
         o += varLen(count.v);
         const first = getVar(data[o..]) orelse return null;
         o += varLen(first.v);
-        c.acked(@truncate(largest.v));
+        c.acked(space, @truncate(largest.v));
         var n: u64 = 0;
         while (n < count.v) : (n += 1) {
             const gap = getVar(data[o..]) orelse return null;
@@ -528,11 +564,17 @@ pub const Conn = struct {
         return o;
     }
 
-    fn acked(c: *Conn, pn: u32) void {
-        var s: usize = 0;
-        while (s < 3) : (s += 1) {
-            if (c.pend[s].on and c.pend[s].tries > 0 and c.pend[s].pn == pn) c.pend[s].on = false;
-        }
+    /// An acknowledgement is for the packet number space it arrived in and
+    /// no other (RFC 9002 section 3): the same number in another space is
+    /// another packet, which may be lost.
+    fn acked(c: *Conn, space: usize, pn: u32) void {
+        const p = &c.pend[space];
+        if (!p.on or p.tries == 0 or p.pn != pn) return;
+        p.on = false;
+        // A client whose 1-RTT packet is acknowledged holds a confirmed
+        // handshake (RFC 9001 section 4.1.2): the server took its Finished,
+        // which no Handshake packet will acknowledge.
+        if (space == 2 and !c.server) c.pend[1].on = false;
     }
 
     fn mark(c: *Conn, space: usize, pn: u32) void {

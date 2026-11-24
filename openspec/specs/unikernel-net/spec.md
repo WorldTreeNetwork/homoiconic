@@ -169,7 +169,7 @@ The command line MAY carry `reflect.quic_port=<port>`, at most once, with a port
 
 ### Requirement: A datagram that does not open changes nothing
 
-A datagram to a QUIC port SHALL change the guest's connection, and where the guest sends, only when one of its packets opens: its AEAD tag checks under keys of the connection it is given to (`quic.zig` `recv`, `open`). A server connection SHALL install the Initial keys named by a first Initial only if that packet opens, and either end SHALL take the peer's connection ID only from an Initial that opened (`quic.zig` `longPacket`). The guest SHALL send a server connection's packets to the address its first opened Initial came from and SHALL NOT move that address afterwards for any packet; there is no connection migration (`net.zig` `quicDatagram`).
+A datagram to a QUIC port SHALL change the guest's connection, and where the guest sends, only when one of its packets opens: its AEAD tag checks under keys of the connection it is given to (`quic.zig` `recv`, `open`). A server connection SHALL install the Initial keys named by a first Initial only if that packet opens, and either end SHALL take the peer's connection ID only from an Initial that opened (`quic.zig` `longPacket`). The guest SHALL send a server connection's packets to the address its first opened Initial came from and SHALL NOT move that address afterwards for any packet; there is no connection migration (`net.zig` `quicDatagram`). Once it has that address, a server connection SHALL be given datagrams only from that IPv4 address and UDP port; a datagram from anywhere else SHALL NOT reach it, whatever it would open, and can only start a connection under the policy below.
 
 A server connection SHALL give way to a new one only under this policy. The datagram SHALL be at least 1200 bytes and begin with a QUIC version 1 Initial with 8-byte connection IDs whose destination ID is not the present connection's (`quic.zig` `newInitial`); the present connection SHALL have answered its stream, or have opened no packet for 2 seconds by the paravirtual clock (`net.zig` `q_idle`); and the Initial SHALL open under the Initial keys of its own destination ID on a connection built aside, which replaces the present one only then. A first Initial in a datagram shorter than 1200 bytes SHALL start nothing. Every other long-header packet that does not open under the present connection's keys, of any type and from any address, SHALL be dropped with no effect. The guest's own connection to a peer (`reflect.peer`) SHALL never be replaced.
 
@@ -227,7 +227,11 @@ The host client `unikernel/out/quic-client <ip> <port> <budget> <program-file> [
 
 ### Requirement: QUIC survives loss and reordering
 
-Each packet number space SHALL keep its unacknowledged flight and resend it, waiting 20 ms shifted left by the number of tries so far, at most by 4, until an acknowledgement for that packet arrives. Received CRYPTO and STREAM data SHALL be placed by offset, so packets that arrive out of order are used once the gap is filled (`quic.zig` `due`, `seal`, `holePut`). There is no congestion control or connection close, and stream data is limited to 8192 bytes each way. A connection is not closed for being idle: it resends until another takes its place, which an unfinished one allows after 2 idle seconds.
+Each packet number space SHALL keep its unacknowledged flight and resend it, waiting 20 ms shifted left by the number of tries so far, at most by 6 (1.28 s), until the flight is finished or has been sent 10 times. After the tenth send, 6.36 s after the first, the flight SHALL be given up and not sent again (`quic.zig` `due`, `seal`, `max_tries`). Received CRYPTO and STREAM data SHALL be placed by offset, so packets that arrive out of order are used once the gap is filled (`holePut`).
+
+An acknowledgement SHALL finish only the flight of the packet number space it arrived in, and only when it names that flight's latest packet (`quic.zig` `acked`; RFC 9002 section 3). The same number in another space is another packet. The flights that no acknowledgement in their own space reaches SHALL finish as RFC 9001 has them finish: a server's Initial flight when the server opens a Handshake packet, after which it opens no Initial (section 4.9.1); a client's Initial flight when the client sends a Handshake packet; a client's Handshake flight when its 1-RTT packet is acknowledged (section 4.1.2); and a server's Handshake flight when the client's Finished checks.
+
+What this does not give SHALL be stated as it is. A client that has the reply has nothing more to send, and there is no packet that only acknowledges, so no reply is ever acknowledged: the guest sends every reply 10 times over 6.36 s unless another connection takes its place first (`homoiconic-q59.58`). There is no congestion control or connection close, and stream data is limited to 8192 bytes each way. A connection is not closed for being idle or for a flight given up: it stays, sending nothing, until another takes its place, which an unfinished one allows after 2 idle seconds. A client whose flight is given up is not told; `quic-client` exits 4 at its 60 seconds.
 
 #### Scenario: Loss and reordering against the guest
 
@@ -241,15 +245,45 @@ Each packet number space SHALL keep its unacknowledged flight and resend it, wai
 - WHEN it checks the RFC 9001 initial keys, a clean exchange, an exchange that drops every fifth datagram and swaps pairs in both directions, and a wrong pin
 - THEN it prints `quic self ok` and the build continues
 
+#### Scenario: An acknowledgement in another space
+
+- GIVEN `quic-self`, a server whose Initial and Handshake flights have both gone out as packet 0, and a client that was given the Initial packet of that datagram and not the Handshake packet
+- WHEN the client's resent first flight, an Initial that acknowledges Initial packet 0, reaches the server
+- THEN the server's next datagram is its Handshake flight alone, and the exchange finishes (exit 21 when the acknowledgement finished the Handshake flight too)
+
+#### Scenario: A reply nobody acknowledges
+
+- GIVEN a finished exchange whose client sends nothing more
+- WHEN the server is left for two minutes of its clock in `quic-self`, and a real guest is watched on its TAP for 11 seconds after a client has left in `check-quic.sh`
+- THEN in `quic-self` the server resends the reply fewer than 10 times and nothing after the first 70 seconds, and the client sends nothing at all; the guest sends at least one and at most 9 more datagrams and none after the eighth second
+
+### Requirement: An address that is not validated is sent at most three times what came from it
+
+Until a server connection has opened a Handshake packet, the bytes it has sent SHALL NOT exceed three times the bytes of the datagrams that opened under its keys (RFC 9000 section 8.1; `quic.zig` `seal`, `amplification`, `rx_bytes`, `tx_bytes`, `validated`). Both counts are UDP payload bytes. A packet that would pass the limit SHALL NOT be sent and SHALL NOT count as a try. It SHALL go as soon as a datagram that opens raises the limit, so a client that is where it says and loses the guest's answers is served when its resent first flight arrives. A Handshake packet that opens validates the address and lifts the limit: its keys come from the ServerHello, which was sent to that address and nowhere else. Because a server connection is given datagrams only from the address it answers (the requirement "A datagram that does not open changes nothing"), the bytes counted came from that address as far as a source address says. A datagram that does not open is not counted, which is less than the RFC allows.
+
+What this does not give SHALL be stated as it is. The limit bounds the factor, not the number: each well-formed first flight with a forged source still takes the one connection for 2 seconds and draws up to three times its bytes to that address. The guest sends no Retry and has no address token. The guest's first answer is not padded to 1200 bytes as RFC 9000 section 14.1 asks of a server (`homoiconic-q59.59`).
+
+#### Scenario: A first flight from a forged address
+
+- GIVEN a running guest with a QUIC port that has answered its last client, and the 1200-byte first datagram of a real handshake written by `quic-client ... initial`
+- WHEN it is sent from 192.168.249.77, where nobody is, and the same bytes are sent four more times from another address over the next three seconds
+- THEN in 8 seconds the guest sends the forged address at least two datagrams and at most 3600 bytes, sends nothing to any other address, and serves factorial to a real client afterwards (`check-quic.sh`)
+
+#### Scenario: A first flight nobody follows, in one process
+
+- GIVEN `quic-self` and a server given one first flight
+- WHEN the server is asked to send every 10 ms for a minute of its clock, and then the client's resent first flight arrives
+- THEN the server has sent more than once and at most three times the flight's bytes (exit 24 otherwise), sends again at once when the second flight arrives, and the exchange finishes
+
 ### Requirement: The QUIC check uses a real guest
 
-`unikernel/check-quic.sh` SHALL require KVM and Cloud Hypervisor v54.0, build with `build-net.sh` (which runs `quic-self`), create its own TAP, boot the network image with `reflect.quic_port`, wait up to 90 seconds for `reflect: quic <port>` on serial, and run factorial, the 5000-step budget, factorial on a new handshake, the wrong key, loss straight after it, the second address (`spoof`, from a second address it gives its TAP), factorial again, the first flight with a bad and then a good UDP checksum, and factorial once more, comparing reply payloads with `unikernel/out/reply`. Before that boot it SHALL boot the two refused command lines. It SHALL require that the serving guest printed nothing but its two start lines, print one `ok` line a step, and stop its guest and remove its TAP on exit, pass or fail.
+`unikernel/check-quic.sh` SHALL require KVM and Cloud Hypervisor v54.0, build with `build-net.sh` (which runs `quic-self`), create its own TAP, boot the network image with `reflect.quic_port`, wait up to 90 seconds for `reflect: quic <port>` on serial, and run factorial, the 5000-step budget, factorial on a new handshake, the wrong key, loss straight after it, the second address (`spoof`, from a second address it gives its TAP), factorial again, the first flight with a bad and then a good UDP checksum, factorial once more, a watch on the TAP for the resends of that unacknowledged reply to stop, a first flight from a forged address, and factorial after it, comparing reply payloads with `unikernel/out/reply`. Before that boot it SHALL boot the two refused command lines. It SHALL require that the serving guest printed nothing but its two start lines, print one `ok` line a step, and stop its guest and remove its TAP on exit, pass or fail.
 
 #### Scenario: The check passes
 
 - GIVEN morphie with Cloud Hypervisor 54.0
 - WHEN `sh unikernel/check-quic.sh` runs
-- THEN it prints eleven `ok` lines and `quic guest ok`, and exits 0 (`unikernel/evidence/check-quic.log`)
+- THEN it prints fourteen `ok` lines and `quic guest ok`, and exits 0 (`unikernel/evidence/check-quic.log`)
 
 ### Requirement: Two guests carry a remote channel over QUIC
 

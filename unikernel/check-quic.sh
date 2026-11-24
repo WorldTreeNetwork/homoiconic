@@ -3,8 +3,11 @@
 # with the guest still answering, a wrong peer key, loss plus reordering,
 # and a second host that sends what it likes: garbage and a new handshake in
 # the middle of an exchange, garbage long headers after the reply, and a
-# first flight with a bad UDP checksum. Before that, the command lines that
-# ask for two QUIC services at once, which the guest refuses.
+# first flight with a bad UDP checksum. Then what the guest stops sending: a
+# reply nobody acknowledges is given up, and a first flight from an address
+# that is never heard from again is answered with at most three times its
+# bytes. Before all that, the command lines that ask for two QUIC services at
+# once, which the guest refuses.
 set -eu
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$HERE/.." && pwd)"
@@ -16,6 +19,7 @@ PORT=4444
 QPORT=4445
 HOSTIP=192.168.249.1
 OTHERIP=192.168.249.9
+FORGEDIP=192.168.249.77
 MAC=02:00:00:00:00:02
 CMD="reflect.ip=$IP reflect.port=$PORT reflect.quic_port=$QPORT"
 
@@ -198,6 +202,115 @@ echo "ok   a first flight with a bad UDP checksum is dropped; with a good one it
 # That handshake is left unfinished too; the guest still serves.
 factorial fact4
 echo "ok   factorial after the unfinished raw handshake"
+
+# watch <mode>: listen on the TAP for what the guest sends from its QUIC port.
+watch() {
+    sudo -n python3 - "$TAP" "$OUT/quic-initial.bin" "$QPORT" "$1" "$HOSTIP" "$FORGEDIP" <<'PY'
+import socket, struct, sys, time
+tap, path, qport, mode = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+host_ip = bytes(int(x) for x in sys.argv[5].split("."))
+forged_ip = bytes(int(x) for x in sys.argv[6].split("."))
+payload = open(path, "rb").read()
+s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
+s.bind((tap, 0))
+host_mac = s.getsockname()[4]
+guest_mac = bytes.fromhex("020000000002")
+guest_ip = bytes([192, 168, 249, 2])
+
+def csum(data):
+    if len(data) % 2:
+        data += b"\x00"
+    t = sum(struct.unpack("!%dH" % (len(data) // 2), data))
+    while t >> 16:
+        t = (t & 0xffff) + (t >> 16)
+    return (~t) & 0xffff
+
+def send(src_ip, sport):
+    ulen = 8 + len(payload)
+    ip = bytearray(20)
+    ip[0] = 0x45
+    ip[2:4] = struct.pack("!H", 20 + ulen)
+    ip[8] = 64
+    ip[9] = 17
+    ip[12:16] = src_ip
+    ip[16:20] = guest_ip
+    ip[10:12] = struct.pack("!H", csum(bytes(ip)))
+    u = bytearray(ulen)
+    u[0:2] = struct.pack("!H", sport)
+    u[2:4] = struct.pack("!H", qport)
+    u[4:6] = struct.pack("!H", ulen)
+    u[8:] = payload
+    cs = csum(src_ip + guest_ip + b"\x00\x11" + struct.pack("!H", ulen) + bytes(u)) or 0xffff
+    u[6:8] = struct.pack("!H", cs)
+    s.send(guest_mac + host_mac + b"\x08\x00" + bytes(ip) + bytes(u))
+
+# What the guest sends from its QUIC port for `seconds`: (when, to, port,
+# payload bytes). `todo` is a list of (when, call) run on the way.
+def watch(seconds, todo=()):
+    todo = sorted(todo, key=lambda e: e[0])
+    start = time.time()
+    seen = []
+    while True:
+        now = time.time() - start
+        while todo and todo[0][0] <= now:
+            todo.pop(0)[1]()
+        if now >= seconds:
+            return seen
+        wait = seconds - now
+        if todo:
+            wait = min(wait, todo[0][0] - now)
+        s.settimeout(max(0.005, wait))
+        try:
+            pkt = s.recv(4096)
+        except socket.timeout:
+            continue
+        if len(pkt) >= 42 and pkt[12:14] == b"\x08\x00" and pkt[23] == 17 and pkt[26:30] == guest_ip \
+                and struct.unpack("!H", pkt[34:36])[0] == qport:
+            seen.append((time.time() - start, pkt[30:34], struct.unpack("!H", pkt[36:38])[0],
+                         struct.unpack("!H", pkt[38:40])[0] - 8))
+
+if mode == "quiet":
+    # The exchange before this left a reply the client never acknowledged.
+    seen = watch(11.0)
+    if not seen:
+        sys.exit("the guest did not resend a reply nobody acknowledged")
+    if len(seen) > 9 or seen[-1][0] > 8.0:
+        sys.exit("the guest went on resending: %d datagrams in 11 s, the last at %.1f s" % (len(seen), seen[-1][0]))
+    print("     %d more datagrams in 11 s, the last at %.1f s" % (len(seen), seen[-1][0]))
+elif mode == "forged":
+    # A real first flight with a source address nobody is at, and then the
+    # same bytes again from another address, which must add nothing.
+    send(forged_ip, 9300)
+    again = lambda: send(host_ip, 9301)
+    seen = watch(8.0, [(0.5, again), (1.0, again), (1.5, again), (3.0, again)])
+    there = [e for e in seen if e[1] == forged_ip and e[2] == 9300]
+    if len(there) < 2:
+        sys.exit("the guest did not answer the first flight and resend the answer")
+    total = sum(e[3] for e in there)
+    if total > 3 * len(payload):
+        sys.exit("a first flight of %d bytes from a forged address drew %d bytes in %d datagrams"
+                 % (len(payload), total, len(there)))
+    if len(seen) != len(there):
+        sys.exit("the guest sent to an address other than the first flight's")
+    print("     %d datagrams and %d bytes for a first flight of %d bytes" % (len(there), total, len(payload)))
+else:
+    sys.exit("watch: quiet or forged")
+PY
+}
+
+# Nobody acknowledged that reply: the client had it and left. The guest
+# resends it a bounded number of times and then says nothing.
+watch quiet
+echo "ok   a reply nobody acknowledges is resent and then given up"
+
+# A first flight from an address nobody is at draws at most three times its
+# bytes, also when the same flight comes again from somewhere else.
+watch forged
+echo "ok   a first flight from a forged address draws at most three times its bytes"
+
+# The forged handshake is left unfinished; the guest still serves.
+factorial fact5
+echo "ok   factorial after the forged first flight"
 
 if grep -v -e "^reflect: ready $IP:$PORT\$" -e "^reflect: quic $QPORT\$" "$OUT/serial.log" | grep -q .; then
     echo "the guest said something unexpected:" >&2
