@@ -379,6 +379,13 @@ sameThroughInterp "$OUT/wide.hom" 1
 expect "[1, 2, 3, 4]" --interp "$EXAMPLES/append.hom"
 expect "bytes error: the value is not a program" --bytes --interp "$OUT/empty-array.bytes"
 refuse "run: the interpreter levels must be a whole number" --interp=x "$EXAMPLES/append.hom"
+# The kernel builds the tower before the budget counts a step, so the levels
+# are bounded, by the kernel (`Surface.maxLevels`): 8 run, 9 and a number past
+# 32 bits are refused before the kernel is asked to run anything.
+expect "no result within 1000 steps" --interp=8 "$EXAMPLES/append.hom" 1000
+refuse "run: the interpreter levels must be at most 8" --interp=9 "$EXAMPLES/append.hom" 1000
+refuse "run: the interpreter levels must be at most 8" --bytes --interp=4294967295 "$OUT/empty-array.bytes" 0
+refuse "run: the interpreter levels must be at most 8" --interp=4294967296 "$EXAMPLES/append.hom" 0
 refuse "$USAGE" --interp
 # A syntax error leaves standard output empty: exit 1 and the kernel's text.
 printf 'fn x ->\n' > "$OUT/broken.hom"

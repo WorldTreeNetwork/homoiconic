@@ -5,6 +5,7 @@ extern fn kernel_finish_initialization(result: *anyopaque) u8;
 extern fn reflect_run(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
 extern fn reflect_run_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
 extern fn reflect_interp(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, levels: u32, flags: u8) usize;
+extern fn reflect_max_levels(ignored: u32) u32;
 
 /// Steps the machine may take when no budget is given.
 const default_budget: u64 = 100_000_000;
@@ -44,8 +45,11 @@ pub fn main(init: std.process.Init) void {
         } else if (std.mem.eql(u8, a, "--interp") and levels == null) {
             levels = 1;
         } else if (std.mem.startsWith(u8, a, "--interp=") and levels == null) {
-            levels = std.fmt.parseInt(u32, a["--interp=".len..], 10) catch
-                fail("run: the interpreter levels must be a whole number\n", .{});
+            // A whole number past u32 is refused below as too many levels.
+            levels = std.fmt.parseInt(u32, a["--interp=".len..], 10) catch |err| switch (err) {
+                error.Overflow => std.math.maxInt(u32),
+                else => fail("run: the interpreter levels must be a whole number\n", .{}),
+            };
         } else break;
     }
     const args = all[first_arg - 1 ..];
@@ -64,6 +68,10 @@ pub fn main(init: std.process.Init) void {
 
     if (kernel_finish_initialization(initialize_circularKernel_Surface_Host(0)) == 0)
         fail("run: the kernel did not start\n", .{});
+    // The kernel builds the tower of interpreters before the budget counts a
+    // step; the bound on levels is the kernel's (`Surface.maxLevels`).
+    const most = reflect_max_levels(0);
+    if (levels) |k| if (k > most) fail("run: the interpreter levels must be at most {d}\n", .{most});
 
     // Most answers fit the first buffer. One that does not is answered by its
     // length, and the same program is run again with that much room.

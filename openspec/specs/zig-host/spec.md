@@ -266,6 +266,8 @@ The host SHALL provide a command that takes a store directory and either `start`
 
 The run command SHALL accept `--interp` and `--interp=k`, for a whole number `k`, before the file path, in any order with `--bytes` and `--text`. `--interp` SHALL mean `--interp=1`. With it, the program, from source or from its byte form, SHALL be passed to the export `reflect_interp` in place of `reflect_run` or `reflect_run_bytes`, with the number of levels and a `flags` byte whose bit 0 SHALL be set when the program is its byte form. `reflect_interp`, a Lean definition, SHALL run `level k` of the program on the machine for at most the budget: the closed interpreter term given the program as data, `k` times over; level 0 is the program itself. The export SHALL read the answer back through `k` levels of the outcome's data form and SHALL render it as `reflect_run` renders an outcome. `reflect_interp` SHALL be one of the exports that evaluate. Zig SHALL NOT read the program or the answer.
 
+The kernel builds the tower of interpreters, and `unlift` reads the answer back by recursion on `k`, before the budget counts a step, so the levels SHALL be bounded by the kernel and not by the budget: `Surface.maxLevels`, 8. `Surface.interpBytes` and `Surface.interpText` SHALL answer `levels error: the interpreter levels must be at most 8` for more levels without reading the program, so every caller of `reflect_interp` has the bound. The export `reflect_max_levels`, which evaluates nothing, SHALL give that bound, and the run command SHALL ask for it after the kernel starts and refuse more levels before anything runs. A whole number of levels too large for 32 bits SHALL be refused the same way, not as a word that is not a number.
+
 #### Scenario: The interpreter prints what the program prints
 
 - GIVEN `examples/append.hom`, `examples/code.hom`, `examples/factorial.hom`, the identity function and a program whose outcome is wrong
@@ -282,6 +284,11 @@ The run command SHALL accept `--interp` and `--interp=k`, for a whole number `k`
 
 - WHEN the command is run with `--interp=x`
 - THEN it prints `run: the interpreter levels must be a whole number` on standard error, nothing on standard output, and exits 2
+
+#### Scenario: Too many levels are refused
+
+- WHEN the command is run with `--interp=9`, with `--bytes --interp=4294967295` and with `--interp=4294967296`
+- THEN each prints `run: the interpreter levels must be at most 8` on standard error, nothing on standard output, and exits 2; with `--interp=8` and a budget of 1000 it prints `no result within 1000 steps` (`host/check.sh`); and `Surface/Check.lean` finds that `interpText` and `interpBytes` answer `levels error: the interpreter levels must be at most 8` for 9 and for 2^32 - 1 levels and do not for 8
 
 ### Requirement: A command prints a result as text
 

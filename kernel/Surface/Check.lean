@@ -177,6 +177,14 @@ def main : IO UInt32 := do
   if !(e.startsWith "syntax error: line 1, column 1:") then
     IO.println s!"FAIL syntax error rendering: `{e}`"
     fails := fails + 1
+  -- More than `maxLevels` levels are refused before the program is read, from
+  -- source and from bytes; `maxLevels` levels run.
+  total := total + 1
+  if interpText "1".toUTF8 (maxLevels + 1) 1000 != levelsError
+      || interpBytes ByteArray.empty (2 ^ 32 - 1) 1000 != levelsError
+      || interpText "1".toUTF8 maxLevels 1000 == levelsError then
+    IO.println s!"FAIL levels: more than {maxLevels} levels are not refused, or {maxLevels} are"
+    fails := fails + 1
   IO.println s!"{total - fails} of {total} checks passed"
   if fails > 0 then
     throw (IO.userError s!"{fails} check(s) failed")

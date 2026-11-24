@@ -49,15 +49,29 @@ def renderInterpreted (k budget : Nat) (asText : Bool) (t : Term) : String :=
     | none => "error: the interpreter answered something that is not an outcome"
   | s => renderState budget s
 
+/-- The most interpreters a program is run through. The machine is given the
+    whole tower, `level k t`, and `unlift k` reads the answer back by
+    recursion on `k`, before the budget counts a step, so the number of levels
+    is bounded here and not by the budget. Every caller has this bound; the
+    hosts ask for it by `reflect_max_levels` to refuse on their own line. -/
+def maxLevels : Nat := 8
+
+/-- What `interpBytes` and `interpText` answer for more than `maxLevels`
+    levels, without reading the program. -/
+def levelsError : String :=
+  s!"levels error: the interpreter levels must be at most {maxLevels}"
+
 /-- `runBytes` through `k` interpreters. The program's bytes are already its
     data form; `level` quotes it once more for each level above the first. -/
 def interpBytes (bytes : ByteArray) (k budget : Nat) (asText : Bool := false) : String :=
+  if k > maxLevels then levelsError else
   match Wire.readProgram bytes with
   | .error msg => renderBytesError msg
   | .ok t => renderInterpreted k budget asText t
 
 /-- `runText` through `k` interpreters. -/
 def interpText (src : ByteArray) (k budget : Nat) (asText : Bool := false) : String :=
+  if k > maxLevels then levelsError else
   match read src with
   | .error msg => renderSyntaxError msg
   | .ok t => renderInterpreted k budget asText t

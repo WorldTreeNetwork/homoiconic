@@ -9,7 +9,8 @@
 //! In the image the second form is what bytes given at boot start: the layer
 //! names them `/boot/program` and passes the command line's words after it.
 //! The budget defaults to the one built in, and the levels to 1. The budget is
-//! a whole number below 2^64 and the levels a whole number up to `max_levels`;
+//! a whole number below 2^64 and the levels a whole number up to the kernel's
+//! bound (`reflect_max_levels`, `Surface.maxLevels`);
 //! a word that is not a whole number, and a number past these, are refused with
 //! a line of their own and status 2 before the kernel is called.
 
@@ -19,6 +20,7 @@ extern fn initialize_circularKernel_Surface_Host(builtin: u8) *anyopaque;
 extern fn kernel_finish_initialization(result: *anyopaque) u8;
 extern fn reflect_run(source: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
 extern fn reflect_interp(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, levels: u32, flags: u8) usize;
+extern fn reflect_max_levels(ignored: u32) u32;
 extern fn open(path: [*:0]const u8, flags: c_int) c_int;
 extern fn read(fd: c_int, buf: [*]u8, n: usize) isize;
 extern fn close(fd: c_int) c_int;
@@ -56,10 +58,6 @@ const Run = struct {
     }
 };
 
-/// The most interpreters a program is run through. The kernel builds the
-/// tower of interpreters before the budget counts a step, one level inside the
-/// next, so the number of levels is bounded here and not by the budget.
-const max_levels = 8;
 
 /// What a word on the command line is: a whole number in decimal digits and
 /// nothing else, no number at all, or a whole number past `limit`.
@@ -84,6 +82,19 @@ fn number(word: [*:0]const u8, limit: u64) Number {
     if (i == 0) return .not_number;
     if (past or v > limit) return .too_large;
     return .{ .value = v };
+}
+
+/// `v` in decimal digits, at the end of `buf`.
+fn decimal(buf: *[10]u8, v: u32) []const u8 {
+    var i: usize = buf.len;
+    var n = v;
+    while (true) {
+        i -= 1;
+        buf[i] = '0' + @as(u8, @intCast(n % 10));
+        n /= 10;
+        if (n == 0) break;
+    }
+    return buf[i..];
 }
 
 /// Every byte of a file.
@@ -130,14 +141,20 @@ pub export fn main(argc: c_int, argv: [*]const [*:0]const u8) c_int {
                 return 2;
             },
         };
-        if (argc > 3) run.levels = switch (number(argv[3], max_levels)) {
+        // The kernel builds the tower of interpreters before the budget
+        // counts a step, so the levels are bounded, by the kernel's bound.
+        const most = reflect_max_levels(0);
+        if (argc > 3) run.levels = switch (number(argv[3], most)) {
             .value => |v| @intCast(v),
             .not_number => {
                 say("reflect: the levels must be a whole number\n");
                 return 2;
             },
             .too_large => {
-                say("reflect: the levels must be at most " ++ @import("std").fmt.comptimePrint("{d}", .{max_levels}) ++ "\n");
+                var digits: [10]u8 = undefined;
+                say("reflect: the levels must be at most ");
+                say(decimal(&digits, most));
+                say("\n");
                 return 2;
             },
         };

@@ -98,6 +98,13 @@ unsafe def reflectInterp (program length out capacity : USize) (budget : UInt64)
     else Surface.interpText input levels.toNat budget.toNat asText
   storeBytes out capacity text.toUTF8
 
+/-- C ABI: the most levels `reflect_interp` runs a program through
+    (`Surface.maxLevels`). The argument is ignored. A host asks for it to
+    refuse more levels on its own line before calling `reflect_interp`, which
+    answers `Surface.levelsError` for them itself. -/
+@[export reflect_max_levels]
+def reflectMaxLevels (_ : UInt32) : UInt32 := Surface.maxLevels.toUInt32
+
 /-- C ABI: program source pointer and length, output pointer and capacity.
     Answers one status byte, then the program's byte form (status 0) or the
     syntax error (status 1). Returns the number of bytes needed. -/
