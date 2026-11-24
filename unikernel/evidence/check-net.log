@@ -3,7 +3,7 @@
 3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
 All 3 tests passed.
 quic self ok
-built /home/dorje/hom-e275842/unikernel/out-net/reflect-net.elf
+built /home/dorje/hom-e9a4c86/unikernel/out-net/reflect-net.elf
 ok   factorial reply is the known integer
 ok   factorial reply reads and writes the same bytes
 ok   forever at 5000 steps is the budget reply
@@ -14,5 +14,5 @@ ok   a function value round-trips
 ok   a trailing byte is refused
 guest cases ok 20
 abort named
-unikernel/check-net.sh: line 287: wait: pid 3132811 is not a child of this shell
+unikernel/check-net.sh: line 287: wait: pid 3463775 is not a child of this shell
 network check passed

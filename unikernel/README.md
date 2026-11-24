@@ -295,3 +295,27 @@ before and after the checks. `source.sha256`, `objects.sha256` and
 `evidence/q59.61-limit-controls.log` is `check.sh` on copies of the tree with
 the limit put back: at 16 MiB it fails at the one array of zeros, and at 4 MiB
 at the literal array of empty texts, each with `INTERNAL PANIC: out of memory`.
+
+2026-11-24 (UTC) on morphie, Cloud Hypervisor 54.0 (`homoiconic-q59.49`,
+`add-entity-keys`), tree `e9a4c86` exported with `git archive` to
+`~/hom-e9a4c86`: `build.sh examples/factorial.hom`, `build-net.sh`,
+`check.sh`, `check-net.sh`, `check-quic.sh` and `check-wire.sh` each exited 0.
+The six logs in `evidence/` are this run's, with exit codes and image hashes
+in `evidence/run-e9a4c86.txt`; `source.sha256` and `objects.sha256` are the
+ones this build wrote (the Lean side had changed under it). `reflect-net.elf`
+is sha256 `562c8143…7fcac4c`, the same before and after the checks, and holds
+no key. `check-quic.log` has twenty-six `ok` lines: a guest with no key, 31
+bytes or 32 zero bytes serves no QUIC; a run request in a STREAM frame of an
+Initial packet leaves a guest with `reflect.hook=alloc` running, and the
+allowed client's request stops it; a guest with another key prints another
+name and the client that expects the first refuses it; a client whose key is
+not allowed is refused and the allowed client, started 0.1 s later, was served
+in 8 ms; a ping to the plain UDP port of a QUIC guest is not answered; the
+same key started again is the same name. `check-wire.log` has the two guests
+with two keys, and both refusals. `evidence/entity-keys-controls.log` is
+`evidence/entity-keys-controls.py` run on morphie on the tree before its
+rebase (`95d7435` with the final `quic-self.zig`; the Zig files are the ones
+of `e9a4c86`): twenty-nine controls, each fix undone in turn, nineteen in
+`quic-self` and ten on real guests, and every one fails at its own step. With
+the frame rule alone undone the guest step still passes, because the second
+gate holds, and `quic-self` exits 68. `host/check.sh` passed on the Mac.

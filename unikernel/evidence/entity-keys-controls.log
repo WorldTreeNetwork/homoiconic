@@ -1,0 +1,117 @@
+== quic-self, each fix undone ==
+control: the name's prefix has another first byte
+  quic-self exits [40], wanted [40]: fails as it should
+control: the client does not check the server's name against its list
+  quic-self exits [42], wanted [42]: fails as it should
+control: the server does not check the client's name against its list
+  quic-self exits [43], wanted [43]: fails as it should
+control: the client does not verify the server's CertificateVerify
+  quic-self exits [44, 46], wanted [44, 46]: fails as it should
+control: the server does not verify the client's CertificateVerify
+  quic-self exits [45, 47], wanted [45, 47]: fails as it should
+control: the server takes a Finished alone, as before this change
+  quic-self exits [48], wanted [48]: fails as it should
+control: the client does not check the server's Finished
+  quic-self exits [49], wanted [49]: fails as it should
+control: the server does not check the client's Finished
+  quic-self exits [50], wanted [50]: fails as it should
+control: the server takes an empty Certificate and no CertificateVerify
+  quic-self exits [51], wanted [51]: fails as it should
+control: a Certificate may hold more after its first entry
+  quic-self exits [52, 53], wanted [52, 53]: fails as it should
+control: a Certificate's context may be filled
+  quic-self exits [54, 55], wanted [54, 55]: fails as it should
+control: a Certificate entry may have extensions
+  quic-self exits [56, 57], wanted [56, 57]: fails as it should
+control: the 12 bytes before the key are not compared
+  quic-self exits [58, 59], wanted [58, 59]: fails as it should
+control: a CertificateVerify may name another scheme
+  quic-self exits [60, 61], wanted [60, 61]: fails as it should
+control: a CertificateVerify's signature field may be longer
+  quic-self exits [62, 63], wanted [62, 63]: fails as it should
+control: the client takes bytes after the server's Finished
+  quic-self exits [64], wanted [64]: fails as it should
+control: the server takes bytes after the client's Finished
+  quic-self exits [65], wanted [65]: fails as it should
+control: the client takes a flight with no CertificateRequest
+  quic-self exits [66], wanted [66]: fails as it should
+control: STREAM and CRYPTO frames are taken in any packet number space
+  quic-self exits [68], wanted [68]: fails as it should
+== check-quic.sh on a real guest, each fix undone ==
+control: the guest ignores the file given at boot and uses one seed
+  check-quic.sh exits 1: fails as it should
+    ok   refused: reflect.quic_port with reflect.wire_port=4446
+    ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+    ok   refused: reflect.quic_port with no reflect.allow
+    quic self ok
+    a guest that should have stopped with 'no entity key' kept running
+control: the guest mixes random bytes into the key it was given
+  check-quic.sh exits 1: fails as it should
+    ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+    ok   refused: reflect.quic_port with no reflect.allow
+    ok   a guest with no key serves no QUIC
+    ok   a guest given 31 bytes serves no QUIC
+    ok   a guest given 32 zero bytes serves no QUIC
+    quic self ok
+control: the client does not check the server's name against its list
+  check-quic.sh exits 3: fails as it should
+    ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+    ok   refused: reflect.quic_port with no reflect.allow
+    ok   a guest with no key serves no QUIC
+    ok   a guest given 31 bytes serves no QUIC
+    ok   a guest given 32 zero bytes serves no QUIC
+    ok   stream data in an Initial packet is not acted on; the allowed client's request is
+control: the server does not check the client's name against its list
+  check-quic.sh exits 1: fails as it should
+    ok   factorial over QUIC equals the Linux process
+    ok   a 5000-step budget reply equals the Linux process
+    ok   factorial again on a new handshake
+    ok   a client that expects another name refuses the guest
+    ok   factorial after an abandoned handshake, with loss and reordering
+    a client the guest does not allow was not refused
+control: a refused connection does not give way at once
+  check-quic.sh exits 1: fails as it should
+    ok   a 5000-step budget reply equals the Linux process
+    ok   factorial again on a new handshake
+    ok   a client that expects another name refuses the guest
+    ok   factorial after an abandoned handshake, with loss and reordering
+    quic self ok
+    the allowed client waited 2527 ms behind a refused one
+control: a QUIC guest still answers its plain UDP port
+  check-quic.sh exits 1: fails as it should
+    ok   a client that expects another name refuses the guest
+    ok   factorial after an abandoned handshake, with loss and reordering
+         the allowed client was served in 7 ms
+    ok   a client the guest does not allow is refused, and the next client is served at once
+    quic self ok
+    a guest with a QUIC port answered a ping on its plain UDP port
+control: stream data is taken in any space, and read before the handshake is accepted
+  check-quic.sh exits 1: fails as it should
+    reflect: ready 192.168.249.2:4444
+    reflect: quic 4445
+    reflect: allocation failure
+    PANIC at Surface.Host.reflectAbortAlloc Surface.Host:78:2: allocation failure
+    backtrace:
+    reflect: allocation failure
+control: stream data is taken in any space; the accepted gate is left in place (this one passes the guest step and fails quic-self)
+  check-quic.sh exits 0: fails as it should
+    ok   a reply nobody acknowledges is resent and then given up
+         3 datagrams and 3600 bytes for a first flight of 1200 bytes
+    ok   a first flight from a forged address draws at most three times its bytes
+    ok   factorial after the forged first flight
+    ok   the same key started again is the same name, and the same client is served
+    quic guest ok
+== check-wire.sh on two real guests, each fix undone ==
+control: the client does not check the server's name against its list
+  check-wire.sh exits 1: fails as it should
+    quic-self exit 42
+    ok   a remote closure replays to 42
+    ok   two guests with two keys, each allowing the other's name, exchange the message
+control: the server does not check the client's name against its list
+  check-wire.sh exits 1: fails as it should
+    quic-self exit 43
+    ok   a remote closure replays to 42
+    ok   two guests with two keys, each allowing the other's name, exchange the message
+    ok   a guest that expects another name refuses its peer
+controls that did not fail: 0
+exit 0
