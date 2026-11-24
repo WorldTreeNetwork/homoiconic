@@ -14,10 +14,12 @@ import Reflect.LogProof
     makes only such references (`Wire.cut_made`) and the lazy machine makes
     none (`Wire.lstep_good`). For a session that runs one turn of a program
     the second half of this file proves that every reference it holds and
-    saves was made by saving (`advance_turn`). For a VM and a node the session
-    is not proved (`full` and `parts` are `partial`, and `openState` and
-    `openNode` are not covered), and neither is that a piece read from its
-    bytes is the piece that was written. Nothing is assumed of the hash. -/
+    saves was made by saving (`advance_turn`). `Surface/KeepLogProof.lean`
+    proves the same of a VM and of a node (`advance_kept`), which is the half
+    of `Made` that is about how the references were made. The other half,
+    that the piece resolves to the state the log theorems speak of, is not
+    proved of any session, and neither is that a piece read from its bytes is
+    the piece that was written. Nothing is assumed of the hash. -/
 
 namespace Surface.Keep
 open Reflect Wire
@@ -97,7 +99,8 @@ end
     supplied is a hypothesis of `give_turn`. -/
 
 /-- Every reference a phase of one turn holds was made by saving. The phases
-    of a VM and of a node are not covered. -/
+    of a VM and of a node are covered by `PhaseHeld`
+    (`Surface/KeepLogProof.lean`). -/
 def PhaseGood (σ : Store Ref) : Phase → Prop
   | .run st => GoodS pieceSize σ st
   | .classify v => Good pieceSize σ v
