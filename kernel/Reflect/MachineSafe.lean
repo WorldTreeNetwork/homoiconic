@@ -112,6 +112,22 @@ def StateOK : State → Prop
 theorem stateOK_load (t : Term) : StateOK (load (compile t)) :=
   ⟨[], [], codeOK_compile t, rfl, rfl, trivial, trivial⟩
 
+/-- A pushed frame keeps the frames well-formed. A frame that would continue as
+    `done` is not pushed: the block it belonged to had nothing left above its
+    start, so the frames below already take the entry. -/
+theorem framesOK_push {k : Code} {env : MEnv} {frs ts stk rest} (hf : Fits ts stk rest)
+    (hk : CodeOK k (.any :: ts)) (he : EnvOK env) (hfr : FramesOK frs rest) :
+    FramesOK (push k env frs) stk := by
+  cases k with
+  | done =>
+    match ts, hk with
+    | [], _ =>
+      have hs : stk = rest := hf
+      subst hs
+      exact hfr
+    | _ :: _, hk => exact absurd (Nat.succ.inj hk) (Nat.succ_ne_zero _)
+  | _ => exact ⟨ts, rest, hf, hk, he, hfr⟩
+
 theorem StateOK.ne_fault {s : State} (h : StateOK s) : s ≠ .fault := by
   intro e; subst e; exact h
 
@@ -164,7 +180,7 @@ theorem stateOK_step : ∀ s, StateOK s → StateOK (step s) := by
     | apply k =>
       match ts, stk, hc, hf, hs with
       | _ :: .fn :: ts', a :: .closure b cap :: stk', hc, hf, hs =>
-        exact ⟨[], stk', hs.2.1.1, rfl, ⟨ts', rest, hf.2.2, hc, he, hfr⟩,
+        exact ⟨[], stk', hs.2.1.1, rfl, framesOK_push hf.2.2 hc he hfr,
           ⟨hs.1, hs.2.1.2⟩, hs.2.2⟩
     | checkData k =>
       match ts, stk, hc, hf, hs with
@@ -198,7 +214,7 @@ theorem stateOK_step : ∀ s, StateOK s → StateOK (step s) := by
       | _ :: ts', .closure b cap :: stk', hc, hf, hs => exact trivial
       | _ :: ts', .data d :: stk', hc, hf, hs =>
         obtain ⟨hz, hsc, hn, hcc, hk⟩ := hc
-        have hfr' : FramesOK (⟨k, env⟩ :: frs) stk' := ⟨ts', rest, hf.2, hk, he, hfr⟩
+        have hfr' : FramesOK (push k env frs) stk' := framesOK_push hf.2 hk he hfr
         cases d with
         | nat m =>
           cases m with

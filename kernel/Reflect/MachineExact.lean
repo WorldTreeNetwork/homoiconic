@@ -18,12 +18,12 @@ def MP.injO : Outcome → MOutcome
 theorem machine_exact : ∀ t n w,
     run n (load (compile t)) = .halted w → ∃ o, Direct [] t o ∧ w = MP.injO o := by
   intro t n w h
-  rcases rev n t [] .done [] [] w h with ⟨e, he, hd⟩ | ⟨m, v, hd, hm⟩
+  rcases rev n t [] .done [] [] w h with ⟨e, he, hd⟩ | ⟨m, v, hd, E, hm⟩
   · cases he with
     | unbound i => exact ⟨_, hd, rfl⟩
     | wrong => exact ⟨_, hd, rfl⟩
   · have h1 : run (m + 1) (load (compile t)) = .halted (.value (injV v)) := by
-      have : run m (load (compile t)) = .running .done [] [injV v] [] := hm
+      have : run m (load (compile t)) = .running .done E [injV v] [] := hm
       rw [run_add, this]; rfl
     exact ⟨_, hd, (halted_unique h1 h).symm⟩
 

@@ -247,14 +247,14 @@ theorem sim_interpreted : Sim source interpreted reifyOutcome reifyValue where
 theorem machine_exact_env (env : Env) (t : Term) (n : Nat) (w : MOutcome)
     (h : run n (.running (compile t) (injE env) [] []) = .halted w) :
     ∃ o, Direct env t o ∧ w = MP.injO o := by
-  rcases rev n t env .done [] [] w h with ⟨e, he, hd⟩ | ⟨m, v, hd, hm⟩
+  rcases rev n t env .done [] [] w h with ⟨e, he, hd⟩ | ⟨m, v, hd, E, hm⟩
   · cases he with
     | unbound i => exact ⟨_, hd, rfl⟩
     | wrong => exact ⟨_, hd, rfl⟩
   · have h1 : run (m + 1) (.running (compile t) (injE env) [] []) =
         .halted (.value (injV v)) := by
       have : run m (.running (compile t) (injE env) [] []) =
-          .running .done (injE env) [injV v] [] := hm
+          .running .done E [injV v] [] := hm
       rw [run_add, this]; rfl
     exact ⟨_, hd, (halted_unique h1 h).symm⟩
 
@@ -264,10 +264,10 @@ theorem machine_halts_env {env : Env} {t : Term} {o : Outcome} (h : Direct env t
   have r := MP.fwd h .done [] []
   cases o with
   | value v =>
-    obtain ⟨n, hn⟩ := r
+    obtain ⟨n, E, hn⟩ := r
     refine ⟨n + 1, ?_⟩
     have : run n (.running (compile t) (injE env) [] []) =
-        .running .done (injE env) [injV v] [] := hn
+        .running .done E [injV v] [] := hn
     rw [run_add, this]; rfl
   | unbound i => exact r
   | wrong => exact r

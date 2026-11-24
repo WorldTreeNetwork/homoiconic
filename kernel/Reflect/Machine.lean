@@ -94,6 +94,16 @@ inductive State where
   | fault : State
   deriving Repr
 
+/-- The frames after entering a block that continues as `k` in `env`. A block
+    entered at the end of another (`k` is `done`: a call or a case in tail
+    position) pushes no frame. That frame would only end the outer block when
+    the inner one ends, and keeping it made a tail loop's frames, and the
+    environments they hold, grow with its steps. -/
+def push (k : Code) (env : MEnv) (frs : List Frame) : List Frame :=
+  match k with
+  | .done => frs
+  | k => ⟨k, env⟩ :: frs
+
 variable [Ops]
 
 def step : State → State
@@ -113,7 +123,7 @@ def step : State → State
   | .running (.checkFun _) _ (.data _ :: _) _ => .halted .wrong
   | .running (.checkFun _) _ [] _ => .fault
   | .running (.apply k) env (a :: .closure b cap :: stk) frs =>
-      .running b (a :: cap) stk (⟨k, env⟩ :: frs)
+      .running b (a :: cap) stk (push k env frs)
   | .running (.apply _) _ _ _ => .fault
   | .running (.checkData k) env (.data d :: stk) frs => .running k env (.data d :: stk) frs
   | .running (.checkData _) _ (.closure _ _ :: _) _ => .halted .wrong
@@ -131,21 +141,21 @@ def step : State → State
   | .running (.cons _) _ (_ :: .data _ :: _) _ => .halted .wrong
   | .running (.cons _) _ _ _ => .fault
   | .running (.dcase z _ _ _ k) env (.data (.nat 0) :: stk) frs =>
-      .running z env stk (⟨k, env⟩ :: frs)
+      .running z env stk (push k env frs)
   | .running (.dcase _ sc _ _ k) env (.data (.nat (n + 1)) :: stk) frs =>
-      .running sc (.data (.nat n) :: env) stk (⟨k, env⟩ :: frs)
+      .running sc (.data (.nat n) :: env) stk (push k env frs)
   | .running (.dcase z _ _ _ k) env (.data (.name 0) :: stk) frs =>
-      .running z env stk (⟨k, env⟩ :: frs)
+      .running z env stk (push k env frs)
   | .running (.dcase _ sc _ _ k) env (.data (.name (n + 1)) :: stk) frs =>
-      .running sc (.data (.nat n) :: env) stk (⟨k, env⟩ :: frs)
+      .running sc (.data (.nat n) :: env) stk (push k env frs)
   | .running (.dcase _ _ n _ k) env (.data (.arr []) :: stk) frs =>
-      .running n env stk (⟨k, env⟩ :: frs)
+      .running n env stk (push k env frs)
   | .running (.dcase _ _ _ c k) env (.data (.arr (x :: xs)) :: stk) frs =>
-      .running c (.data (.arr xs) :: .data x :: env) stk (⟨k, env⟩ :: frs)
+      .running c (.data (.arr xs) :: .data x :: env) stk (push k env frs)
   | .running (.dcase _ _ n _ k) env (.data (.text []) :: stk) frs =>
-      .running n env stk (⟨k, env⟩ :: frs)
+      .running n env stk (push k env frs)
   | .running (.dcase _ _ _ c k) env (.data (.text (ch :: r)) :: stk) frs =>
-      .running c (.data (.text r) :: .data (.nat ch.toNat) :: env) stk (⟨k, env⟩ :: frs)
+      .running c (.data (.text r) :: .data (.nat ch.toNat) :: env) stk (push k env frs)
   | .running (.dcase _ _ _ _ _) _ (.closure _ _ :: _) _ => .halted .wrong
   | .running (.dcase _ _ _ _ _) _ [] _ => .fault
   | .running (.checkNat k) env (.data (.nat n) :: stk) frs =>

@@ -146,6 +146,18 @@ def P.toData : P R → Option Data
   | .closure _ _ => none
   | .ref _ => none
 
+/-- `push` with a partial environment: a block entered in tail position pushes
+    no frame. -/
+def ppush (k : Code) (env : P R) (frs : List (PFrame R)) : List (PFrame R) :=
+  match k with
+  | .done => frs
+  | k => ⟨k, env⟩ :: frs
+
+@[simp] theorem forall_mem_ppush {k : Code} {env : P R} {frs : List (PFrame R)}
+    {q : PFrame R → Prop} :
+    (∀ f ∈ ppush k env frs, q f) ↔ (∀ f ∈ frs, q f) ∧ (k ≠ .done → q ⟨k, env⟩) := by
+  cases k <;> simp [ppush, and_comm]
+
 def lDone (_env : P R) (stk : List (P R)) (frs : List (PFrame R)) : LStep R :=
   match stk, frs with
   | [v], [] => .next (.halted (.value v))
@@ -172,7 +184,7 @@ def lCheckFun (σ : Store R) (k : Code) (env : P R) (stk : List (P R))
 def lApply (σ : Store R) (k : Code) (env : P R) (stk : List (P R))
     (frs : List (PFrame R)) : LStep R :=
   match stk with
-  | a :: .closure b cap :: stk => .next (.running b (.cons a cap) stk (⟨k, env⟩ :: frs))
+  | a :: .closure b cap :: stk => .next (.running b (.cons a cap) stk (ppush k env frs))
   | a :: .ref r :: stk => fetch σ r (fun p => .running (.apply k) env (a :: p :: stk) frs)
   | _ => .next .fault
 
@@ -209,15 +221,15 @@ def lCons (σ : Store R) (k : Code) (env : P R) (stk : List (P R))
 def lCase (σ : Store R) (z sc n c k : Code) (env : P R) (stk : List (P R))
     (frs : List (PFrame R)) : LStep R :=
   match stk with
-  | .nat 0 :: stk => .next (.running z env stk (⟨k, env⟩ :: frs))
-  | .nat (m + 1) :: stk => .next (.running sc (.cons (.nat m) env) stk (⟨k, env⟩ :: frs))
-  | .name 0 :: stk => .next (.running z env stk (⟨k, env⟩ :: frs))
-  | .name (m + 1) :: stk => .next (.running sc (.cons (.nat m) env) stk (⟨k, env⟩ :: frs))
-  | .nil :: stk => .next (.running n env stk (⟨k, env⟩ :: frs))
-  | .cons h t :: stk => .next (.running c (.cons t (.cons h env)) stk (⟨k, env⟩ :: frs))
-  | .text [] :: stk => .next (.running n env stk (⟨k, env⟩ :: frs))
+  | .nat 0 :: stk => .next (.running z env stk (ppush k env frs))
+  | .nat (m + 1) :: stk => .next (.running sc (.cons (.nat m) env) stk (ppush k env frs))
+  | .name 0 :: stk => .next (.running z env stk (ppush k env frs))
+  | .name (m + 1) :: stk => .next (.running sc (.cons (.nat m) env) stk (ppush k env frs))
+  | .nil :: stk => .next (.running n env stk (ppush k env frs))
+  | .cons h t :: stk => .next (.running c (.cons t (.cons h env)) stk (ppush k env frs))
+  | .text [] :: stk => .next (.running n env stk (ppush k env frs))
   | .text (ch :: r) :: stk =>
-      .next (.running c (.cons (.text r) (.cons (.nat ch.toNat) env)) stk (⟨k, env⟩ :: frs))
+      .next (.running c (.cons (.text r) (.cons (.nat ch.toNat) env)) stk (ppush k env frs))
   | .ref r :: stk => fetch σ r (fun p => .running (.dcase z sc n c k) env (p :: stk) frs)
   | .closure _ _ :: _ => .next (.halted .wrong)
   | [] => .next .fault

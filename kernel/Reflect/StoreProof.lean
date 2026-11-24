@@ -839,6 +839,15 @@ theorem cons_top {k} {e : P R} {menv stk mstk frs mfrs} (he : REnv σ e menv)
       obtain ⟨z, zs, rfl, _, _⟩ := rv_cons hu
       exact .real rfl (.running he (.cons (rv_cons_mk hy hu) hs) hf)
 
+omit [Ops] in
+/-- Frames pushed the same way on both sides still resolve. -/
+theorem all2_push {k : Code} {e : P R} {menv : MEnv} {frs : List (PFrame R)} {mfrs : List Frame}
+    (he : REnv σ e menv)
+    (hf : All2 (fun (f : PFrame R) (m : Frame) => f.code = m.code ∧ REnv σ f.env m.env) frs mfrs) :
+    All2 (fun (f : PFrame R) (m : Frame) => f.code = m.code ∧ REnv σ f.env m.env)
+      (ppush k e frs) (push k menv mfrs) := by
+  cases k <;> first | exact hf | exact .cons ⟨rfl, he⟩ hf
+
 /-- From a state that resolves to `s`, the lazy machine with the whole store
     reaches a state that resolves to `step s`. -/
 theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ ps (step s) := by
@@ -958,28 +967,28 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
         | nat m =>
           have := rv_nat hu; subst this
           cases m with
-          | zero => exact .real rfl (.running he ht (.cons ⟨rfl, he⟩ hf))
+          | zero => exact .real rfl (.running he ht (all2_push he hf))
           | succ m =>
-            exact .real rfl (.running (re_cons_mk rv_nat_mk he) ht (.cons ⟨rfl, he⟩ hf))
+            exact .real rfl (.running (re_cons_mk rv_nat_mk he) ht (all2_push he hf))
         | name m =>
           have := rv_name hu; subst this
           cases m with
-          | zero => exact .real rfl (.running he ht (.cons ⟨rfl, he⟩ hf))
+          | zero => exact .real rfl (.running he ht (all2_push he hf))
           | succ m =>
-            exact .real rfl (.running (re_cons_mk rv_nat_mk he) ht (.cons ⟨rfl, he⟩ hf))
+            exact .real rfl (.running (re_cons_mk rv_nat_mk he) ht (all2_push he hf))
         | text t =>
           have := rv_text hu; subst this
           cases t with
-          | nil => exact .real rfl (.running he ht (.cons ⟨rfl, he⟩ hf))
+          | nil => exact .real rfl (.running he ht (all2_push he hf))
           | cons ch r =>
             exact .real rfl
-              (.running (re_cons_mk rv_text_mk (re_cons_mk rv_nat_mk he)) ht (.cons ⟨rfl, he⟩ hf))
+              (.running (re_cons_mk rv_text_mk (re_cons_mk rv_nat_mk he)) ht (all2_push he hf))
         | nil =>
           have := rv_nil hu; subst this
-          exact .real rfl (.running he ht (.cons ⟨rfl, he⟩ hf))
+          exact .real rfl (.running he ht (all2_push he hf))
         | cons a b =>
           obtain ⟨y, ys, rfl, ha, hb⟩ := rv_cons hu
-          exact .real rfl (.running (re_cons_mk hb (re_cons_mk ha he)) ht (.cons ⟨rfl, he⟩ hf))
+          exact .real rfl (.running (re_cons_mk hb (re_cons_mk ha he)) ht (all2_push he hf))
         | closure c e' =>
           obtain ⟨cenv, rfl, _⟩ := rv_closure hu
           exact .real rfl (.halted .wrong)
@@ -1002,7 +1011,7 @@ theorem progress {ps : PState R} {s : State} (h : RState σ ps s) : Reaches σ p
           | cons a' b' => obtain ⟨z, zs, rfl, _, _⟩ := rv_cons hu; exact .real rfl .fault
           | closure c e' =>
             obtain ⟨cenv, rfl, hce⟩ := rv_closure hu
-            exact .real rfl (.running (re_cons_mk ha hce) ht (.cons ⟨rfl, he⟩ hf))
+            exact .real rfl (.running (re_cons_mk ha hce) ht (all2_push he hf))
     | cons k =>
       cases hs with
       | nil => exact .real rfl .fault
