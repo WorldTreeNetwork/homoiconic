@@ -62,7 +62,9 @@ Collision resistance appears as an explicit premise on theorems that need it. No
 
 The partition extends. The step function, the event handler, the log fold, the serialization, and the network transition are Lean definitions. Zig owns sockets, files, the event loop, and calling a model. Zig does not decide what an event means.
 
-### D7. Formats come from identikey-protocol; the code that reads them is Lean
+### D7. Formats come from identikey-protocol; the code that reads them is Lean — relaxed 2026-11-12, confirmed 2026-11-24
+
+> **Relaxed by the user, 2026-11-12, confirmed 2026-11-24.** The data, storage and wire formats may be designed for this system first, and identikey-protocol updated to match where needed. The canonical form is hash-named pieces. Working memory stays Lean's native objects. The starting data subset below is confirmed. The table records where the choices came from, not a constraint to follow identikey-protocol.
 
 Direction from the user, 2026-11-09: reuse identikey-protocol's choices where useful. Source: `identikey-protocol/docs/standards/` and `crates/identikey-log`.
 
@@ -89,7 +91,7 @@ Constraints this puts on us:
 
 > **2026-11-11, `add-wire-bytes`:** P4 holds, tested, for data, programs and machine values; not yet for outcomes, whole machine states, or a piece that holds references. The language's numbers have no upper limit. A number of 2^64 or more is written as CBOR tag 2 over its bytes with no leading zero, and only such a number. That is this project's rule: dCBOR's numeric rules cover 64-bit numbers and neither define nor forbid tag 2. The statements are in `openspec/specs/wire-bytes/spec.md`.
 
-### D8. Code is a value of the data type — confirmed by spike 2026-11-09
+### D8. Code is a value of the data type — confirmed by spike 2026-11-09, confirmed by the user 2026-11-24
 
 The spike used flat tags `0`–`5` and a single case form in place of the nested primitive tag sketched below. `add-code-as-data/design.md` has the table that stands.
 

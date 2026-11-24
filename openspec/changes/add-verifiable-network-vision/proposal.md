@@ -1,12 +1,12 @@
 # add-verifiable-network-vision
 
-> **PENDING**
+> **ACTIVE BUILD**
 
 **Rigor:** vision. This change holds the project vision and the roadmap. It adds no behavior and no spec delta. Each roadmap stage lands as its own change.
 
 Depends on: `add-language-partition`, `add-lean-circular-kernel`, `add-zig-host` (all folded).
 
-Sections marked *(inferred)* were written from the code and one conversation, not from an interview. Correct them before this is treated as settled.
+The target users and the anti-vision were first written from the code and one conversation. The user reviewed them on 2026-11-24 and added the fourth target user.
 
 ## Why
 
@@ -32,11 +32,12 @@ The first theorem is in place. `reflective` says an interpreter written in the l
 
 The second half of the insight is about model calls. A model call does not have to be inside the semantics. It can be a request the program makes and an answer it receives. Then the program is exact relative to the answers it was given. The answers are recorded. Everything downstream of them can be replayed and checked, and the program can be proved correct for every answer that passes a check it runs itself.
 
-### Target users *(inferred)*
+### Target users
 
 - **People building systems across machines they do not all control.** They need a result they can check, not a result they are told.
 - **People putting model calls inside programs that matter.** They need to know which outputs depend on the model and what holds regardless of what the model says.
 - **Someone who receives a result and wants to verify it later, alone.** They hold a receipt and a copy of the kernel. They need nothing else.
+- **People computing together across ownership boundaries.** Many machines with different owners cooperate on one massively parallel computation, under rules about how that happens: reciprocity, permissions that can be delegated, capability tokens. Verifiability is one use; cooperation at scale is the other. The process calculus the channels already follow fits this, and interaction nets are a candidate model for the parallel evaluation. (Added by the user, 2026-11-24. No roadmap stage covers interaction nets, reciprocity or delegation yet.)
 
 ## What
 
@@ -66,7 +67,7 @@ Model calls live in layer 2 as requests. The model is outside the proof. The pro
 - Not a verified compiler. The Lean compiler and the C toolchain are trusted.
 - Not a second runtime in Zig or Rust for speed. If the kernel is too slow, the answer is a proved refinement, not a rewrite.
 
-### Anti-vision: how we lose the plot *(inferred)*
+### Anti-vision: how we lose the plot
 
 - The host grows an `eval`, a scheduler rule, or a serialization rule that Lean does not define.
 - A theorem is stated about a model of the system while the running code is something else.
@@ -122,6 +123,10 @@ No new UI because this change is a vision and a roadmap.
 - A surface syntax, module system, or editor.
 
 ## Changelog
+
+### 2026-11-24
+
+The user reviewed the target users and the anti-vision, and added cooperative computation across ownership boundaries as a target use. D8 confirmed. D7 confirmed as relaxed on 2026-11-12: formats may be designed for this system first.
 
 ### 2026-11-11
 
