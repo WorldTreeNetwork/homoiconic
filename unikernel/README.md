@@ -346,3 +346,11 @@ records are that run's.
 `evidence/build.log`, `build-net.log`, `check.log`, `check-net.log`,
 `check-quic.log` and `check-wire.log` are copies of this run's logs: it is the
 later tree, and holds `add-entity-keys` as `e9a4c86` had it.
+`evidence/cross-controls.log` is `kernel/cross-controls.py` in that tree: one
+check of the Lean side undone at a time in a copy of the kernel, and the test
+credited to it failing. One rule is listed with no test, because undoing it
+stops honest logs combining. The script there is the next commit's: the
+`ecaa6c8` one had a control that gave no result in 300 seconds on morphie.
+`evidence/cross-sig-controls.log` is `check-wire.sh` on copies of the tree
+with each check of the record's signature undone in `cross-check.zig`.
+The script is `evidence/cross-sig-controls.sh`. With the signature not verified the moved entry is caught by the link instead; a record with no signature and one signed by another entity are accepted.

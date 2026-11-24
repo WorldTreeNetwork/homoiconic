@@ -1,0 +1,17 @@
+== undone: the signature is not verified
+   check-wire.sh fails:
+   refused: log a: entry 5 does not name the entry before it
+   FAIL an entry moved, by another hand: not refused with 'record a: the signature is not valid'
+   lines of ok before it: 9
+== undone: a record with no signature is taken as it stands
+   check-wire.sh fails:
+   accepted
+   FAIL a record with no signature: accepted
+   lines of ok before it: 13
+== undone: the signer need not be the entity the record names
+   check-wire.sh fails:
+   accepted
+   FAIL a record signed by another entity: accepted
+   lines of ok before it: 14
+== done
+exit 0
