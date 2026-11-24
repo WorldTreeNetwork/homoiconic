@@ -138,3 +138,20 @@ checks rebuilt it. `evidence/check-quic-controls.log` is `check-quic.sh` on a
 copy of that tree with each fix of `homoiconic-q59.50` and `q59.53` undone in
 turn; every one fails at its own step. A non-interactive `ssh morphie` has no
 `zig` on its PATH: Zig 0.16.0 is at `~/.local/share/mise/installs/zig/0.16.0/bin`.
+
+2026-11-24 (UTC) on morphie, Cloud Hypervisor 54.0, tree `9de1838` exported
+with `git archive` to `~/hom-9de1838`: `build.sh examples/factorial.hom`,
+`build-net.sh`, `check.sh`, `check-net.sh`, `check-quic.sh` and `check-wire.sh`
+each exited 0. The six logs in `evidence/` are now this run's (those of
+`c0c800c` are in git at `709b13a`), with the exit codes and image hashes in
+`evidence/run-9de1838.txt`; `source.sha256`, `objects.sha256` and
+`versions.txt` came out the same as that build wrote before, since the Lean
+side did not change. `reflect-net.elf` is sha256 `1f3aa81c…b9718c`, the same
+before and after the checks. `check-quic.log` has fourteen `ok` lines; the
+guest sent 8 more copies of an unacknowledged reply and stopped at 6.3 s, and
+sent 3568 bytes in 8 datagrams for a forged first flight of 1200.
+`evidence/check-quic-controls-q59.56-57.log` is `check-quic.sh` on a copy of
+that tree with each fix of `homoiconic-q59.56` and `q59.57` undone in turn and
+the build told to go on past a failing `quic-self`, so both the `quic-self`
+exit and the guest step that fails are there. The old acknowledgement rule
+fails `quic-self` (exit 21) and no guest step.

@@ -1,0 +1,132 @@
+== control: nothing undone; the build goes on past quic-self as in every control below
+   quic self ok
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
+   ok   factorial after the unfinished raw handshake
+   ok   a reply nobody acknowledges is resent and then given up
+   ok   a first flight from a forged address draws at most three times its bytes
+   ok   factorial after the forged first flight
+   quic guest ok
+   exit 0
+== control: an acknowledgement clears the flight of every packet number space (before q59.56)
+   quic-self exit 21
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
+   ok   factorial after the unfinished raw handshake
+   ok   a reply nobody acknowledges is resent and then given up
+   ok   a first flight from a forged address draws at most three times its bytes
+   ok   factorial after the forged first flight
+   quic guest ok
+   exit 0
+== control: no three-times limit, no give-up, resends every 320 ms (before q59.57)
+   quic-self exit 24
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
+   ok   factorial after the unfinished raw handshake
+   | the guest went on resending: 36 datagrams in 11 s, the last at 10.8 s
+   exit 1
+== control: no three-times limit; the give-up kept
+   quic-self exit 24
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
+   ok   factorial after the unfinished raw handshake
+   ok   a reply nobody acknowledges is resent and then given up
+   | a first flight of 1200 bytes from a forged address drew 7490 bytes in 10 datagrams
+   exit 1
+== control: no give-up; the three-times limit kept
+   quic-self exit 28
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
+   ok   factorial after the unfinished raw handshake
+   | the guest went on resending: 12 datagrams in 11 s, the last at 10.2 s
+   exit 1
+== control: a server connection takes datagrams from any address
+   quic self ok
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
+   ok   factorial after the unfinished raw handshake
+   ok   a reply nobody acknowledges is resent and then given up
+   | a first flight of 1200 bytes from a forged address drew 7470 bytes in 10 datagrams
+   exit 1
+== control: a client's Handshake flight is not finished by a 1-RTT acknowledgement
+   quic-self exit 26
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
+   ok   factorial after the unfinished raw handshake
+   ok   a reply nobody acknowledges is resent and then given up
+   ok   a first flight from a forged address draws at most three times its bytes
+   ok   factorial after the forged first flight
+   quic guest ok
+   exit 0
+== control: a server's Initial flight is not finished by a Handshake packet
+   quic-self exit 28
+   ok   refused: reflect.quic_port with reflect.wire_port=4446
+   ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
+   ok   factorial over QUIC equals the Linux process
+   ok   a 5000-step budget reply equals the Linux process
+   ok   factorial again on a new handshake
+   ok   a wrong pin is refused by the client
+   ok   factorial after an abandoned handshake, with loss and reordering
+   ok   factorial with a second address sending garbage and a new Initial; that address heard nothing
+   ok   factorial again after the garbage
+   ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
+   ok   factorial after the unfinished raw handshake
+   | the guest went on resending: 16 datagrams in 11 s, the last at 6.3 s
+   exit 1
+== restored

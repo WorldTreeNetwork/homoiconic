@@ -3,6 +3,6 @@
 3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
 All 3 tests passed.
 quic self ok
-built /home/dorje/hom-c0c800c/unikernel/out-net/reflect-net.elf
+built /home/dorje/hom-9de1838/unikernel/out-net/reflect-net.elf
 ok   a remote closure replays to 42
 wire guests ok

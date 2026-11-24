@@ -3,7 +3,7 @@
 3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
 All 3 tests passed.
 quic self ok
-built /home/dorje/hom-c0c800c/unikernel/out-net/reflect-net.elf
+built /home/dorje/hom-9de1838/unikernel/out-net/reflect-net.elf
 ok   refused: reflect.quic_port with reflect.wire_port=4446
 ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
 ok   factorial over QUIC equals the Linux process
@@ -15,4 +15,9 @@ ok   factorial with a second address sending garbage and a new Initial; that add
 ok   factorial again after the garbage
 ok   a first flight with a bad UDP checksum is dropped; with a good one it is answered
 ok   factorial after the unfinished raw handshake
+     8 more datagrams in 11 s, the last at 6.3 s
+ok   a reply nobody acknowledges is resent and then given up
+     8 datagrams and 3568 bytes for a first flight of 1200 bytes
+ok   a first flight from a forged address draws at most three times its bytes
+ok   factorial after the forged first flight
 quic guest ok
