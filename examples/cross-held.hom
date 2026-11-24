@@ -1,0 +1,9 @@
+; a send that was put out is held. The sender and a later receiver end up on
+; one guest, on one name, and do not meet there: the send was already offered
+; to the other guest, which takes it.
+let sender = quote (fn ch -> ask [1, ch, 1] (fn sent -> []))
+let waiter = quote (fn ch -> ask [2, ch] (fn x -> [x]))
+ask [0] (fn ch ->
+  ask [3, sender, ch] (fn first ->
+    ask [3, waiter, ch] (fn second ->
+      ask [2, ch] (fn x -> x))))

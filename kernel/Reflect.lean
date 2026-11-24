@@ -17,3 +17,5 @@ import Reflect.Node
 import Reflect.NodeProof
 import Reflect.Store
 import Reflect.StoreProof
+import Reflect.Crossing
+import Reflect.CrossingProof

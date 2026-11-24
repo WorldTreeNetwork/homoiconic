@@ -8,7 +8,7 @@ Two events of the one-machine network involve two processes: a start (`Step.spaw
 
 ## D-1. What each guest records
 
-A guest's log is a list of entries, each one of five (`Reflect.Entry`):
+A guest's log is a list of entries, each one of five (`Reflect.Note`):
 
 | Entry | Meaning | Machine run on this guest |
 |---|---|---|
@@ -76,7 +76,7 @@ What the merge checks, and where each tamper is caught:
 - Entries that combine but are not what the program does (an event that cannot happen, a wrong process, a name made twice): the replay refuses.
 - A record that replays but whose guest reported something else: the comparison of processes refuses.
 
-Not refused: the comparison is of lines, a finished value or a payload and the names held. It does not compare what a waiting process will do next. A guest that lies, makes its chain again, and drops or repeats one turn of a loop that sends the same message on the same name can hand over a record that is accepted. That record is still a run of the one-machine network, and its lines are that run's; it is not the run the guest made.
+Not refused: the comparison is of lines, a finished value or a payload and the names held. It does not compare what a waiting process will do next. A guest that lies, makes its chain again, and drops or repeats one turn of a loop that sends the same message on the same name can hand over a record that is accepted. That record is still a run of the one-machine network, and its lines are that run's; it is not the run the guest made. Also not refused: the order of a guest's `ack` entries is not compared with the order in which the peer took the crossings. The taking guest's log holds the delivery order; the asking guest's record of a run with the takings in the other order combines with it (`kernel/CrossCheck.lean`).
 
 ## D-5. The check
 

@@ -1,0 +1,12 @@
+; two senders and one receiver that receives twice. With the starts sent to
+; another guest, both sends come back as crossings, and the order in which the
+; receiving guest takes them decides the result: [1, 2] or [2, 1].
+let sender = quote (fn start ->
+  case start
+    [ch, n] -> ask [1, ch, n] (fn sent -> n)
+    _ -> 0)
+ask [0] (fn ch ->
+  ask [3, sender, [ch, 1]] (fn first ->
+    ask [3, sender, [ch, 2]] (fn second ->
+      ask [2, ch] (fn x ->
+        ask [2, ch] (fn y -> [x, y])))))

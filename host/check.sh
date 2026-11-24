@@ -15,6 +15,7 @@ lake env lean StoreContract.lean
 lake env lean ChannelContract.lean
 lake env lean LogContract.lean
 lake env lean NodeContract.lean
+lake env lean CrossingContract.lean
 lake env lean RootContract.lean
 lake env lean Surface/Check.lean
 # The scenarios print one line each; a line that starts with FAIL fails the check.
@@ -48,6 +49,12 @@ if grep -q "^FAIL" "$OUT/node.txt" || ! grep -q "^ok" "$OUT/node.txt" || grep -q
     exit 1
 fi
 
+lake env lean CrossCheck.lean > "$OUT/cross.txt"
+if grep -q "^FAIL" "$OUT/cross.txt" || [ "$(grep -c "^ok" "$OUT/cross.txt")" -ne 47 ] || grep -q "error" "$OUT/cross.txt"; then
+    cat "$OUT/cross.txt" >&2
+    exit 1
+fi
+
 lake env lean StoreCheck.lean > "$OUT/store.txt"
 if grep -q "^FAIL" "$OUT/store.txt" || ! grep -q "^ok" "$OUT/store.txt"; then
     cat "$OUT/store.txt" >&2
@@ -60,9 +67,9 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store \
+for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store Reflect/Crossing \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece Wire/Reply \
-              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Remote Surface/Host; do
+              Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Cross Surface/Host; do
     name="$(echo "$module" | tr / -)"
     lake env lean --setup ".lake/build/ir/$module.setup.json" \
         -c "$OUT/$name.c" "$module.lean"

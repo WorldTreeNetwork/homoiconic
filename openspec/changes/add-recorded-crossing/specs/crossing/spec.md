@@ -4,7 +4,7 @@
 
 ### Requirement: A guest's log holds local events and halves of crossings
 
-An entry of a guest's log SHALL be one of five (`Reflect.Entry`): `did ev`, a local event with the guest's own places; `out i k`, process `i`'s start or send put out to the peer as the guest's crossing `k`; `spawnIn k`, the peer's crossing `k` taken as a new local process; `sendIn k j`, the peer's crossing `k` taken by local receiver `j`; `ack k i`, the peer took crossing `k` and process `i` continued. A written entry SHALL be `[mark, body]` with the link mark of `openspec/specs/event-log/spec.md` and SHALL be named by `Surface.Keep.entryName`. No new record type SHALL be added for it.
+An entry of a guest's log SHALL be one of five (`Reflect.Note`): `did ev`, a local event with the guest's own places; `out i k`, process `i`'s start or send put out to the peer as the guest's crossing `k`; `spawnIn k`, the peer's crossing `k` taken as a new local process; `sendIn k j`, the peer's crossing `k` taken by local receiver `j`; `ack k i`, the peer took crossing `k` and process `i` continued. A written entry SHALL be `[mark, body]` with the link mark of `openspec/specs/event-log/spec.md` and SHALL be named by `Surface.Keep.entryName`. No new record type SHALL be added for it.
 
 #### Scenario: The chain is read as a log's is
 

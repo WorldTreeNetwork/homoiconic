@@ -2,7 +2,7 @@ import Surface.Run
 import Surface.Bytes
 import Surface.Keep
 import Surface.Chan
-import Surface.Remote
+import Surface.Cross
 
 namespace Surface.Host
 
@@ -52,25 +52,58 @@ unsafe def reflectChannels (program length schedule scheduleLength out capacity 
 unsafe def reflectReplyBytes (program length out capacity : USize) (budget : UInt64) : USize :=
   storeBytes out capacity (Surface.replyBytes (copyBytes program length) budget.toNat)
 
-/-- C ABI: the wire bytes a guest sends on a remote name. -/
-@[export reflect_remote_offer]
-unsafe def reflectRemoteOffer (out capacity : USize) : USize :=
-  storeBytes out capacity Surface.Remote.offerBytes
+/-! A guest of a run on two machines (`Surface.Cross`). The guest is a Lean
+    value the image holds between calls and cannot look inside, as a kept
+    session is; a call that takes it uses it up. -/
 
-/-- C ABI: offer bytes in, the reply-channel message out. -/
-@[export reflect_remote_take]
-unsafe def reflectRemoteTake (offer length out capacity : USize) : USize :=
-  storeBytes out capacity (Surface.Remote.takeBytes (copyBytes offer length))
+/-- C ABI: begin a guest. `flags` bit 0: this guest has the program, given in
+    its byte form, and starts it as its first process. Bit 1: its start
+    requests go to the peer. Bit 2: of the peer's sends it can take, it takes
+    the newest first. `me` and `peer` are the two guests' names, as text. -/
+@[export reflect_cross_start]
+unsafe def crossStart (program length me meLength peer peerLength : USize) (budget : UInt64)
+    (flags : UInt8) : Cross.Guest :=
+  Cross.start (copyBytes program length)
+    ((String.fromUTF8? (copyBytes me meLength)).getD "")
+    ((String.fromUTF8? (copyBytes peer peerLength)).getD "")
+    budget.toNat (flags &&& 1 == 1) (flags &&& 2 == 2) (flags &&& 4 == 4)
 
-/-- C ABI: the delivery order, as the text of a schedule. -/
-@[export reflect_remote_log]
-unsafe def reflectRemoteLog (out capacity : USize) : USize :=
-  storeBytes out capacity Surface.Remote.logText.toUTF8
+/-- C ABI: work until nothing is possible, or `Cross.workLimit` steps. -/
+@[export reflect_cross_work]
+def crossWork (g : Cross.Guest) : Cross.Guest := g.work Cross.workLimit
 
-/-- C ABI: 1 when replaying that schedule on one machine gives the same result. -/
-@[export reflect_remote_same]
-unsafe def reflectRemoteSame (_: USize) : USize :=
-  if Surface.Remote.same then 1 else 0
+/-- C ABI: take a batch from the peer. -/
+@[export reflect_cross_take]
+unsafe def crossTake (g : Cross.Guest) (batch length : USize) : Cross.Guest :=
+  g.take (copyBytes batch length)
+
+/-- C ABI: the batch for the peer, of at most `capacity` bytes. -/
+@[export reflect_cross_batch]
+unsafe def crossBatch (g : Cross.Guest) (out capacity : USize) : USize :=
+  storeBytes out capacity (g.batch (capacity.toNat - 256))
+
+/-- C ABI: 0 there is work, 1 resting, 2 closed, 3 failed. -/
+@[export reflect_cross_state]
+def crossState (g : Cross.Guest) : UInt8 := g.state
+
+/-- C ABI: the guest's record, as text. -/
+@[export reflect_cross_record]
+unsafe def crossRecord (g : Cross.Guest) (out capacity : USize) : USize :=
+  storeBytes out capacity g.record.toUTF8
+
+/-- C ABI: check two guests' records against a program's bytes. `a` is the
+    record of the guest that had the program. Answers `accepted` and the
+    replay, or `refused` and the reason. -/
+@[export reflect_cross_check]
+unsafe def crossCheck (program length a aLength b bLength out capacity : USize) : USize :=
+  storeBytes out capacity
+    (Cross.check (copyBytes program length) (copyBytes a aLength) (copyBytes b bLength)).toUTF8
+
+/-- Check-only hook: a record with its chain and head made again from its
+    entries, as a guest that lies would hand it over. -/
+@[export reflect_cross_reseal]
+unsafe def crossReseal (record length out capacity : USize) : USize :=
+  storeBytes out capacity (Cross.reseal (copyBytes record length)).toUTF8
 
 /-- Build-only hook: a Lean abort the network check can ask for. -/
 @[export reflect_abort_alloc]

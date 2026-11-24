@@ -1,0 +1,14 @@
+; a function crosses with a reply name and keeps running on the other guest:
+; it sends, starts a process of its own there on code it was handed, and
+; finishes with 7. The process it starts sends too.
+let echo = quote (fn r -> ask [1, r, 22] (fn sent -> 9))
+let worker = quote (fn start ->
+  case start
+    [reply, code] ->
+      ask [1, reply, 20] (fn sent ->
+        ask [3, code, reply] (fn started -> 7))
+    _ -> 0)
+ask [0] (fn reply ->
+  ask [3, worker, [reply, echo]] (fn started ->
+    ask [2, reply] (fn x ->
+      ask [2, reply] (fn y -> [x, y]))))

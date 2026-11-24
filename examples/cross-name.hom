@@ -1,0 +1,10 @@
+; a name crosses in a message. The far process receives a reply name on the
+; channel it was started with, and answers on it.
+let worker = quote (fn ch ->
+  ask [2, ch] (fn reply ->
+    ask [1, reply, 5] (fn sent -> [])))
+ask [0] (fn ch ->
+  ask [3, worker, ch] (fn started ->
+    ask [0] (fn reply ->
+      ask [1, ch, reply] (fn sent ->
+        ask [2, reply] (fn n -> n)))))

@@ -1,4 +1,4 @@
-- [ ] `kernel/Reflect/Crossing.lean`: `Side`, `Entry`, `Mix`, `combine`, `accept`
+- [ ] `kernel/Reflect/Crossing.lean`: `Side`, `Note`, `Mix`, `combine`, `accept`
 - [ ] `kernel/Reflect/CrossingProof.lean`, `kernel/CrossingContract.lean`: `accepted_network`, `combine_exact`, `combine_events`, axioms printed, no `sorry`
 - [ ] `kernel/Surface/Cross.lean`: the guest (state, step, packets, batches, record text), the record reader, `check`
 - [ ] `kernel/CrossCheck.lean`: two guests in one process; both `take` orders of `examples/cross-race.hom` give two records and two results; tampered records refused, each with its reason
