@@ -243,9 +243,53 @@ def readGo (b : ByteArray) : Nat → Nat → List Frame → Except String Item
         else .error "a tag other than a positive bignum or a name"
       else .error notData
 
+/-- The same walk as `readGo`, with the same refusals in the same order, that
+    builds nothing: it keeps only how many values are still owed. Arrays the
+    bytes open and never close cost a counter, not a frame each, so bytes that
+    are no value are refused before anything is made from them. -/
+def scanGo (b : ByteArray) : Nat → Nat → Nat → Except String Unit
+  | 0, _, _ => .error "the bytes end inside a value"
+  | fuel + 1, pos, owed => do
+      let (major, n, pos) ← readHead b pos
+      -- One value arrived; `owed` is at least one here.
+      let next (pos : Nat) : Except String Unit :=
+        if owed ≤ 1 then
+          if pos == b.size then .ok () else .error "there are bytes after the value"
+        else scanGo b fuel pos (owed - 1)
+      if major == 0 then next pos
+      else if major == 4 then
+        if n == 0 then next pos
+        else scanGo b fuel pos (owed - 1 + n)
+      else if major == 2 then
+        if pos + n > b.size then .error "the bytes end inside a value"
+        else next (pos + n)
+      else if major == 3 then
+        if pos + n > b.size then .error "the bytes end inside a value"
+        else match String.fromUTF8? (b.extract pos (pos + n)) with
+          | some _ => next (pos + n)
+          | none => .error "a text that is not UTF-8"
+      else if major == 6 then
+        if n == 2 then do
+          let (_, pos) ← readBig b pos
+          next pos
+        else if n == 39 then do
+          let (major, k, pos) ← readHead b pos
+          if major == 0 then next pos
+          else if major == 6 && k == 2 then do
+            let (_, pos) ← readBig b pos
+            next pos
+          else .error "a name that is not over a number"
+        else .error "a tag other than a positive bignum or a name"
+      else .error notData
+
 /-- Read one item from exactly these bytes. Bytes the writer would not have
-    produced are refused. -/
-def readItem (b : ByteArray) : Except String Item := readGo b (b.size + 1) 0 []
+    produced are refused, and they are refused by `scanGo` before `readGo`
+    makes anything: what a refusal costs does not grow with how deep the
+    bytes open arrays. Only bytes that are one value are built, and what they
+    build is at most one item for each byte. -/
+def readItem (b : ByteArray) : Except String Item := do
+  scanGo b (b.size + 1) 0 1
+  readGo b (b.size + 1) 0 []
 
 /-- Read one data value from exactly these bytes. A byte string is refused. -/
 def read (b : ByteArray) : Except String Data := do

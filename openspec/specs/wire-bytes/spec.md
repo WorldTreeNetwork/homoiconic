@@ -48,6 +48,22 @@ The kernel SHALL provide a writer from data to bytes, for every data value in wh
 - WHEN each is read
 - THEN the reader refuses it
 
+### Requirement: Bytes that are no value are refused before anything is built
+
+The reader SHALL decide whether the bytes are one value, with the refusals of "A data value has one byte form", before it builds any part of the value, keeping no more than a count of the values still owed: what a refusal costs SHALL NOT grow with how many arrays the bytes open. Its refusals SHALL be in the same words, for the same bytes, as a reader that builds as it goes (`Wire.readGo`). Bytes it accepts SHALL build at most one item for each byte. It is tested, not proved.
+
+#### Scenario: Arrays opened and never closed
+
+- GIVEN 200000 bytes `81`, each opening an array of one, and the same bytes followed by `00`
+- WHEN each is read
+- THEN the first is refused with `the bytes end inside a value`, and the second is read as 200000 nested arrays around 0
+
+#### Scenario: The same refusals
+
+- GIVEN every string of one or two bytes, every refused vector, and arrays nested and cut short
+- WHEN each is read by the reader and by the builder alone
+- THEN both read the same value or refuse with the same words
+
 ### Requirement: A program's bytes are the bytes of its quoted form
 
 The byte form of a program SHALL be the byte form of the data value `reify` gives it. The kernel SHALL read a program back from that data and SHALL refuse data that is the form of no program. Reading the data form of a program SHALL give that program; this is proved, with Lean's standard axioms only.

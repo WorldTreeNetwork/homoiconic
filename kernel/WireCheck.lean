@@ -168,6 +168,45 @@ def oneForm : String :=
 
 #eval IO.println oneForm
 
+/-- What a reading gives, as text: the bytes it is written as again, or the
+    refusal's words. -/
+def outcome : Except String Item → String
+  | .ok i => "ok " ++ hex (writeItem i)
+  | .error e => "error " ++ e
+
+/-- `readItem` scans before it builds. The scan refuses what the builder
+    refuses, with the same words: for every string of up to two bytes, every
+    refused vector, and arrays nested and cut short, `readItem` gives what
+    the builder alone (`readGo`) gives. -/
+def sameAsBuilder : String :=
+  let one := (List.range 256).map fun a => ByteArray.empty.push a.toUInt8
+  let two := (List.range 65536).map fun a =>
+    (ByteArray.empty.push (a / 256).toUInt8).push (a % 256).toUInt8
+  let more := (refused.map fun (_, h) => unhex h) ++
+    [unhex (rep 5 "81" ++ "00"), unhex (rep 5 "81"), unhex (rep 3 "82" ++ "00"),
+     unhex ("8301" ++ rep 3 "81" ++ "0200"), unhex ("820181" ++ "1817"),
+     unhex (rep 4 "81" ++ "61ff"), unhex ("8200" ++ rep 3 "81" ++ "00" ++ "00")]
+  let all := one ++ two ++ more
+  let differ := all.filter fun b => outcome (readItem b) != outcome (readGo b (b.size + 1) 0 [])
+  line differ.isEmpty s!"of {all.length} strings, the scan and the builder agree on every one, refusals word for word ({differ.length} differ)"
+
+#eval IO.println sameAsBuilder
+
+-- Arrays opened and never closed: each byte `81` opens an array of one. The
+-- scan refuses them before a frame is made, in the words for bytes cut
+-- short; closed by one number they are a value and are read.
+#eval do
+  let k := 200000
+  let deep := ByteArray.mk (Array.replicate k 0x81)
+  let cut := match read deep with
+    | .error e => e == "the bytes end inside a value"
+    | .ok _ => false
+  let closed := match readItem (deep.push 0) with
+    | .ok i => (writeItem i).size == k + 1
+    | .error _ => false
+  IO.println (line (cut && closed)
+    s!"{k} arrays opened and not closed are refused as bytes cut short; closed by a number they are read")
+
 def n (k : Nat) : Term := .lit (.nat k)
 def emptyArr : Term := .lit (.arr [])
 
