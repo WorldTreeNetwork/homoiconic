@@ -73,12 +73,17 @@ if [ ! -r "$OUT/lean/done" ]; then
                 todo="${todo# }"
             done
         done
+        # Only the objects compiled here are named in the manifest, and only
+        # those are linked: a stray file in lean/ reaches no image.
+        rm -f "$OUT"/lean/*.o "$OUT/lean/objects"
         for module in $seen; do
             name="$(echo "$module" | tr / -)"
             lake env leanc -c -O3 -o "$OUT/lean/lean-$name.o" ".lake/build/ir/$module.c"
+            echo "lean/lean-$name.o" >> "$OUT/lean/objects"
         done
         lake env leanc -c -o "$OUT/lean/ffi.o" ffi.c
         lake env leanc -c -o "$OUT/lean/runtime.o" "$HERE/../host/runtime.c"
+        printf 'lean/ffi.o\nlean/runtime.o\n' >> "$OUT/lean/objects"
         # 2. Copies of four toolchain archives, each with one edit.
         # The C++ archives list pthread, rt and dl as libraries to link; musl has them inside libc.
         for a in libc++.a libc++abi.a libunwind.a; do
@@ -88,20 +93,24 @@ if [ ! -r "$OUT/lean/done" ]; then
         objcopy --weaken-symbol=initialize_libuv "$L/lib/lean/libleanrt.a" "$OUT/lib/libleanrt.a"
         cp "$L/lib/lean/libInit.a" "$L/lib/lean/libStd.a" "$L/lib/libgmp.a" "$L/lib/libuv.a" "$OUT/lib/"
         zig version >> "$OUT/versions.txt"
-        (cd "$OUT" && sha256sum lean/*.o lib/*.a) > "$OUT/objects.sha256"
+        # shellcheck disable=SC2046
+        (cd "$OUT" && sha256sum $(cat lean/objects) lib/*.a) > "$OUT/objects.sha256"
         cp "$OUT/source.current" "$OUT/source.sha256"
         touch "$OUT/lean/done"
     )
 fi
 # Every object must be the one that was compiled: an ELF x86-64 object with the recorded hash.
 (cd "$OUT" && sha256sum --quiet -c objects.sha256) || { echo "build: an object in $OUT changed since it was compiled; remove $OUT" >&2; exit 2; }
+# The Lean objects to link are the ones the manifest names, and no others.
+LEAN_OBJECTS="$(sed -n 's|^[0-9a-f]\{64\}  \(lean/[^ /]*\.o\)$|'"$OUT"'/\1|p' "$OUT/objects.sha256")"
+[ -n "$LEAN_OBJECTS" ] || { echo "build: the manifest names no Lean objects; remove $OUT" >&2; exit 2; }
 
 # 3. The layer and the program.
 cp "$PROGRAM" "$OUT/gen/program.hom"
 printf 'pub const source = @embedFile("program.hom");\npub const budget: u64 = %s;\npub const probe: enum { preserve, guard, random } = .%s;\n' \
     "$BUDGET" "${PROBE:-preserve}" > "$OUT/gen/program.zig"
 if [ -n "${PROBE:-}" ]; then IS_PROBE=true; TOP="$HERE/probe.zig"; EXTRA="$HERE/probe.S"; else IS_PROBE=false; TOP="$HERE/main.zig"; EXTRA=""; fi
-printf 'pub const omit_call: ?u64 = %s;\npub const probe = %s;\npub const pretend: enum { nothing, no_saved_state, no_random, random_fails_at_boot, random_fails_when_served, clock_stuck } = .%s;\n' \
+printf 'pub const omit_call: ?u64 = %s;\npub const probe = %s;\npub const pretend: enum { nothing, no_saved_state, no_random, random_fails_at_boot, random_fails_when_served, clock_stuck, two_modules, module_list_outside } = .%s;\n' \
     "${OMIT_CALL:-null}" "$IS_PROBE" "${PRETEND:-nothing}" > "$OUT/gen/options.zig"
 
 # shellcheck disable=SC2086
@@ -119,15 +128,15 @@ LIBS="$OUT/lib/libInit.a $OUT/lib/libleanrt.a $OUT/lib/libStd.a $OUT/lib/libInit
 # shellcheck disable=SC2086
 zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reflect.elf" \
     "$HERE/boot.S" "$OUT/kernel.o" "$OUT/main.o" $EXTRA "$HERE/glibc_names.c" \
-    "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
+    $LEAN_OBJECTS $LIBS -lc --gc-sections $Z
 if [ -z "${PROBE:-}" ]; then
     # shellcheck disable=SC2086
     zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reflect-linux" \
-        "$OUT/main.o" "$HERE/glibc_names.c" "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
+        "$OUT/main.o" "$HERE/glibc_names.c" $LEAN_OBJECTS $LIBS -lc --gc-sections $Z
     # The same objects once more, as the tool that writes a source's byte form
     # (`reply source <file>`): what a program given at boot is made with.
     # shellcheck disable=SC2086
     zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reply" \
-        "$HERE/reply.zig" "$HERE/glibc_names.c" "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
+        "$HERE/reply.zig" "$HERE/glibc_names.c" $LEAN_OBJECTS $LIBS -lc --gc-sections $Z
 fi
 echo "built $OUT/reflect.elf"

@@ -49,25 +49,33 @@ if [ ! -r "$OUT/lean/done" ]; then
                 todo="${todo# }"
             done
         done
+        # As in build.sh: the manifest names the objects compiled here, and
+        # only those are linked.
+        rm -f "$OUT"/lean/*.o "$OUT/lean/objects"
         for module in $seen; do
             name="$(echo "$module" | tr / -)"
             lake env leanc -c -O3 -o "$OUT/lean/lean-$name.o" ".lake/build/ir/$module.c"
+            echo "lean/lean-$name.o" >> "$OUT/lean/objects"
         done
         lake env leanc -c -o "$OUT/lean/ffi.o" ffi.c
         lake env leanc -c -o "$OUT/lean/runtime.o" "$HERE/../host/runtime.c"
+        printf 'lean/ffi.o\nlean/runtime.o\n' >> "$OUT/lean/objects"
         for a in libc++.a libc++abi.a libunwind.a; do
             objcopy --remove-section=.deplibs "$L/lib/$a" "$OUT/lib/$a"
         done
         objcopy --weaken-symbol=initialize_libuv "$L/lib/lean/libleanrt.a" "$OUT/lib/libleanrt.a"
         cp "$L/lib/lean/libInit.a" "$L/lib/lean/libStd.a" "$L/lib/libgmp.a" "$L/lib/libuv.a" "$OUT/lib/"
         zig version >> "$OUT/versions.txt"
-        (cd "$OUT" && sha256sum lean/*.o lib/*.a) > "$OUT/objects.sha256"
+        # shellcheck disable=SC2046
+        (cd "$OUT" && sha256sum $(cat lean/objects) lib/*.a) > "$OUT/objects.sha256"
         cp "$OUT/source.current" "$OUT/source.sha256"
         touch "$OUT/lean/done"
     )
 fi
 (cd "$OUT" && sha256sum --quiet -c objects.sha256) || { echo "build-net: an object changed; remove $OUT" >&2; exit 2; }
-printf 'pub const omit_call: ?u64 = null;\npub const probe = false;\npub const pretend: enum { nothing, no_saved_state, no_random, random_fails_at_boot, random_fails_when_served, clock_stuck } = .nothing;\n' \
+LEAN_OBJECTS="$(sed -n 's|^[0-9a-f]\{64\}  \(lean/[^ /]*\.o\)$|'"$OUT"'/\1|p' "$OUT/objects.sha256")"
+[ -n "$LEAN_OBJECTS" ] || { echo "build-net: the manifest names no Lean objects; remove $OUT" >&2; exit 2; }
+printf 'pub const omit_call: ?u64 = null;\npub const probe = false;\npub const pretend: enum { nothing, no_saved_state, no_random, random_fails_at_boot, random_fails_when_served, clock_stuck, two_modules, module_list_outside } = .nothing;\n' \
     > "$OUT/gen/options.zig"
 LIBS="$OUT/lib/libInit.a $OUT/lib/libleanrt.a $OUT/lib/libStd.a $OUT/lib/libInit.a $OUT/lib/libleanrt.a \
     $OUT/lib/libgmp.a $OUT/lib/libuv.a $OUT/lib/libc++.a $OUT/lib/libc++abi.a $OUT/lib/libunwind.a"
@@ -84,13 +92,13 @@ zig build-obj -target x86_64-linux-musl -O ReleaseSafe -fno-PIE -lc \
 # shellcheck disable=SC2086
 zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reflect-net.elf" \
     "$HERE/boot.S" "$OUT/kernel.o" "$OUT/net.o" "$OUT/netmain.o" "$HERE/glibc_names.c" \
-    "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
+    $LEAN_OBJECTS $LIBS -lc --gc-sections $Z
 # shellcheck disable=SC2086
 zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/reply" \
-    "$HERE/reply.zig" "$HERE/glibc_names.c" "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
+    "$HERE/reply.zig" "$HERE/glibc_names.c" $LEAN_OBJECTS $LIBS -lc --gc-sections $Z
 # shellcheck disable=SC2086
 zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/remote-check" \
-    "$HERE/remote-check.zig" "$HERE/glibc_names.c" "$OUT"/lean/*.o $LIBS -lc --gc-sections $Z
+    "$HERE/remote-check.zig" "$HERE/glibc_names.c" $LEAN_OBJECTS $LIBS -lc --gc-sections $Z
 # shellcheck disable=SC2086
 zig build-exe -O ReleaseSafe -femit-bin="$OUT/quic-self" "$HERE/quic-self.zig" $Z
 # shellcheck disable=SC2086
