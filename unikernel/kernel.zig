@@ -279,7 +279,9 @@ const Module = extern struct { addr: u64, size: u64, cmdline_paddr: u64, reserve
 /// The bytes Cloud Hypervisor was given with --initramfs, if any: one file the
 /// program can open, `boot_path`. The layer copies them and does not read them.
 const boot_path = "/boot/program";
-const boot_limit = 16 << 20;
+/// 2 MiB: at 4 MiB, valid data (a literal array of empty texts, say) can need
+/// more than the 512 MiB machine has to read and print (homoiconic-q59.61).
+const boot_limit = 2 << 20;
 const boot_fd = 4;
 var boot_given = false;
 var boot_at: usize = 0;

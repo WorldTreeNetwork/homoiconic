@@ -30,7 +30,7 @@ unikernel/out/reflect-linux factorial.bytes 100000000 1     # the same, as a Lin
 
 `given.sh` starts Cloud Hypervisor with `--initramfs factorial.bytes
 --cmdline "100000000 1"`, one processor and 512 MiB. Use it rather than
-starting Cloud Hypervisor by hand: it refuses a file larger than 16 MiB before
+starting Cloud Hypervisor by hand: it refuses a file larger than 2 MiB before
 the hypervisor starts. Cloud Hypervisor 54.0 copies the file to the top of the
 first memory region without looking at where the image lies, so a file nearly
 as large as the memory lands on the image before any of the image's code runs,
@@ -60,10 +60,45 @@ read the bytes: bytes that are no program are refused by the kernel, in the
 kernel's text. The kernel's reader walks the bytes once without building
 anything before it builds the value, so bytes that open millions of arrays and
 never close them are refused at once as `bytes error: the bytes end inside a
-value`. More than 16 MiB, a second module, or a module list outside usable
+value`. More than 2 MiB, a second module, or a module list outside usable
 memory stops the image with a line. Cloud Hypervisor hands over one module at
 most; the check reaches the last two lines with `PRETEND=two_modules` and
 `PRETEND=module_list_outside`.
+
+### Why 2 MiB
+
+The limit is what the bytes may cost, measured on morphie with the image
+started by `given.sh` (512 MiB) and, for peak memory, the Linux process.
+Each shape filled the size given; a literal is `82 02` and then the data, a
+program whose answer is the data, so the data is read, run and printed.
+
+| shape | 4 MiB | 2 MiB |
+|---|---|---|
+| one array of zeros, or nested arrays of one, as data | kernel's text | kernel's text |
+| literal: array of zeros, of names, a text of `a` | answer (up to 227 s of serial output) | answer |
+| literal: array of empty texts, of empty arrays, a text of line ends | `INTERNAL PANIC: out of memory` | answer (243 MiB peak as a Linux process) |
+| list of zeros written out (`[0, 0, ...]`), 1000 steps, 1 to 8 levels | | `no result within 1000 steps` (at most 132 MiB as a Linux process) |
+| literal nested arrays | full stack | full stack (from 262144 deep; 131072 answers) |
+| one number of 2 MiB (tag 2) | | no answer in 300 s, 12 MiB |
+
+At 16 MiB one array of zeros ran out of memory as data. 2 MiB is the largest
+power of two at which every shape here gave its answer or the kernel's text.
+Two limits are not the byte limit's. A literal nested deeper than the stack
+holds ends in the report of a full stack, as a deep source does. A number of
+megabytes is read (`takeBE`) and printed in time that grows with the square of
+its length: one of 128 KiB took 393 s as a Linux process, so one near the
+limit never finishes inside any check's time (`homoiconic-q59.64`).
+
+The limit bounds what the bytes cost, not what a run costs. A run's memory
+grows with its steps: `examples/forever.hom`, 52 bytes, ran the image out of
+memory at the default budget of 100000000 steps at levels 0 and 1 (1151 MiB
+at level 0 as a Linux process, about 4.6 bytes a step at level 1), and the
+list of zeros above, at 1 MiB through one interpreter, did after a few seconds
+of steps. No byte limit prevents that; a budget is what bounds it
+(`homoiconic-q59.65`). The network image takes at most 1176 program bytes (a
+1200-byte frame less its 24-byte header) and a budget of at most 100000000
+steps, so what its bytes cost is small, and its runs have the same per-step
+growth.
 
 `build.sh` runs Lake, compiles generated C for Surface.Host's local imports,
 and links identical Lean objects into `out/reflect.elf` and

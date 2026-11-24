@@ -69,6 +69,8 @@ same() {
 # given <bytes-file> <command-line>: boot the image as it is, with a file handed
 # to it at boot, through the documented launch (given.sh). The command line is
 # `[step-budget [levels]]`, split into words as the launch takes them.
+# GIVEN_LIMIT, when set, is the time limit instead of LIMIT: an answer of
+# megabytes takes minutes to leave through the serial port.
 given() {
     rm -f "$OUT/serial.log"
     GIVEN_BYTES="$1"
@@ -76,8 +78,8 @@ given() {
     status=0
     # shellcheck disable=SC2086
     CLOUD_HYPERVISOR="$CH" IMAGE="$OUT/reflect.elf" SERIAL="file=$OUT/serial.log" \
-        timeout "$LIMIT" sh "$HERE/given.sh" "$1" $2 > "$OUT/cloud-hypervisor.log" 2>&1 || status=$?
-    [ "$status" = 124 ] && fail "given $1: no power off within $LIMIT seconds"
+        timeout "${GIVEN_LIMIT:-$LIMIT}" sh "$HERE/given.sh" "$1" $2 > "$OUT/cloud-hypervisor.log" 2>&1 || status=$?
+    [ "$status" = 124 ] && fail "given $1: no power off within ${GIVEN_LIMIT:-$LIMIT} seconds"
     [ "$status" = 0 ] || { cat "$OUT/cloud-hypervisor.log" >&2; fail "given $1: cloud-hypervisor exit $status"; }
     [ -r "$OUT/serial.log" ] || fail "given $1: the serial port said nothing"
 }
@@ -102,7 +104,7 @@ launch_refuses() {
     CLOUD_HYPERVISOR="$CH" IMAGE="$OUT/reflect.elf" SERIAL="file=$OUT/serial.log" \
         sh "$HERE/given.sh" "$2" > "$OUT/launch.log" 2>&1 || status=$?
     [ "$status" = 2 ] || fail "$1: the launch ended with $status"
-    printf 'given: the program given at boot is larger than 16 MiB\n' > "$OUT/wanted.txt"
+    printf 'given: the program given at boot is larger than 2 MiB\n' > "$OUT/wanted.txt"
     cmp "$OUT/wanted.txt" "$OUT/launch.log" || fail "$1: the launch said something else"
     [ ! -e "$OUT/serial.log" ] || fail "$1: the image was started"
     echo "ok   $1"
@@ -231,15 +233,54 @@ says "a megabyte that is no program" "bytes error: an indefinite length or a res
 { cat "$OUT/factorial.bytes"; printf '\0'; } > "$OUT/one-more.bytes"
 given "$OUT/one-more.bytes" ""; same_given "bytes at boot: one byte past a program"
 says "one byte past a program" "bytes error: there are bytes after the value"
-# 16 MiB is the most the layer takes, and all of it arrives.
-head -c 16777216 /dev/zero > "$OUT/limit.bytes"
-given "$OUT/limit.bytes" ""; same_given "bytes at boot: exactly 16 MiB"
-says "exactly 16 MiB" "bytes error: there are bytes after the value"
-# 16 MiB of arrays opened and never closed is refused as bytes cut short,
+# 2 MiB is the most the layer takes, and all of it arrives.
+limit=2097152
+head -c $limit /dev/zero > "$OUT/limit.bytes"
+given "$OUT/limit.bytes" ""; same_given "bytes at boot: exactly 2 MiB"
+says "exactly 2 MiB" "bytes error: there are bytes after the value"
+# 2 MiB of arrays opened and never closed is refused as bytes cut short,
 # before the kernel makes anything of them.
-head -c 16777216 /dev/zero | tr '\0' '\201' > "$OUT/open-arrays.bytes"
-given "$OUT/open-arrays.bytes" ""; same_given "bytes at boot: 16 MiB of arrays never closed"
-says "16 MiB of arrays never closed" "bytes error: the bytes end inside a value"
+head -c $limit /dev/zero | tr '\0' '\201' > "$OUT/open-arrays.bytes"
+given "$OUT/open-arrays.bytes" ""; same_given "bytes at boot: 2 MiB of arrays never closed"
+says "2 MiB of arrays never closed" "bytes error: the bytes end inside a value"
+# Valid data of 2 MiB fits the machine: the costliest shapes found, each the
+# whole limit, end in the kernel's text and not in the runtime's out of memory.
+# A literal, `82 02` and then the data, is a program whose answer is the data,
+# so the data is read, run and printed. At 4 MiB the empty texts and the text
+# of line ends ran out of memory (unikernel/README.md, homoiconic-q59.61).
+be32() { printf "$(printf '\\%03o\\%03o\\%03o\\%03o' $(($1 >> 24 & 255)) $(($1 >> 16 & 255)) $(($1 >> 8 & 255)) $(($1 & 255)))"; }
+{ printf '\232'; be32 $((limit - 5)); head -c $((limit - 5)) /dev/zero; } > "$OUT/flat.bytes"
+given "$OUT/flat.bytes" ""; same_given "bytes at boot: one array of 2097147 zeros"
+says "one array of 2097147 zeros" "bytes error: the value is not a program"
+{ head -c $((limit - 1)) /dev/zero | tr '\0' '\201'; printf '\0'; } > "$OUT/nested.bytes"
+given "$OUT/nested.bytes" ""; same_given "bytes at boot: 2097151 arrays of one nested around 0"
+says "2097151 arrays of one nested around 0" "bytes error: the value is not a program"
+GIVEN_LIMIT=600
+{ printf '\202\002\232'; be32 $((limit - 7)); head -c $((limit - 7)) /dev/zero | tr '\0' '\140'; } > "$OUT/texts.bytes"
+given "$OUT/texts.bytes" ""; same_given "bytes at boot: a literal array of 2097145 empty texts"
+{ printf '\202\002\172'; be32 $((limit - 7)); head -c $((limit - 7)) /dev/zero | tr '\0' '\n'; } > "$OUT/lines.bytes"
+given "$OUT/lines.bytes" ""; same_given "bytes at boot: a literal text of 2097145 line ends"
+unset GIVEN_LIMIT
+# A program of 2 MiB is read, lifted and started through one interpreter
+# within the machine: a list of 419429 zeros written out, given 1000 steps.
+# (What a run takes after that grows with its steps, not its bytes.)
+printf '\203\004\202\002\0' > "$OUT/cons.unit"
+n=$(((limit - 3) / 5)); : > "$OUT/cons.bytes"
+while [ $n -gt 0 ]; do
+    [ $((n % 2)) = 1 ] && cat "$OUT/cons.unit" >> "$OUT/cons.bytes"
+    n=$((n / 2)); cat "$OUT/cons.unit" "$OUT/cons.unit" > "$OUT/cons.two"; mv "$OUT/cons.two" "$OUT/cons.unit"
+done
+printf '\202\002\200' >> "$OUT/cons.bytes"
+[ "$(wc -c < "$OUT/cons.bytes")" -gt $((limit - 5)) ] || fail "the list program is not near 2 MiB"
+given "$OUT/cons.bytes" "1000 1"; same_given "bytes at boot: a list of 419429 zeros, 1000 steps, one interpreter"
+says "a list of 419429 zeros" "no result within 1000 steps"
+# A literal nested deeper than the stack holds ends in the report of a full
+# stack, as a source nested too deep does: the stack, not the memory, bounds it.
+{ printf '\202\002'; head -c $((limit - 3)) /dev/zero | tr '\0' '\201'; printf '\0'; } > "$OUT/deep.bytes"
+given "$OUT/deep.bytes" ""
+grep -q "^reflect: processor fault 14 .* (on the fault stack): the stack is full" "$OUT/serial.log" || fail "deep bytes: no report of a full stack"
+if grep -q "reflect: exit\|out of memory" "$OUT/serial.log"; then fail "deep bytes: not a full stack"; fi
+echo "ok   bytes at boot: a literal nested 2097149 deep ends in a report of a full stack"
 # Words that are not numbers, or numbers past the limits, are refused by the
 # program as the Linux process refuses them, each with its own line.
 given "$OUT/factorial.bytes" "many"; refused_given "bytes at boot: a budget that is not a number" "reflect: the step budget must be a whole number"
@@ -256,10 +297,16 @@ given "$OUT/factorial.bytes" "$words"
 only "bytes at boot: a command line of 1101 bytes is refused" "reflect: the command line is longer than 1023 bytes"
 # More than the layer keeps room for is refused by the launch before the
 # hypervisor starts, and by the image when the hypervisor is started without it.
-head -c 16777217 /dev/zero > "$OUT/too-large.bytes"
-launch_refuses "bytes at boot: the launch refuses more than 16 MiB" "$OUT/too-large.bytes"
+head -c $((limit + 1)) /dev/zero > "$OUT/too-large.bytes"
+launch_refuses "bytes at boot: the launch refuses more than 2 MiB" "$OUT/too-large.bytes"
 given_raw "$OUT/too-large.bytes" ""
-only "bytes at boot: the image refuses more than 16 MiB" "reflect: the program given at boot is too large"
+only "bytes at boot: the image refuses more than 2 MiB" "reflect: the program given at boot is too large"
+# The old limit, 16 MiB, is refused too: valid data of that size ran the
+# machine out of memory when the image took it.
+head -c 16777216 /dev/zero > "$OUT/old-limit.bytes"
+launch_refuses "bytes at boot: the launch refuses 16 MiB" "$OUT/old-limit.bytes"
+given_raw "$OUT/old-limit.bytes" ""
+only "bytes at boot: the image refuses 16 MiB" "reflect: the program given at boot is too large"
 # A file just under the first memory region: Cloud Hypervisor would put it on
 # top of the image. The launch refuses it; started directly, the image never
 # gets to say anything (Cloud Hypervisor 54.0 reports an internal error from

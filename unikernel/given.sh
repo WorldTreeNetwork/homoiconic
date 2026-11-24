@@ -12,14 +12,16 @@
 # it: with 512 MiB, a file of 500 MiB ends in "InternalError" from the
 # processor, an empty serial port and exit status 0 (unikernel/README.md). So
 # the size is refused here, before the hypervisor starts. With the 512 MiB this
-# launch gives, a file of up to 16 MiB lands at 496 MiB or above, far from the
-# image at 16 MiB, and the image refuses anything larger in any case.
+# launch gives, a file of up to 2 MiB lands at 510 MiB or above, far from the
+# image at 16 MiB, and the image refuses anything larger in any case. The limit
+# is 2 MiB, not more, because valid data of 4 MiB can need more memory than
+# 512 MiB to read and print (unikernel/README.md).
 set -eu
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 CH="${CLOUD_HYPERVISOR:-cloud-hypervisor}"
 IMAGE="${IMAGE:-$HERE/out/reflect.elf}"
 SERIAL="${SERIAL:-tty}"
-limit=16777216
+limit=2097152
 if [ $# -lt 1 ] || [ $# -gt 3 ]; then
     echo "usage: given.sh <bytes-file> [step-budget [levels]]" >&2
     exit 2
@@ -28,6 +30,6 @@ file="$1"
 shift
 [ -f "$file" ] && [ -r "$file" ] || { echo "given: cannot read $file as a file" >&2; exit 2; }
 size="$(wc -c < "$file" | tr -d ' ')"
-[ "$size" -le "$limit" ] || { echo "given: the program given at boot is larger than 16 MiB" >&2; exit 2; }
+[ "$size" -le "$limit" ] || { echo "given: the program given at boot is larger than 2 MiB" >&2; exit 2; }
 exec "$CH" --kernel "$IMAGE" --initramfs "$file" ${1+--cmdline "$*"} --cpus boot=1 --memory size=512M \
     --serial "$SERIAL" --console off
