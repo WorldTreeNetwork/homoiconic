@@ -89,16 +89,36 @@ megabytes is read (`takeBE`) and printed in time that grows with the square of
 its length: one of 128 KiB took 393 s as a Linux process, so one near the
 limit never finishes inside any check's time (`homoiconic-q59.64`).
 
-The limit bounds what the bytes cost, not what a run costs. A run's memory
-grows with its steps: `examples/forever.hom`, 52 bytes, ran the image out of
-memory at the default budget of 100000000 steps at levels 0 and 1 (1151 MiB
-at level 0 as a Linux process, about 4.6 bytes a step at level 1), and the
-list of zeros above, at 1 MiB through one interpreter, did after a few seconds
-of steps. No byte limit prevents that; a budget is what bounds it
-(`homoiconic-q59.65`). The network image takes at most 1176 program bytes (a
+The limit bounds what the bytes cost, not what a run costs. Until
+`homoiconic-q59.65` a run's memory grew with its steps even when nothing was
+kept: every call and case in tail position pushed a frame that only ended the
+block again. `examples/forever.hom`, 52 bytes, ran the image out of memory at
+the default budget of 100000000 steps at levels 0 and 1 (1151 MiB at level 0
+as a Linux process), and the list of zeros above, at 1 MiB through one
+interpreter, did after a few seconds of steps. A tail call now keeps no frame.
+Measured on morphie (2026-11-24, tree `8300d8f`; the control is the same tree
+with `kernel/` from `e9a4c86`; `reflect-linux` peaks from `getrusage`, the
+image booted through `given.sh` with 512 MiB):
+
+| run | 1M steps | 10M | 30M | 100M | image, 100M |
+|---|---|---|---|---|---|
+| forever, levels 0, 1, 2 | 11 MiB | 11 MiB | 11 MiB | 11 MiB | `no result within 100000000 steps` at each level |
+| forever, level 0, a frame per tail call (control) | 19 MiB | 121 MiB | 349 MiB | 1151 MiB | `INTERNAL PANIC: out of memory` |
+| forever, level 1, control | 11 MiB | 53 MiB | 145 MiB | 463 MiB | `INTERNAL PANIC: out of memory` |
+| forever, level 2, control | 11 MiB | 19 MiB | 45 MiB | 135 MiB | `no result within 100000000 steps` |
+| list of zeros, 1 MiB, one interpreter | 64 MiB | 176 MiB | 317 MiB (answer) | 317 MiB (answer) | the answer |
+| the same, control | 68 MiB | 228 MiB | 463 MiB | 461 MiB (answer) | `INTERNAL PANIC: out of memory` |
+| `def deep x = [x, ...deep x]`, 55 bytes | 15 MiB | 91 MiB | 259 MiB | 849 MiB | `INTERNAL PANIC: out of memory` |
+
+What a run keeps live still grows with its steps where the program keeps it:
+a recursion whose calls wait on each other keeps a frame per pending call
+(`depth_bound` allows one a step), and built data is kept. `deep` is such a
+run, and no byte limit or budget limit stops it from ending the machine
+(`homoiconic-q59.67`). The network image takes at most 1176 program bytes (a
 1200-byte frame less its 24-byte header) and a budget of at most 100000000
-steps, so what its bytes cost is small, and its runs have the same per-step
-growth.
+steps, so what its bytes cost is small; its runs have the same growth where
+the program keeps something, and none where it does not: forever at
+100000000 is the budget reply and the guest answers after it (`check-net.sh`).
 
 `build.sh` runs Lake, compiles generated C for Surface.Host's local imports,
 and links identical Lean objects into `out/reflect.elf` and

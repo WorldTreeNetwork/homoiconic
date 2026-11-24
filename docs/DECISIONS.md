@@ -163,7 +163,7 @@ Ordered by dependency. "Free" means it follows from earlier results with little 
 | **P1** | `Direct env t o ↔ ∃ n, run n (load env t) = done o` | The thing that runs means what `Direct` says. | — |
 | **P1b** | `Direct [] t o ↔ ∃ n, run n (load (compile t)) = done o`, and `decompile (compile t) = t` | The bytecode means what the term means, and is the same information. | P1's machine, D9 |
 | **P2** | `run (n + m) s = run m (run n s)` | Pause, resume, checkpoint, slice. | P1's machine |
-| **P3** | After `n` steps the state holds at most `c * n + size s₀` cells | A budget bounds memory, not only time. A hostile program cannot exhaust a VM. | P1's machine |
+| **P3** | After `n` steps the state holds at most `c * n + size s₀` cells | A budget bounds memory, not only time. A hostile program cannot exhaust a VM. | P1's machine. Not proved (2026-11-24): `depth_bound` bounds the stack and frames only. A tail call keeps no frame (`homoiconic-q59.65`), so a tail loop holds finitely many states (`forever_bounded`); environments and data are unbounded, and a recursion that waits can still exhaust the 512 MiB image within the default budget (`homoiconic-q59.67`). |
 
 ### Bytes
 

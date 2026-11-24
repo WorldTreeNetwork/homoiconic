@@ -1,6 +1,6 @@
 # bytecode-machine
 
-What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `machine_never_faults`, `run_add`, `run_halted`, `runUntil_eq`, `runPriced_run`, `runPriced_reach`, `runPriced_unit`, `machine_exact_priced`, `decompile_compile`, and `depth_bound` are proved and restated in `kernel/MachineContract.lean`. `step`, `run`, and the theorems about them take the operation table `Ops` as a parameter and hold for every table. `runPriced` (`kernel/Reflect/RunUntil.lean`) runs the same steps against a budget that charges each operation the cost its table gives (`ab8e361`); every budgeted path of the host runs it (`homoiconic-q59.52`). The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
+What is built: `Reflect.Machine`, a stack machine for the `Reflect` language. `compile` takes a term to continuation-form code, `step` is total on an explicit state, and `run n` takes `n` steps. `machine_correct`, `machine_exact`, `machine_never_halts`, `machine_never_faults`, `run_add`, `run_halted`, `runUntil_eq`, `runPriced_run`, `runPriced_reach`, `runPriced_unit`, `machine_exact_priced`, `decompile_compile`, `depth_bound`, `run_cycle`, `runPriced_cycle`, `omega_cycle`, `forever_cycle` and `forever_bounded` are proved and restated in `kernel/MachineContract.lean`. A block entered in tail position, a call or a case whose continuation is `done`, pushes no frame (`push`, `homoiconic-q59.65`), so a loop whose calls are in tail position runs in constant memory. `step`, `run`, and the theorems about them take the operation table `Ops` as a parameter and hold for every table. `runPriced` (`kernel/Reflect/RunUntil.lean`) runs the same steps against a budget that charges each operation the cost its table gives (`ab8e361`); every budgeted path of the host runs it (`homoiconic-q59.52`). The speed measurement is in `docs/LEARNINGS.md`. The host runs `Reflect` programs on this machine through `reflect_run` (`openspec/specs/zig-host/spec.md`).
 
 ## Purpose
 
@@ -52,13 +52,29 @@ The package SHALL prove that running `n + m` steps from a state equals running `
 
 ### Requirement: Steps bound control depth
 
-The package SHALL prove that the value stack plus the pending frames after `n` steps is at most that of the starting state plus `n`.
+The package SHALL prove that the value stack plus the pending frames after `n` steps is at most that of the starting state plus `n`. This is all a step budget is proved to bound in memory. The environments, closures and data a state holds are not bounded by a theorem: a recursion whose calls wait on each other keeps a frame and its environment per pending call, as `depth_bound` allows, and a program that builds data keeps the data, so what such a run holds grows with its steps. The vision's P3, a bound on the cells a state holds after `n` steps (`docs/DECISIONS.md`), is not proved (`homoiconic-q59.67`).
 
 #### Scenario: A budget bounds the stacks
 
 - GIVEN a step budget
 - WHEN any program is run within it
 - THEN the stack and frame depth is within the stated bound
+
+### Requirement: A tail call keeps no frame
+
+`step` SHALL push the frame `⟨k, env⟩` when it enters a function's body or a case branch whose continuation `k` is not `done`, and SHALL push nothing when `k` is `done` (`push` in `kernel/Reflect/Machine.lean`; `ppush` on the lazy machine). Such a frame would only end the block it returns to, and it held that block's environment. Dropping it SHALL change no outcome: `machine_correct`, `machine_exact`, `machine_never_faults` and the lazy machine's theorems SHALL hold with their statements unchanged. It SHALL change step counts: each dropped frame is one step `run` no longer takes (factorial 1290 steps to 1165 at level 0, 66758 to 55543 through one interpreter, 4816682 to 4036172 through two). The package SHALL prove that a run that comes back to a state it held stays within its first `a + p` states for any number of steps and any priced budget (`run_cycle`, `runPriced_cycle`), and SHALL prove by evaluation that `omega` and `examples/forever.hom` (`loopForever`) come back: `omega` from step 4 every 4 steps, forever from step 21 every 17, and forever through one interpreter, under `arith`, from step 853 every 832 (`forever_cycle_interp`), so a priced run of forever at any budget ends in one of 38 states, and through one interpreter in one of 1685 (`forever_bounded`). `kernel/Surface/Check.lean` SHALL check that forever's depth after 2000000 steps is at most 64 at levels 0, 1 and 2; with a frame per tail call it was 222222 at level 0.
+
+#### Scenario: A tail loop at the default budget
+
+- GIVEN `examples/forever.hom`
+- WHEN `host/out/run` runs it with the budget 100000000 at levels 0, 1 and 2
+- THEN each prints `no result within 100000000 steps` with peak resident memory under 64 MiB (`host/check.sh`; about 7 MiB at every budget, where a frame per tail call took 1153, 465 and 136 MiB)
+
+#### Scenario: A recursion that waits still grows
+
+- GIVEN `def deep x = [x, ...deep x]`, whose call waits on the next
+- WHEN it runs with the budgets 1000000, 10000000 and 30000000
+- THEN its peak memory grows with the budget (15, 91 and 260 MiB as a macOS process), within `depth_bound`
 
 ### Requirement: The machine runs operations
 
@@ -84,7 +100,7 @@ The package SHALL prove that the value stack plus the pending frames after `n` s
 
 ### Requirement: The theorems depend on the logic only
 
-`machine_correct`, `machine_exact`, `machine_never_halts`, `machine_never_faults`, `machine_never_faults_until`, `machine_never_faults_priced`, `run_add`, `run_halted`, `runUntil_eq`, `runPriced_run`, `runPriced_reach`, `runPriced_unit`, `machine_exact_priced`, `decompile_compile`, and `depth_bound` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
+`machine_correct`, `machine_exact`, `machine_never_halts`, `machine_never_faults`, `machine_never_faults_until`, `machine_never_faults_priced`, `run_add`, `run_halted`, `runUntil_eq`, `runPriced_run`, `runPriced_reach`, `runPriced_unit`, `machine_exact_priced`, `decompile_compile`, `depth_bound`, `run_cycle`, `runPriced_cycle`, `omega_cycle`, `forever_cycle`, `forever_cycle_interp` and `forever_bounded` SHALL be restated by a contract file. Their axiom dependencies SHALL NOT include `sorryAx` or an axiom declared by this package.
 
 #### Scenario: No admitted correctness
 

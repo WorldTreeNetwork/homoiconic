@@ -130,7 +130,9 @@ and nothing else.
 | `run_add`, `run_halted` | Pausing and resuming equals running straight through; a halted machine stays halted |
 | `runUntil_eq` | The early-exit loop the host uses equals the proved one |
 | `decompile_compile` | Bytecode converts back to the exact term |
-| `depth_bound` | Stack depth grows by at most one per step |
+| `depth_bound` | Stack depth plus pending frames grows by at most one per step |
+| `run_cycle`, `runPriced_cycle` | A run that comes back to a state it held stays in its first `a + p` states, at any step count or budget |
+| `omega_cycle`, `forever_cycle`, `forever_cycle_interp`, `forever_bounded` | A tail loop keeps no frame per call: `omega` and `examples/forever.hom` repeat a state exactly, forever also through one interpreter, so a run of any budget holds one of finitely many states |
 
 ### Requests
 
@@ -312,6 +314,13 @@ theorems; `advance` is tested against it.
 
 ## What the proofs do not cover
 
+- **Memory.** A step budget bounds the stack and the frames (`depth_bound`),
+  and a tail call keeps no frame, so a tail loop runs in constant memory
+  (`forever_bounded` for `examples/forever.hom`, measured at about 7 MiB at
+  every budget, `homoiconic-q59.65`). Nothing bounds the environments,
+  closures and data a state holds: a recursion that waits keeps a frame per
+  pending call, and built data is kept, so what such a run holds grows with
+  its steps. P3 (`docs/DECISIONS.md`) is not proved (`homoiconic-q59.67`).
 - **Reader, renderer, Zig host.** Tested, not proved.
 - **Running through the interpreter, and text.** `reflect_interp` runs the
   closed term `interp` on the machine, so what runs is covered by the

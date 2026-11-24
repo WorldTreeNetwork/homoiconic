@@ -91,13 +91,19 @@ The server SHALL accept only kinds 0 and 2 with status zero. It SHALL drop kinds
 
 ### Requirement: Lean owns binary replies
 
-The Lean export `reflect_reply_bytes` SHALL copy program bytes, decode them with Wire.readProgram, compile and execute the existing Reflect machine under arithmetic for at most the budget in steps, and encode through `Wire.runReplyBytes` in `kernel/Wire/Reply.lean`. The budget SHALL be charged as `reflect_run` charges it (`runPriced`): one for every machine step, and an operation its cost under `arith` before it runs, so a budget bounds the work inside an operation (`homoiconic-q59.52`). A run the budget stops SHALL be the budget reply (`81 01`). The replies for factorial at 100000000 and for `examples/forever.hom` at 5000 SHALL be byte-identical to those the image at `793b583` gave. The payload SHALL be the bounded-run reply form specified by wire-bytes, independent of UDP framing. The server SHALL invoke the export once per received run request; an oversized answer SHALL NOT be evaluated again to retry it with more capacity. The export SHALL return the required byte length and write nothing unless capacity suffices. Non-Lean code SHALL NOT parse program syntax or reconstruct an outcome from rendered text.
+The Lean export `reflect_reply_bytes` SHALL copy program bytes, decode them with Wire.readProgram, compile and execute the existing Reflect machine under arithmetic for at most the budget in steps, and encode through `Wire.runReplyBytes` in `kernel/Wire/Reply.lean`. The budget SHALL be charged as `reflect_run` charges it (`runPriced`): one for every machine step, and an operation its cost under `arith` before it runs, so a budget bounds the work inside an operation (`homoiconic-q59.52`). A run the budget stops SHALL be the budget reply (`81 01`). The replies for factorial at 100000000 and for `examples/forever.hom` at 5000 SHALL be byte-identical to those the image at `793b583` gave. `examples/forever.hom` at 100000000 SHALL be the budget reply, and the guest SHALL answer the next request: a tail call keeps no frame, so a tail loop runs in constant memory (`homoiconic-q59.65`; a frame per tail call ran the 512 MiB machine out of memory at levels 0 and 1 at boot). A frame carries no interpreter levels, and forever through one interpreter is 1777 bytes, past one datagram, so the interpreted loop is checked at boot (`openspec/specs/unikernel-image/spec.md`). What a run keeps live is not bounded by the budget: a recursion that waits keeps a frame per pending call, and a program of a few bytes can still exhaust the guest within 100000000 steps (`def deep x = [x, ...deep x]`, 55 bytes, peaks at 849 MiB at 100000000 steps as a Linux process and ends the image at boot in `INTERNAL PANIC: out of memory`; a run that panics powers the guest off; `homoiconic-q59.67`). The payload SHALL be the bounded-run reply form specified by wire-bytes, independent of UDP framing. The server SHALL invoke the export once per received run request; an oversized answer SHALL NOT be evaluated again to retry it with more capacity. The export SHALL return the required byte length and write nothing unless capacity suffices. Non-Lean code SHALL NOT parse program syntax or reconstruct an outcome from rendered text.
 
 #### Scenario: Known replies and a closure
 
 - GIVEN factorial, exhaustion, invalid bytes and a program returning a closure
 - WHEN the export runs and its output is independently decoded
 - THEN every response has the specified shape, factorial's data equals the known integer, and the closure's code/environment round-trips through the existing Wire value format
+
+#### Scenario: A tail loop at the largest budget
+
+- GIVEN `examples/forever.hom` as program bytes, sent to the guest after factorial
+- WHEN it is run with the budget 100000000, and factorial is sent again
+- THEN the first reply is the budget reply `81 01`, the Linux export's reply, and the second is factorial's (`unikernel/check-net.sh`)
 
 #### Scenario: A large operation is bounded on the network path
 
