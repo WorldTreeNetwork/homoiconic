@@ -115,6 +115,33 @@ expect "[1, 2, 3, 4]" "$EXAMPLES/append.hom"
 expect "[0, [1, 42]]" "$EXAMPLES/code.hom"
 expect "265252859812191058636308480000000" "$EXAMPLES/factorial.hom"
 expect "no result within 5000 steps" "$EXAMPLES/forever.hom" 5000
+# A tail loop runs in constant memory (homoiconic-q59.65): at the default
+# budget, at interpreter levels 0, 1 and 2, it ends in the budget reply and its
+# peak resident memory stays under 64 MiB. With a frame kept per tail call the
+# peaks were 1153, 465 and 136 MiB. The peak is read from /usr/bin/time where it
+# reports one (-l on macOS, -v with GNU time); otherwise only the reply is checked.
+peak_kib() {
+    if /usr/bin/time -l true > /dev/null 2>&1; then
+        /usr/bin/time -l "$@" > "$OUT/peak.out" 2> "$OUT/peak.err" || return 1
+        awk '/maximum resident set size/ { print int($1 / 1024) }' "$OUT/peak.err"
+    elif /usr/bin/time -v true > /dev/null 2>&1; then
+        /usr/bin/time -v "$@" > "$OUT/peak.out" 2> "$OUT/peak.err" || return 1
+        awk -F: '/Maximum resident set size/ { print $2 + 0 }' "$OUT/peak.err"
+    else
+        "$@" > "$OUT/peak.out" || return 1
+        echo 0
+    fi
+}
+for levels in "" --interp=1 --interp=2; do
+    # shellcheck disable=SC2086
+    kib="$(peak_kib "$OUT/run" $levels "$EXAMPLES/forever.hom" 100000000)"
+    got="$(cat "$OUT/peak.out")"
+    if [ "$got" != "no result within 100000000 steps" ] || [ "$kib" -gt 65536 ]; then
+        echo "run $levels forever.hom 100000000: expected the budget reply under 64 MiB, got '$got' at $kib KiB" >&2
+        exit 1
+    fi
+    echo "run $levels forever.hom 100000000 => $got (peak $kib KiB)"
+done
 # An answer longer than the command's first buffer is printed in full: every
 # byte is compared.
 printf 'def fill n =\n  case n\n    0 -> []\n    m + 1 -> [n, ...fill m]\n\nfill 20000\n' > "$OUT/long.hom"

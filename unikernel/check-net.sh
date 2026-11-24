@@ -176,6 +176,15 @@ if b2 != linux_run(5000, fore):
 b3 = must(exchange(0, 0, 9, 100000000, fact_bytes, wait=30), 1, 0, 9, 100000000)
 if b3 != body:
     sys.exit("second factorial differs")
+# A tail loop at the default budget ends in the budget reply and the guest
+# goes on answering (homoiconic-q59.65). With a frame kept per tail call its
+# memory grew with its steps, past the 512 MiB guest.
+b4 = must(exchange(0, 0, 10, 100000000, fore, wait=120), 1, 0, 10, 100000000)
+if b4 != linux_run(100000000, fore) or b4 != bytes.fromhex("8101"):
+    sys.exit(f"forever at the default budget gave {b4.hex()}")
+b5 = must(exchange(0, 0, 15, 100000000, fact_bytes, wait=30), 1, 0, 15, 100000000)
+if b5 != body:
+    sys.exit("factorial after forever differs")
 big_path = "/tmp/uk-big.hom"
 open(big_path, "w").write(
     "def factorial n =\n  case n\n    0 -> 1\n    m + 1 -> mul n (factorial m)\n\nfactorial 1200\n"

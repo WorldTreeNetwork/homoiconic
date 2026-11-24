@@ -211,6 +211,14 @@ given "$OUT/factorial.bytes" "1000000000 2"; same_given "bytes at boot: factoria
 given "$OUT/quine.bytes" ""; same_given "bytes at boot: the quine"
 # The budget on the command line is the one that counts.
 given "$OUT/forever.bytes" "5000"; same_given "bytes at boot: a budget of 5000 steps" "$HERE/expected/forever.txt"
+# A tail loop at the default budget ends in the budget reply at every level the
+# interpreters reach, in constant memory (homoiconic-q59.65). With a frame kept
+# per tail call, levels 0 and 1 ran the 512 MiB machine out of memory.
+for levels in 0 1 2; do
+    given "$OUT/forever.bytes" "100000000 $levels"
+    same_given "bytes at boot: forever at the default budget through $levels"
+    says "forever at the default budget through $levels" "no result within 100000000 steps"
+done
 # The levels on the command line are the ones that count: 10000 steps are
 # enough for factorial itself and not through one interpreter, and 100000 are
 # enough through one and not through two.
