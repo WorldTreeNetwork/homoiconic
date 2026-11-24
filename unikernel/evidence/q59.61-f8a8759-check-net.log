@@ -1,0 +1,18 @@
+1/3 pvclock.test.time runs forward far past 2^32 shifted ticks...OK
+2/3 pvclock.test.a 3 GHz counter gives a second per 3e9 ticks, for a day...OK
+3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
+All 3 tests passed.
+quic self ok
+built /home/dorje/hom-f8a8759/unikernel/out-net/reflect-net.elf
+ok   factorial reply is the known integer
+ok   factorial reply reads and writes the same bytes
+ok   forever at 5000 steps is the budget reply
+ok   a 40-digit product at 200 steps is the budget reply
+ok   a 40-digit product at 200000 steps is the product
+ok   bytes that are not a program are refused
+ok   a function value round-trips
+ok   a trailing byte is refused
+guest cases ok 20
+abort named
+unikernel/check-net.sh: line 287: wait: pid 3185998 is not a child of this shell
+network check passed

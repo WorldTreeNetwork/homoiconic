@@ -251,3 +251,18 @@ window; a client that does not acknowledge leaves 13; no padding fails
 side, on the Mac. The first export of these fixes, `2fc1ec2`, failed
 `check.sh` at the list of kernel symbols the program names, which now
 includes `reflect_max_levels` (fixed in `e275842`).
+
+2026-11-24 (UTC) on morphie, Cloud Hypervisor 54.0 (`homoiconic-q59.61`, the
+limit lowered to 2 MiB), tree `f8a8759` exported with `git archive` to
+`~/hom-f8a8759`: `build.sh examples/factorial.hom`, `build-net.sh`,
+`check.sh`, `check-net.sh`, `check-quic.sh` and `check-wire.sh` each exited 0.
+Their logs are `evidence/q59.61-f8a8759-*.log` (`check.sh`'s has 60 lines of
+`ok`), with exit codes and image hashes in `evidence/run-f8a8759.txt`; the
+other runs' logs are left as they were. `reflect.elf` built from factorial is
+sha256 `f3c54a3e…dd1033`; `reflect-net.elf` is `33a04433…29f530`, the same
+before and after the checks. `source.sha256`, `objects.sha256` and
+`versions.txt` came out the same as before: the Lean side did not change.
+`evidence/q59.61-measurements.log` has the measurements behind "Why 2 MiB".
+`evidence/q59.61-limit-controls.log` is `check.sh` on copies of the tree with
+the limit put back: at 16 MiB it fails at the one array of zeros, and at 4 MiB
+at the literal array of empty texts, each with `INTERNAL PANIC: out of memory`.

@@ -1,0 +1,49 @@
+# Measurements for homoiconic-q59.61 (the boot byte-form limit), morphie, Cloud Hypervisor 54.0,
+# 2026-11-24 (UTC). Image: tree 967c95c (limit still 16 MiB) built to ~/hom-967c95c-measure,
+# booted through unikernel/given.sh (one processor, 512 MiB), default words (budget 100000000,
+# 1 level) unless named. "lit" is `82 02` then the data: a program whose answer is the data.
+# Peak memory is ru_maxrss of reflect-linux on the same bytes. Times are wall-clock in the image,
+# mostly the serial port writing the answer.
+
+## image, 4194304 bytes
+flat   (one array of 4194299 zeros)        data: bytes error: the value is not a program; exit 0   1.2 s
+flat                                        lit : the answer, reflect: exit 0                      227 s
+nested (4194303 arrays of one around 0)     data: bytes error: the value is not a program; exit 0   1.3 s
+nested                                      lit : processor fault 14 ... the stack is full          1.1 s
+text   (4194299 x "a")                      data: not a program; exit 0 / lit: the answer; exit 0   76 s
+nltext (4194299 line ends)                  data: not a program; exit 0 / lit: INTERNAL PANIC: out of memory; exit 1
+texts  (array of 4194299 empty texts)       data: not a program; exit 0 / lit: INTERNAL PANIC: out of memory; exit 1
+arrays (array of 4194299 empty arrays)      data: not a program; exit 0 / lit: INTERNAL PANIC: out of memory; exit 1
+names  (array of 1398099 names #0)          data: not a program; exit 0 / lit: the answer; exit 0   102 s
+
+## image, 2097152 bytes, lit
+nested: processor fault 14 ... the stack is full
+texts : the answer, exit 0, 151 s      arrays: the answer, exit 0, 151 s      nltext: the answer, exit 0, 75 s
+texts at "100000000 0": the answer, exit 0, 153 s;  at "100000000 8": no result within 100000000 steps, exit 0
+big (tag 2 over 2097146 bytes ff), data and lit: no power off within 300 s
+
+## image, 1048576 bytes, lit
+nested: stack full; texts, arrays, nltext: the answer, exit 0 (76 s, 76 s, 38 s)
+
+## image, lit nested: 262144 bytes: stack full; 131072 bytes: the answer, exit 0; 65536 bytes: the answer, exit 0
+
+## Linux process, texts lit 2097152 bytes, budget 2^64-1
+levels 0..3: 1.8-1.9 s, 243-245 MiB peak;  level 4: 16.3 s, 243 MiB;  level 8: no answer in 580 s, 314 MiB
+level 8, 120 s, same budget: factorial byte form 82 MiB, texts lit 165 MiB (both still growing: steps)
+
+## Linux process, one number (tag 2): 131072 bytes: 393 s (error: unbound <digits>);
+## 2097152 bytes: no answer in 120 s, 12 MiB peak (data and lit)
+
+## list of zeros written out (83 04 82 02 00 per item, 82 02 80 at the end), Linux process
+2097148 bytes, budget 100000000: level 0: Lean "Stack overflow detected" (8 MiB host stack); level 1: answer, 11.8 s, 916 MiB
+4194303 bytes, budget 100000000: level 1: no result within 100000000 steps, 10.0 s, 1827 MiB
+262144 / 524288 / 1048576 bytes, budget 100000000, level 1: answer, 121 / 233 / 461 MiB
+                                               level 2: no result, 471 / 480 / 501 MiB;  level 3: no result, 147 / 156 / 178 MiB
+budget 1000, levels 0,1,2,3,8: 262144 bytes 21-25 MiB; 1048576 bytes 53-69 MiB; 2097148 bytes 99-132 MiB
+1048576 bytes, level 1: budget 1000000 67 MiB; 10000000 228 MiB; 30000000 461 MiB
+## image, list of zeros, "100000000 1": 2097148 and 1048573 bytes: INTERNAL PANIC: out of memory (2 s); 524288 bytes: the answer, exit 0 (8 s)
+
+## examples/forever.hom (52 bytes), budget 100000000
+image: level 0 INTERNAL PANIC: out of memory, exit 1; level 1 the same; level 2 no result within 100000000 steps, exit 0
+Linux: level 0 1151 MiB, level 1 463 MiB, level 2 134 MiB, level 3 44 MiB
+Linux, level 1: budget 1000000 11 MiB; 10000000 51 MiB; 30000000 143 MiB

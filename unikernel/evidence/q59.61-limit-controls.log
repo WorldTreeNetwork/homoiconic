@@ -1,0 +1,75 @@
+# Controls for homoiconic-q59.61 on morphie, Cloud Hypervisor 54.0, 2026-11-24 (UTC).
+# Each is check.sh on a copy of tree f8a8759 (~/hom-f8a8759-control16, -control4) with the limit
+# put back in kernel.zig (boot_limit), given.sh and check.sh (limit=). The case names keep the
+# 2 MiB tree's counts; the bytes are the control's limit: at 16 MiB the array holds 16777211 zeros,
+# at 4 MiB the literal holds 4194297 empty texts.
+
+## limit 16 MiB
+with cloud-hypervisor v54.0
+ok   factorial
+ok   forever
+ok   not-syntax
+ok   text
+ok   a zero byte in the source
+ok   an answer of 128911 bytes
+ok   the clock stopped
+ok   the event loop's start is the empty one
+ok   the program calls reflect_run and reflect_interp and nothing else that evaluates or reads
+ok   the Lean objects are the ones Lake's C compiled to
+ok   bytes at boot: text, through one interpreter
+ok   bytes at boot: factorial, through one interpreter
+ok   bytes at boot: factorial, through none
+ok   bytes at boot: factorial, through two interpreters
+ok   bytes at boot: the quine
+ok   bytes at boot: a budget of 5000 steps
+ok   bytes at boot: 10000 steps are enough through none
+ok   bytes at boot: 10000 steps are not enough through one
+ok   bytes at boot: 100000 steps are enough through one
+ok   bytes at boot: 100000 steps are not enough through two
+ok   bytes at boot: eight interpreters
+ok   bytes at boot: the largest budget
+ok   bytes at boot: a megabyte that is no program
+ok   bytes at boot: one byte past a program
+ok   bytes at boot: exactly 2 MiB
+ok   bytes at boot: 2 MiB of arrays never closed
+/home/dorje/hom-f8a8759-control16/unikernel/out/wanted.txt /home/dorje/hom-f8a8759-control16/unikernel/out/serial.log differ: char 1, line 1
+FAIL bytes at boot: one array of 2097147 zeros: the image and the Linux process differ
+  serial: INTERNAL PANIC: out of memory
+  serial: reflect: exit 1
+exit 1
+
+## limit 4 MiB
+with cloud-hypervisor v54.0
+ok   factorial
+ok   forever
+ok   not-syntax
+ok   text
+ok   a zero byte in the source
+ok   an answer of 128911 bytes
+ok   the clock stopped
+ok   the event loop's start is the empty one
+ok   the program calls reflect_run and reflect_interp and nothing else that evaluates or reads
+ok   the Lean objects are the ones Lake's C compiled to
+ok   bytes at boot: text, through one interpreter
+ok   bytes at boot: factorial, through one interpreter
+ok   bytes at boot: factorial, through none
+ok   bytes at boot: factorial, through two interpreters
+ok   bytes at boot: the quine
+ok   bytes at boot: a budget of 5000 steps
+ok   bytes at boot: 10000 steps are enough through none
+ok   bytes at boot: 10000 steps are not enough through one
+ok   bytes at boot: 100000 steps are enough through one
+ok   bytes at boot: 100000 steps are not enough through two
+ok   bytes at boot: eight interpreters
+ok   bytes at boot: the largest budget
+ok   bytes at boot: a megabyte that is no program
+ok   bytes at boot: one byte past a program
+ok   bytes at boot: exactly 2 MiB
+ok   bytes at boot: 2 MiB of arrays never closed
+ok   bytes at boot: one array of 2097147 zeros
+ok   bytes at boot: 2097151 arrays of one nested around 0
+/home/dorje/hom-f8a8759-control4/unikernel/out/wanted.txt /home/dorje/hom-f8a8759-control4/unikernel/out/serial.log differ: char 1, line 1
+FAIL bytes at boot: a literal array of 2097145 empty texts: the image and the Linux process differ
+  serial: INTERNAL PANIC: out of memory
+  serial: reflect: exit 1
+exit 1
