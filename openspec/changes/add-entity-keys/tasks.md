@@ -7,7 +7,7 @@
 - [ ] `quic.zig`: `Conn.peer_name`, `Conn.gaveUp`; the test seams `Conn.signer`, `Conn.tamper`, `Conn.earlyStream`
 - [ ] `kernel.zig` `reflect_boot_take`; `net.zig` takes the key, parses `reflect.allow`, refuses QUIC without a key, prints the entity line, drops `reflect.port` on a guest with a QUIC word, lets a refused connection give way, prints the two peer lines
 - [ ] `quic-client`: key file and server name; `wrong`, `denied`, `early`, exit 6
-- [ ] `quic-self`: the name vector and base58 (40, 41) and the refusals 42 to 67
+- [ ] `quic-self`: the name vector and base58 (40, 41), the refusals 42 to 66 and early stream data (68)
 - [ ] `check-quic.sh`: two keys two identities, same key same identity, wrong pin, client not allowed and the timed give-way, no key (none, 31 bytes, zeros), no allow-list, the ping to `reflect.port`, `early` on a guest with the hook
 - [ ] `check-wire.sh`: each guest pins the other, and both refusals
 - [ ] Each check shown to fail with its fix undone (`unikernel/evidence/entity-keys-controls.log`)

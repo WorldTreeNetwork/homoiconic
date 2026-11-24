@@ -33,3 +33,7 @@ Fresh context, Claude Fable 5.2, given this directory with the first review in i
 | F5 | RFC 9000 §12.4 allows CRYPTO in 1-RTT; the SHALL cited it for the opposite. | The citation is for STREAM only; the CRYPTO rule is said to be stricter than the RFC, with what that costs against a standard server. |
 
 Notes taken: the give-way check is timed at 0.1 s and 1 s and its control text corrected; `early` exits 2 when it sent nothing; exit 6 waits out the last send; the sentence about the seed says what is and is not cleared; dates are UTC.
+
+## 2026-11-24, third read: not run
+
+A third fresh read, asked only to confirm F1 to F5, stopped on an API rate limit before it answered. It was not run again: the second read had called the design sound and buildable, its findings were text and check lists, and the orchestrator said to continue with implementation. So no reader has returned "accept"; the last verdict on record is the second read's.

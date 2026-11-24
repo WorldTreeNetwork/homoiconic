@@ -1,6 +1,6 @@
 # A key per entity
 
-> **PENDING** until the design has had its fresh-context review (2026-11-24).
+> **ACTIVE BUILD** since 2026-11-24 (UTC). Two fresh-context reads, both send-back, the second on text and check lists only with the design called sound and buildable; their findings are in `review.md` with what was done. A third read, to confirm the second's five fixes, was cut off by an API limit and not run again; the orchestrator said to go on to implementation.
 
 **Rigor:** instrument (trusted, unproved image code; no change to a definition or theorem of `Reflect`). Bead: `homoiconic-q59.49`.
 

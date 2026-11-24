@@ -59,7 +59,7 @@ Both ends are one file of code, so a mistake made the same way on both sides pas
 
 The application secrets come from the hash of ClientHello … server Finished and nothing after it (§7.1).
 
-A reader refuses anything but exactly this: a context that is not empty, more or fewer than one entry, an entry that is not the 12 fixed bytes and a key, entry extensions, a scheme that is not `08 07`, a signature that is not 64 bytes, a message out of order (a server flight with no CertificateRequest, a client flight that starts with Finished), or bytes after Finished. A reader waits while a message is incomplete and refuses when a complete message is the wrong one. The ClientHello and ServerHello randoms were the constants `11…` and `22…`; they are now random bytes. Finished values are compared in constant time.
+A reader refuses anything but exactly this: a context that is not empty, more or fewer than one entry, an entry that is not the 12 fixed bytes and a key, entry extensions, a scheme that is not `08 07`, a signature field that is not 64 bytes, a message out of order (a server flight with no CertificateRequest, a client flight that starts with Finished), or bytes after Finished. A reader waits while a message is incomplete and refuses when a complete message is the wrong one. The ClientHello and ServerHello randoms were the constants `11…` and `22…`; they are now random bytes. Finished values are compared in constant time.
 
 ## 3. How the key reaches the guest
 
@@ -124,7 +124,7 @@ Test keys: `check-quic.sh` and `check-wire.sh` make theirs from `/dev/urandom` o
 
 ## 6. The exit test
 
-The key is 32 bytes in a file its owner made with any tool (`head -c 32 /dev/urandom`). The name is computed offline, by `unikernel/out-net/entity name <key-file>` or by identikey's own code. The guest does not make, change, export or escrow a key, and no service holds one. An owner who stops using a launcher, this image or this project still has the key and can run the entity elsewhere under the same name. A launcher that makes a key for an entity must hand that file to the owner; that rule is the launcher's (Mjolnir's change), and nothing here lets a launcher hold a key the owner cannot have.
+The key is 32 bytes in a file its owner made with any tool (`head -c 32 /dev/urandom`). The name is computed offline, by `unikernel/out-net/entity name <key-file>` (`unikernel/entity-tool.zig`) or by identikey's own code. The guest does not make, change, export or escrow a key, and no service holds one. An owner who stops using a launcher, this image or this project still has the key and can run the entity elsewhere under the same name. A launcher that makes a key for an entity must hand that file to the owner; that rule is the launcher's (Mjolnir's change), and nothing here lets a launcher hold a key the owner cannot have.
 
 There is no rotation and no revocation. A new key is a new name. A host that was once given a key still has a working copy after the owner has left it; the only remedy is for peers to take that name off their lists.
 
@@ -160,10 +160,10 @@ In one process (`quic-self`), where one end can be made to break a rule. Three s
 | A server that presents an allowed key it does not hold | Server's `signer` is another key: client refuses | Client skips the server's CertificateVerify |
 | A client that presents an allowed key it does not hold | Client's `signer` is another key: server refuses | Server skips the client's CertificateVerify |
 | A signature over another transcript, each direction | The right key signs a hash with one bit changed; the other end refuses (46, 47) | The same two controls |
-| A client that sends only Finished | The server refuses (48). This is the flight today's server accepts | Server takes a lone Finished |
+| A client that sends only Finished | The server refuses (48). This is the flight the server took before this change | Server takes a lone Finished |
 | A bad Finished, each direction | One bit changed: refused (49, 50) | Finished check removed, each end |
-| STREAM in an Initial or Handshake packet, each end | `earlyStream` puts a STREAM frame with FIN beside the CRYPTO frame of a client's Initial, a server's Initial, a server's Handshake and a client's Handshake flight: `readApp` is empty, the end of stream is not noted, and the packet counted as not opened (51) | The space rule removed: the packet opens |
-| A client with no key, as a standard client answers | An empty Certificate, no CertificateVerify, a right Finished: the server refuses (52) | Server takes an empty Certificate |
-| Each reader rule, each direction | Two entries (53, 54); a context that is not empty (55, 56); entry extensions (57, 58); another 12-byte prefix (59, 60); scheme `04 03` (61, 62); a 63-byte signature (63, 64); bytes after Finished (65, 66); a server flight with no CertificateRequest (67) | That rule removed from the reader: the exchange finishes |
+| A client with no key, as a standard client answers | An empty Certificate, no CertificateVerify, a right Finished: the server refuses (51) | Server takes an empty Certificate |
+| Each reader rule, each direction | Two entries (52, 53); a context that is not empty (54, 55); entry extensions (56, 57); another 12-byte prefix (58, 59); scheme `04 03` (60, 61); a signature field of 65 bytes (62, 63); bytes after Finished (64, 65); a server flight with no CertificateRequest (66) | That rule removed from the reader: the exchange finishes |
+| STREAM in an Initial or Handshake packet, each end | `earlyStream` puts a STREAM frame with FIN beside the CRYPTO frame of a client's Initial, a server's Initial, a server's Handshake and a client's Handshake flight: `readApp` is empty, the end of stream is not noted, and the packet counted as not opened (68) | The space rule removed: the packet opens |
 
-The controls are run on a copy of the tree with each fix undone in turn, and the log is kept in `unikernel/evidence/entity-keys-controls.log`.
+`quic-self <code>` runs one of these alone, so a control shows the case it is for. The controls are run on a copy of the tree with each fix undone in turn, by `unikernel/evidence/entity-keys-controls.py`, and the log is kept in `unikernel/evidence/entity-keys-controls.log`.
