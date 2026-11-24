@@ -2,6 +2,8 @@
 
 The settled language partition for the first system. Source of record for the partition: `openspec/specs/language-partition/spec.md`. Source of record for the host: `openspec/specs/zig-host/spec.md`. Source of record for programs as data: `openspec/specs/code-as-data/spec.md`. Source of record for the machine: `openspec/specs/bytecode-machine/spec.md`. Source of record for the surface syntax: `openspec/specs/surface-syntax/spec.md`. Source of record for requests: `openspec/specs/requests/spec.md`. Source of record for stored state: `openspec/specs/state-store/spec.md`. Source of record for the byte form: `openspec/specs/wire-bytes/spec.md`. Source of record for the machine image: `openspec/specs/unikernel-image/spec.md`. Source of record for the network image: `openspec/specs/unikernel-net/spec.md`.
 
+The vision and the roadmap this serves are in `docs/VISION.md`. The decisions it rests on (D1–D10) and the proof obligations (P1–P21) are in `docs/DECISIONS.md`. Both were folded from `add-verifiable-network-vision`.
+
 ## Partition
 
 | Language | Role | Contains an evaluator? |
@@ -95,5 +97,6 @@ A second image, `unikernel/out/reflect-net.elf` (`unikernel/build-net.sh`), keep
 - `add-boot-program-bytes`: folded. One image runs a program's byte form given at boot with `--initramfs`, served as `/boot/program` and run through `reflect_interp`; `unikernel/out/reply source`. The requirements are in `openspec/specs/unikernel-image/spec.md`; the change is `openspec/changes/archive/2026-11-22-add-boot-program-bytes/`. Its advise read by another model family is still owed.
 - `add-unikernel-quic`: folded. One authenticated QUIC stream on `reflect.quic_port`, the KVM paravirtual clock, the certificate pin, `unikernel/check-quic.sh`. The requirements are in `openspec/specs/unikernel-net/spec.md`; the change is `openspec/changes/archive/2026-11-23-add-unikernel-quic/`.
 - `add-network-channels`: folded. A closure and a reply name cross between two guests on `reflect.wire_port` and `reflect.peer`; the `reflect_remote_*` exports; `unikernel/check-wire.sh`. The requirements are in `openspec/specs/channels/spec.md`, `openspec/specs/unikernel-net/spec.md` and `openspec/specs/zig-host/spec.md`; the change is `openspec/changes/archive/2026-11-23-add-network-channels/`.
+- `add-verifiable-network-vision`: folded. No behavior and no spec delta; the vision and roadmap are `docs/VISION.md`, the decisions and proof obligations `docs/DECISIONS.md`. The change is `openspec/changes/archive/2026-11-24-add-verifiable-network-vision/`.
 
 The partition is the landed artifact those changes cite. This kernel does not add a Zig host or a C ABI. The host landing is the call above.

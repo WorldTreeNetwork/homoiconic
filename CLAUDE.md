@@ -82,6 +82,9 @@ Work loop: intend → steer → change → advise → act → fold.
 Tracker is beads (`bd`; DAG nodes are `--type node`). Living specs are
 `openspec/specs/`; in-flight work is `openspec/changes/`. Read
 [`openspec/AGENTS.md`](openspec/AGENTS.md) before changing behavior.
+The vision and roadmap are [`docs/VISION.md`](docs/VISION.md); the
+decisions (D1–D10) and proof obligations (P1–P21) are
+[`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Remotes
 

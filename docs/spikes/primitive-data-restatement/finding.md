@@ -1,7 +1,7 @@
 ---
 spike_id: primitive-data-restatement
 hypothesis_id: primitive-data-restatement
-source_synthesis: openspec/changes/add-verifiable-network-vision/design.md
+source_synthesis: docs/DECISIONS.md
 run_at: 2026-11-09
 time_spent_min: 60
 verdict: go

@@ -420,7 +420,7 @@ theorems; `advance` is tested against it.
   it should be skipped or tried again. A kept node is taken at its word for
   what each process holds and is waiting on.
 - **The network.** What a payload means, several VMs and model calls
-  are the roadmap in `openspec/changes/add-verifiable-network-vision/`.
+  are the roadmap in `docs/VISION.md`.
 
 ## Next
 
