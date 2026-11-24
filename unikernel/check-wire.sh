@@ -1,6 +1,9 @@
 #!/bin/sh
 # Two guests. One sends a closure and a reply channel. The other runs it and
 # answers on that channel. The delivery log replays to the same result here.
+# Each guest has its own entity key, made for this run, and allows only the
+# other's name. A guest that expects another name refuses its peer, and a
+# guest whose peer does not allow it gets no answer.
 set -eu
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$HERE/.." && pwd)"
@@ -20,6 +23,14 @@ sh "$HERE/build-net.sh"
 grep -q "^FAIL" "$OUT/remote-lean.txt" && exit 1
 grep -q "ok   a remote closure replays to 42" "$OUT/remote-lean.txt"
 "$OUT/remote-check"
+
+( umask 077
+  for k in a b other; do head -c 32 /dev/urandom > "$OUT/wire-key-$k"; done )
+KA="$OUT/wire-key-a"
+KB="$OUT/wire-key-b"
+NA="$("$OUT/entity" name "$KA")"
+NB="$("$OUT/entity" name "$KB")"
+NO="$("$OUT/entity" name "$OUT/wire-key-other")"
 
 sudo ip link del "$TA" 2>/dev/null || true
 sudo ip link del "$TB" 2>/dev/null || true
@@ -45,15 +56,40 @@ boot() {
     mac="$2"
     cmd="$3"
     log="$4"
+    key="$5"
     rm -f "$log"
-    timeout 180 "$CH" --kernel "$OUT/reflect-net.elf" --cpus boot=1 --memory size=512M \
+    timeout 180 "$CH" --kernel "$OUT/reflect-net.elf" --initramfs "$key" --cpus boot=1 --memory size=512M \
         --serial "file=$log" --console off \
         --net "tap=$tap,mac=$mac" --cmdline "$cmd" >"$OUT/ch-wire.log" 2>&1 &
     echo $!
 }
 
-pb=$(boot "$TB" 02:00:00:00:00:03 "reflect.ip=$CHB reflect.port=4444 reflect.wire_port=4446" "$OUT/wire-b.log")
-pa=$(boot "$TA" 02:00:00:00:00:02 "reflect.ip=$CHA reflect.port=4444 reflect.peer=$CHB:4446" "$OUT/wire-a.log")
+# pair <the name A allows> <the name B allows>
+pair() {
+    pb=$(boot "$TB" 02:00:00:00:00:03 "reflect.ip=$CHB reflect.port=4444 reflect.wire_port=4446 reflect.allow=$2" "$OUT/wire-b.log" "$KB")
+    pa=$(boot "$TA" 02:00:00:00:00:02 "reflect.ip=$CHA reflect.port=4444 reflect.peer=$CHB:4446 reflect.allow=$1" "$OUT/wire-a.log" "$KA")
+}
+unpair() {
+    kill "$pa" "$pb" 2>/dev/null || true
+    wait "$pa" 2>/dev/null || true
+    wait "$pb" 2>/dev/null || true
+}
+# said <line>: A says the line within 60 seconds and never `remote ok`.
+said() {
+    end=$(( $(date +%s) + 60 ))
+    while [ "$(date +%s)" -lt "$end" ]; do
+        if grep -qx "reflect: $1" "$OUT/wire-a.log" 2>/dev/null; then break; fi
+        sleep 0.05
+    done
+    grep -qx "reflect: $1" "$OUT/wire-a.log"
+    sleep 1
+    if grep -q "reflect: remote ok" "$OUT/wire-a.log"; then
+        echo "a guest finished the exchange with a peer it should not have" >&2
+        exit 1
+    fi
+}
+
+pair "$NB" "$NA"
 
 end=$(( $(date +%s) + 90 ))
 while [ "$(date +%s)" -lt "$end" ]; do
@@ -73,7 +109,20 @@ done
 grep -q "reflect: remote ok" "$OUT/wire-a.log"
 grep -q "reflect: log " "$OUT/wire-a.log"
 grep -q "reflect: wire 4446" "$OUT/wire-b.log"
-kill "$pa" "$pb" 2>/dev/null || true
-wait "$pa" 2>/dev/null || true
-wait "$pb" 2>/dev/null || true
+grep -qx "reflect: entity $NA" "$OUT/wire-a.log"
+grep -qx "reflect: entity $NB" "$OUT/wire-b.log"
+unpair
+echo "ok   two guests with two keys, each allowing the other's name, exchange the message"
+
+# A expects another name than B's: A refuses B and sends no offer.
+pair "$NO" "$NA"
+said "the peer is not allowed"
+unpair
+echo "ok   a guest that expects another name refuses its peer"
+
+# B does not allow A: B takes none of A's handshake, and A gets no answer.
+pair "$NB" "$NO"
+said "the peer gave no answer"
+unpair
+echo "ok   a guest its peer does not allow gets no answer"
 echo "wire guests ok"

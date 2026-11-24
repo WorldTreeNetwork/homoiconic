@@ -110,6 +110,35 @@ and rebuild. Build outputs are ignored. Checks start from an empty output
 folder and compare full serial streams against the Linux executable and
 independent expected values, including a rendering larger than 64 KiB.
 
+## An entity's key (the network image)
+
+A guest that serves or calls over QUIC runs for one entity and has that
+entity's Ed25519 key. The key is not in the image: one `reflect-net.elf`
+serves every entity. The key is a 32-byte file its owner makes and keeps, and
+the name is computed from the file alone.
+
+```sh
+head -c 32 /dev/urandom > guest.key && chmod 600 guest.key   # the owner's; keep it
+unikernel/out-net/entity name guest.key                       # its name, base58
+cloud-hypervisor --kernel unikernel/out-net/reflect-net.elf --initramfs guest.key \
+    --cpus boot=1 --memory size=512M --serial tty --console off --net tap=... \
+    --cmdline "reflect.ip=... reflect.port=4444 reflect.quic_port=4445 reflect.allow=<client name>"
+unikernel/out-net/quic-client <ip> 4445 <budget> <program-file> client.key <guest name>
+```
+
+The name is identikey-protocol's fingerprint of the key: Blake3 of the dCBOR
+of `{"alg": "ed25519", "key": <public key>}`, written in base58
+(`unikernel/entity.zig`). The guest prints `reflect: entity <name>` before
+`reflect: ready`. `reflect.allow` is the list, one to eight names, of the
+entities it finishes a handshake with; each end proves its key and checks the
+other's name. With a QUIC word and no key the guest prints `reflect: no entity
+key` and powers off; there is no built-in key. Such a guest answers nothing on
+its plain UDP port.
+
+Whoever starts the guest holds the key: they chose its memory and can read
+it. Giving the key as a file keeps it out of the image, its hash, the process
+list and the hypervisor's log, and no more. Never put it on the command line.
+
 ## Runtime audit (Lean v4.35.0)
 
 The permitted entry is `main.zig` -> module initializer ->

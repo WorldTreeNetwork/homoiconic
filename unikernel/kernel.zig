@@ -308,6 +308,27 @@ const Tss = extern struct {
 
 var command_line: [1024]u8 = .{0} ** 1024;
 
+/// Hand the file given at boot over, once: its length, or 0 when none was
+/// given or it was taken before. The bytes are copied to `out` when they fit
+/// `capacity`. In every case this copy is cleared and the file forgotten, so
+/// `boot_path` does not open afterwards. The network image takes its entity
+/// key this way; the one-program image does not call this.
+export fn reflect_boot_take(out: [*]u8, capacity: usize) usize {
+    if (!boot_given) return 0;
+    const len = boot_len;
+    const at: [*]volatile u8 = @ptrFromInt(boot_at);
+    var i: usize = 0;
+    while (i < len) : (i += 1) {
+        if (len <= capacity) out[i] = at[i];
+        at[i] = 0;
+    }
+    boot_given = false;
+    boot_open = false;
+    boot_len = 0;
+    boot_pos = 0;
+    return len;
+}
+
 export fn reflect_command_line() [*]const u8 {
     return &command_line;
 }

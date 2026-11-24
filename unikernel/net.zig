@@ -12,6 +12,7 @@ const budget_max: u64 = 100000000;
 extern fn reflect_reply_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
 extern fn reflect_abort_alloc(unused: usize) usize;
 extern fn reflect_command_line() [*]const u8;
+extern fn reflect_boot_take(out: [*]u8, capacity: usize) usize;
 extern fn reflect_remote_offer(out: [*]u8, capacity: usize) usize;
 extern fn reflect_remote_take(offer: [*]const u8, length: usize, out: [*]u8, capacity: usize) usize;
 extern fn reflect_remote_log(out: [*]u8, capacity: usize) usize;
@@ -25,10 +26,19 @@ const Endpoint = struct {
     peer_port: u16,
     has_peer: bool,
     hook: bool,
+    /// A QUIC word was given: this guest has an entity key and an allow-list,
+    /// and answers nothing on the plain UDP port.
+    guarded: bool,
 };
 const std = @import("std");
 const quic_mod = @import("quic.zig");
 const pvclock = @import("pvclock.zig");
+const entity = @import("entity.zig");
+/// This guest's entity: its key and its name (`me.name`). On a connection
+/// whose handshake was accepted, `qconn.peer_name` is the other end's name.
+var me: entity.Identity = undefined;
+/// The names this guest finishes a handshake with (`reflect.allow`).
+var allow: entity.Allow = .{};
 var qconn: quic_mod.Conn = undefined;
 var q_ready = false;
 var q_wire = false;
@@ -41,6 +51,17 @@ const q_idle: u64 = 2_000_000_000;
 
 export fn net_serve() noreturn {
     const ep = parse(line()) orelse halt("the network address is not valid");
+    // The entity key, before the device is touched. A guest with no QUIC
+    // word has no use for a file given at boot: it is cleared and not kept.
+    if (ep.guarded) {
+        takeKey();
+        say("reflect: entity ");
+        say(entity.text(&me.name).slice());
+        say("\n");
+    } else {
+        var none: [1]u8 = undefined;
+        _ = reflect_boot_take(&none, 0);
+    }
     var nic = discover() orelse halt("no network device");
     var i: usize = 0;
     while (i < nic.nbars) : (i += 1) {
@@ -55,7 +76,7 @@ export fn net_serve() noreturn {
     say("\n");
     if (ep.quic_port != 0) {
         if (!startClock()) halt("no monotonic clock");
-        qconn = quic_mod.Conn.openServer(rdrand64);
+        qconn = quic_mod.Conn.openServer(rdrand64, &me, &allow);
         q_ready = true;
         say("reflect: quic ");
         putDec(ep.quic_port);
@@ -64,14 +85,12 @@ export fn net_serve() noreturn {
     if (ep.wire_port != 0 or ep.has_peer) {
         if (!startClock()) halt("no monotonic clock");
         if (ep.wire_port != 0) {
-            qconn = quic_mod.Conn.openServer(rdrand64);
+            qconn = quic_mod.Conn.openServer(rdrand64, &me, &allow);
             say("reflect: wire ");
             putDec(ep.wire_port);
             say("\n");
         } else {
-            var pin: [32]u8 = undefined;
-            std.crypto.hash.sha2.Sha256.hash(quic_mod.certificate(), &pin, .{});
-            qconn = quic_mod.Conn.openClient(rdrand64, &pin);
+            qconn = quic_mod.Conn.openClient(rdrand64, &me, &allow);
             say("reflect: peer ");
             putIp(ep.peer_ip);
             say(":");
@@ -84,6 +103,20 @@ export fn net_serve() noreturn {
         poll(nic, ep);
         if (q_wire) wireTick(nic, ep) else if (q_ready) quicTick(nic, ep);
     }
+}
+
+/// The entity key is the file given at boot: 32 bytes, an Ed25519 seed.
+/// There is no other key to fall back to.
+fn takeKey() void {
+    var seed: [33]u8 = .{0} ** 33;
+    const n = reflect_boot_take(&seed, seed.len);
+    if (n == 0) halt("no entity key");
+    if (n != 32) halt("the entity key is not 32 bytes");
+    var any: u8 = 0;
+    for (seed[0..32]) |b| any |= b;
+    if (any == 0) halt("the entity key is all zero");
+    me = entity.identity(seed[0..32]) orelse halt("the entity key is not usable");
+    std.crypto.secureZero(u8, &seed);
 }
 
 fn line() []const u8 {
@@ -104,6 +137,7 @@ fn parse(s: []const u8) ?Endpoint {
     var peer_ip: [4]u8 = .{ 0, 0, 0, 0 };
     var peer_port: u16 = 0;
     var has_peer = false;
+    var has_allow = false;
     var i: usize = 0;
     while (i < s.len) {
         while (i < s.len and s[i] == ' ') i += 1;
@@ -137,11 +171,18 @@ fn parse(s: []const u8) ?Endpoint {
             peer_ip = parseIp(rest[0..at]) orelse return null;
             peer_port = parsePort(rest[at + 1 ..]) orelse return null;
             has_peer = true;
+        } else if (starts(word, "reflect.allow=")) {
+            if (has_allow) return null;
+            allow = entity.Allow.parseList(word["reflect.allow=".len..]) orelse return null;
+            has_allow = true;
         } else return null;
     }
     // One QUIC connection: the service, the wire server or the peer, not two.
     if (wire_port != 0 and has_peer) return null;
     if (saw_quic and (saw_wire or has_peer)) return null;
+    // A QUIC word needs the list of names it admits, and the list needs one.
+    const guarded = saw_quic or saw_wire or has_peer;
+    if (guarded != has_allow) return null;
     return .{
         .ip = ip orelse return null,
         .port = port orelse return null,
@@ -151,6 +192,7 @@ fn parse(s: []const u8) ?Endpoint {
         .peer_port = peer_port,
         .has_peer = has_peer,
         .hook = hook,
+        .guarded = guarded,
     };
 }
 
@@ -437,6 +479,9 @@ fn handle(frame: []u8, nic: Nic, ep: Endpoint) void {
         return;
     }
     if (dport != ep.port) return;
+    // A guest with a QUIC word answers programs only over QUIC, from a name
+    // on its list. Plain UDP beside that would be a second door.
+    if (ep.guarded) return;
     const payload = frame[udp + 8 .. udp + ulen];
     if (payload.len > max_dgram) return;
     onDatagram(frame, payload, nic, ep);
@@ -528,14 +573,15 @@ fn quicDatagram(frame: []const u8, nic: Nic, ep: Endpoint) void {
             q_peer = true;
         }
         q_seen = now;
-    } else if (qconn.server and q_peer and (q_answered or now -| q_seen >= q_idle) and
+    } else if (qconn.server and q_peer and (q_answered or qconn.refused or now -| q_seen >= q_idle) and
         quic_mod.newInitial(payload, &qconn.orig_dcid))
     {
-        // A server connection gives way only when it has answered or has
+        // A server connection gives way only when it has answered, has
+        // refused its client, or has
         // opened nothing for q_idle, and only to a datagram that opens as a
         // new Initial. The candidate is built aside; if it does not open,
         // the connection in place is untouched.
-        q_next = quic_mod.Conn.openServer(rdrand64);
+        q_next = quic_mod.Conn.openServer(rdrand64, &me, &allow);
         if (q_next.recv(payload, now)) {
             qconn = q_next;
             @memcpy(q_frame[0..42], frame[0..42]);
@@ -554,6 +600,7 @@ var peer_mac: [6]u8 = .{0} ** 6;
 var peer_known = false;
 var wire_sent = false;
 var wire_done = false;
+var peer_said = false;
 var offer_buf: [2048]u8 = undefined;
 var offer_len: usize = 0;
 
@@ -641,6 +688,12 @@ fn wirePump(nic: Nic, ep: Endpoint) void {
     var out: [1500]u8 = undefined;
     const n = qconn.send(&out, mono());
     if (n > 0) sendTo(nic, ep, &peer_mac, &ep.peer_ip, ep.peer_port, 9000, out[0..n]);
+    // The peer is not on this guest's list, or took none of this guest's
+    // handshake: said once.
+    if (!peer_said and !wire_done and (qconn.refused or qconn.gaveUp(mono()))) {
+        say(if (qconn.refused) "reflect: the peer is not allowed\n" else "reflect: the peer gave no answer\n");
+        peer_said = true;
+    }
     if (!wire_done and qconn.peer_fin) {
         const got = qconn.readApp();
         var expect: [256]u8 = undefined;

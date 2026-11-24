@@ -1,8 +1,14 @@
-//! Host QUIC client. Verifies the guest certificate, sends one RFL1 payload,
+//! Host QUIC client: <ip> <port> <budget> <program-file> <key-file>
+//! <server-name> [mode]. It has its own entity key (a 32-byte file) and
+//! accepts only a guest whose name is <server-name>. It sends one RFL1 payload,
 //! acknowledges the reply in a packet of its own, and writes the reply bytes
 //! to stdout. `loss` drops and reorders datagrams, the acknowledgement too.
 //! `silent` takes the reply and leaves without acknowledging it.
-//! `wrong` expects the peer key to be refused.
+//! `wrong` expects to refuse the guest: its name is not <server-name>.
+//! `denied` expects the guest to refuse this key: the client accepts the
+//! guest, gets no reply, and sees its own flight given up.
+//! `early` puts the request in a STREAM frame in the Initial packet, sends
+//! that first flight once and leaves; a guest must not act on it.
 //! `spoof <local-ip>` plays a second host at <local-ip> beside the exchange:
 //! once the handshake is accepted it sends the guest garbage and a well-formed
 //! new Initial from that address, then loses the first copy of the reply,
@@ -13,6 +19,7 @@
 
 const std = @import("std");
 const quic = @import("quic.zig");
+const entity = @import("entity.zig");
 
 extern fn socket(domain: c_int, kind: c_int, proto: c_int) c_int;
 extern fn sendto(fd: c_int, buf: [*]const u8, n: usize, flags: c_int, addr: *const Sock, len: u32) isize;
@@ -84,6 +91,8 @@ fn pump(c: *quic.Conn, fd: c_int, dst: *const Sock, loss: bool) void {
 
 var probe: quic.Conn = undefined;
 var other: quic.Conn = undefined;
+var me: entity.Identity = undefined;
+var allow: entity.Allow = .{};
 
 fn junk(buf: []u8) void {
     var i: usize = 0;
@@ -155,22 +164,27 @@ fn quiet(c: *quic.Conn, fd: c_int, sfd: c_int, ns: u64) bool {
 
 pub fn main(init: std.process.Init.Minimal) u8 {
     const v = init.args.vector;
-    if (v.len < 5) return 2;
+    if (v.len < 7) return 2;
     const ip = ip4(std.mem.span(v[1])) orelse return 2;
     const port = std.fmt.parseInt(u16, std.mem.span(v[2]), 10) catch return 2;
     const budget = std.fmt.parseInt(u64, std.mem.span(v[3]), 10) catch return 2;
     const path = std.mem.span(v[4]);
-    const mode = if (v.len > 5) std.mem.span(v[5]) else "";
+    const mode = if (v.len > 7) std.mem.span(v[7]) else "";
     const loss = std.mem.eql(u8, mode, "loss");
     const wrong = std.mem.eql(u8, mode, "wrong");
     const spoof = std.mem.eql(u8, mode, "spoof");
     const only_initial = std.mem.eql(u8, mode, "initial");
     const silent = std.mem.eql(u8, mode, "silent");
-    if (mode.len != 0 and !loss and !wrong and !spoof and !only_initial and !silent) return 2;
-    if (spoof and v.len < 7) return 2;
-    var pin: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(quic.certificate(), &pin, .{});
-    if (wrong) pin[0] ^= 0xff;
+    const denied = std.mem.eql(u8, mode, "denied");
+    const early = std.mem.eql(u8, mode, "early");
+    if (mode.len != 0 and !loss and !wrong and !spoof and !only_initial and !silent and !denied and !early) return 2;
+    if (spoof and v.len < 9) return 2;
+    // This end's key, and the one name it accepts.
+    var seed: [33]u8 = undefined;
+    if ((readFile(std.mem.span(v[5]), &seed) orelse return 2) != 32) return 2;
+    me = entity.identity(seed[0..32]) orelse return 2;
+    const expect = entity.parse(std.mem.span(v[6])) orelse return 2;
+    if (!allow.add(&expect)) return 2;
     var file: [1 << 16]u8 = undefined;
     const n = readFile(path, &file) orelse return 2;
     var frame: [1200]u8 = undefined;
@@ -184,7 +198,8 @@ pub fn main(init: std.process.Init.Minimal) u8 {
     std.mem.writeInt(u64, frame[16..24], budget, .big);
     @memcpy(frame[24..][0..n], file[0..n]);
 
-    var c = quic.Conn.openClient(rnd, &pin);
+    var c = quic.Conn.openClient(rnd, &me, &allow);
+    if (early and !c.earlyStream(0, frame[0 .. 24 + n])) return 2;
     if (only_initial) {
         var first: [1500]u8 = undefined;
         const fnn = c.send(&first, now());
@@ -198,11 +213,19 @@ pub fn main(init: std.process.Init.Minimal) u8 {
     var dst = Sock{ .family = 2, .port = @byteSwap(port), .addr = @byteSwap(ip), .zero = .{0} ** 8 };
     var sfd: c_int = -1;
     if (spoof) {
-        const sip = ip4(std.mem.span(v[6])) orelse return 2;
+        const sip = ip4(std.mem.span(v[8])) orelse return 2;
         sfd = socket(2, 2, 17);
         if (sfd < 0) return 2;
         var second = Sock{ .family = 2, .port = 0, .addr = @byteSwap(sip), .zero = .{0} ** 8 };
         if (bind(sfd, &second, @sizeOf(Sock)) != 0) return 2;
+    }
+    if (early) {
+        // The first flight, once, with the request where no request may be.
+        var first: [1500]u8 = undefined;
+        const fnn = c.send(&first, now());
+        if (fnn < quic.min_initial) return 2;
+        if (sendto(fd, first[0..fnn].ptr, fnn, 0, &dst, @sizeOf(Sock)) != @as(isize, @intCast(fnn))) return 2;
+        return 0;
     }
     var stage: u8 = 0;
     const start = now();
@@ -214,7 +237,7 @@ pub fn main(init: std.process.Init.Minimal) u8 {
             // Mid-connection, from the second address: garbage, and the
             // well-formed first flight of another handshake.
             garbage(sfd, &dst);
-            other = quic.Conn.openClient(rnd, &pin);
+            other = quic.Conn.openClient(rnd, &me, &allow);
             var first: [1500]u8 = undefined;
             const fnn = other.send(&first, now());
             if (fnn < quic.min_initial) return 2;
@@ -227,9 +250,12 @@ pub fn main(init: std.process.Init.Minimal) u8 {
             if (!c.writeApp(frame[0 .. 24 + n])) return 2;
         }
         if (c.refused) return if (wrong) 0 else 3;
+        // A flight of this end's was given up and its last wait is over.
+        // `denied` passes only when the guest was there and was accepted.
+        if (!c.peer_fin and c.gaveUp(now())) return if (denied and c.accepted) 0 else 6;
         if (c.peer_fin) {
             const got = c.readApp();
-            if (wrong) return 3;
+            if (wrong or denied) return 3;
             // The acknowledgement went out in the pump above, or is held
             // there to be sent after something else: nothing else follows.
             if (hold_n != 0 and !silent) {

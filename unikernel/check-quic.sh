@@ -9,6 +9,14 @@
 # and a first flight from an address that is never heard from again is
 # answered with at most three times its bytes, in datagrams of 1200 or more. Before all that, the command lines that ask for two QUIC services at
 # once, which the guest refuses.
+#
+# Every guest and client here has an entity key, made for this run. The
+# guest's is the file given at boot; the client's name is on the guest's
+# list. Checked: a guest with no key, a short key or a zero key serves no
+# QUIC; two keys are two identities and one key twice is one; a client that
+# expects another name refuses the guest; a client the guest does not allow
+# is refused, and the guest serves the next one at once; stream data in an
+# Initial packet is not acted on; and plain UDP beside QUIC is not answered.
 set -eu
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$HERE/.." && pwd)"
@@ -22,11 +30,28 @@ HOSTIP=192.168.249.1
 OTHERIP=192.168.249.9
 FORGEDIP=192.168.249.77
 MAC=02:00:00:00:00:02
-CMD="reflect.ip=$IP reflect.port=$PORT reflect.quic_port=$QPORT"
+BASE="reflect.ip=$IP reflect.port=$PORT reflect.quic_port=$QPORT"
 
 [ -r /dev/kvm ] && [ -w /dev/kvm ]
 "$CH" --version | grep -qx "cloud-hypervisor v54.0"
 sh "$HERE/build-net.sh"
+
+# Three entities for this run: the guest, the client it allows, and one
+# that is on no list. A key is 32 bytes from anywhere; its name is computed
+# from the file alone.
+( umask 077
+  for k in guest client other; do head -c 32 /dev/urandom > "$OUT/key-$k"; done
+  head -c 31 /dev/urandom > "$OUT/key-short"
+  head -c 32 /dev/zero > "$OUT/key-zero" )
+KG="$OUT/key-guest"
+KC="$OUT/key-client"
+KO="$OUT/key-other"
+NG="$("$OUT/entity" name "$KG")"
+NC="$("$OUT/entity" name "$KC")"
+NO="$("$OUT/entity" name "$KO")"
+[ "$NG" != "$NC" ] && [ "$NG" != "$NO" ] && [ "$NC" != "$NO" ]
+if "$OUT/entity" name "$OUT/key-short" >/dev/null 2>&1; then exit 1; fi
+CMD="$BASE reflect.allow=$NC"
 
 pid=
 sudo ip link del "$TAP" 2>/dev/null || true
@@ -40,53 +65,120 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# boot <command line> [key file]: the key is the file given at boot.
 boot() {
     rm -f "$OUT/serial.log" "$OUT/ch.log"
-    timeout 400 "$CH" --kernel "$OUT/reflect-net.elf" --cpus boot=1 --memory size=512M \
-        --serial "file=$OUT/serial.log" --console off \
-        --net "tap=$TAP,mac=$MAC" --cmdline "$1" >"$OUT/ch.log" 2>&1 &
+    if [ -n "${2:-}" ]; then
+        timeout 400 "$CH" --kernel "$OUT/reflect-net.elf" --initramfs "$2" --cpus boot=1 --memory size=512M \
+            --serial "file=$OUT/serial.log" --console off \
+            --net "tap=$TAP,mac=$MAC" --cmdline "$1" >"$OUT/ch.log" 2>&1 &
+    else
+        timeout 400 "$CH" --kernel "$OUT/reflect-net.elf" --cpus boot=1 --memory size=512M \
+            --serial "file=$OUT/serial.log" --console off \
+            --net "tap=$TAP,mac=$MAC" --cmdline "$1" >"$OUT/ch.log" 2>&1 &
+    fi
     pid=$!
 }
-
-# One guest has one QUIC connection. A command line that asks for the QUIC
-# service and an end of the remote channel is refused before the device is
-# touched.
-refused() {
-    boot "$CMD $1"
+# Wait for the guest to say it serves QUIC.
+serving() {
+    end=$(( $(date +%s) + 90 ))
+    while [ "$(date +%s)" -lt "$end" ]; do
+        if grep -q "reflect: quic $QPORT" "$OUT/serial.log" 2>/dev/null; then
+            break
+        fi
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "guest exited" >&2
+            cat "$OUT/serial.log" >&2 || true
+            exit 1
+        fi
+        sleep 0.05
+    done
+    grep -q "reflect: quic $QPORT" "$OUT/serial.log"
+}
+stop() {
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    pid=
+}
+# stops <command line> <key file or ""> <serial line>: the guest says the
+# line, claims no readiness, and the hypervisor exits.
+stops() {
+    boot "$1" "$2"
     end=$(( $(date +%s) + 90 ))
     while kill -0 "$pid" 2>/dev/null && [ "$(date +%s)" -lt "$end" ]; do sleep 0.05; done
     if kill -0 "$pid" 2>/dev/null; then
-        echo "a guest given '$1' with a QUIC port kept running" >&2
+        echo "a guest that should have stopped with '$3' kept running" >&2
         exit 1
     fi
     wait "$pid" 2>/dev/null || true
     pid=
-    grep -q "reflect: the network address is not valid" "$OUT/serial.log"
-    if grep -q "reflect: ready" "$OUT/serial.log"; then exit 1; fi
+    grep -qx "reflect: $3" "$OUT/serial.log"
+    if grep -q -e "reflect: ready" -e "reflect: quic" "$OUT/serial.log"; then exit 1; fi
+}
+
+# One guest has one QUIC connection. A command line that asks for the QUIC
+# service and an end of the remote channel is refused before the device is
+# touched, with a key and an allow-list given so that nothing else is wrong.
+refused() {
+    stops "$CMD $1" "$KG" "the network address is not valid"
     echo "ok   refused: reflect.quic_port with $1"
 }
 refused "reflect.wire_port=4446"
 refused "reflect.peer=192.168.249.3:4446"
 
-boot "$CMD"
-end=$(( $(date +%s) + 90 ))
-while [ "$(date +%s)" -lt "$end" ]; do
-    if grep -q "reflect: quic $QPORT" "$OUT/serial.log" 2>/dev/null; then
-        break
-    fi
-    if ! kill -0 "$pid" 2>/dev/null; then
-        echo "guest exited" >&2
-        cat "$OUT/serial.log" >&2 || true
-        exit 1
-    fi
-    sleep 0.05
-done
-grep -q "reflect: quic $QPORT" "$OUT/serial.log"
+# No list of names, no QUIC: there is no setting that admits everyone.
+stops "$BASE" "$KG" "the network address is not valid"
+echo "ok   refused: reflect.quic_port with no reflect.allow"
+
+# No key, no QUIC: the guest has no other key to fall back to.
+stops "$CMD" "" "no entity key"
+echo "ok   a guest with no key serves no QUIC"
+stops "$CMD" "$OUT/key-short" "the entity key is not 32 bytes"
+echo "ok   a guest given 31 bytes serves no QUIC"
+stops "$CMD" "$OUT/key-zero" "the entity key is all zero"
+echo "ok   a guest given 32 zero bytes serves no QUIC"
 
 fact="$ROOT/examples/factorial.hom"
 fore="$ROOT/examples/forever.hom"
 "$OUT/reply" run 100000000 "$fact" > "$OUT/factorial.reply"
 "$OUT/reply" run 5000 "$fore" > "$OUT/budget.reply"
+
+# Stream data in an Initial packet, whose keys anyone can make. This guest
+# stops at its first run request (reflect.hook=alloc). A first flight with a
+# run request in a STREAM frame beside its ClientHello must leave it up; the
+# allowed client's request then stops it, so the hook was armed.
+boot "$CMD reflect.hook=alloc" "$KG"
+serving
+"$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NG" early
+sleep 3
+if ! kill -0 "$pid" 2>/dev/null || grep -q "allocation failure" "$OUT/serial.log"; then
+    echo "the guest acted on stream data in an Initial packet" >&2
+    cat "$OUT/serial.log" >&2
+    exit 1
+fi
+"$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NG" > /dev/null || true
+end=$(( $(date +%s) + 30 ))
+while kill -0 "$pid" 2>/dev/null && [ "$(date +%s)" -lt "$end" ]; do sleep 0.05; done
+if kill -0 "$pid" 2>/dev/null; then exit 1; fi
+wait "$pid" 2>/dev/null || true
+pid=
+grep -q "reflect: allocation failure" "$OUT/serial.log"
+echo "ok   stream data in an Initial packet is not acted on; the allowed client's request is"
+
+# Two keys are two identities: the same image with another key has another
+# name, the one computed from its file, and the client that expects the
+# first guest refuses it.
+boot "$CMD" "$KO"
+serving
+grep -qx "reflect: entity $NO" "$OUT/serial.log"
+"$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NG" wrong
+stop
+echo "ok   a guest with another key has another name, and the client that expects the first refuses it"
+
+boot "$CMD" "$KG"
+serving
+grep -qx "reflect: entity $NG" "$OUT/serial.log"
+echo "ok   the guest's name is the one computed from its key file"
 
 body() {
     dd if="$1" of="$2" bs=1 skip=24 status=none
@@ -98,7 +190,7 @@ kind() {
 factorial() {
     name="$1"
     shift
-    "$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" "$@" > "$OUT/quic-$name.frame"
+    "$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NG" "$@" > "$OUT/quic-$name.frame"
     body "$OUT/quic-$name.frame" "$OUT/quic-$name.body"
     cmp -s "$OUT/quic-$name.body" "$OUT/factorial.reply"
     kind "$OUT/quic-$name.frame"
@@ -107,7 +199,7 @@ factorial() {
 factorial fact
 echo "ok   factorial over QUIC equals the Linux process"
 
-"$OUT/quic-client" "$IP" "$QPORT" 5000 "$fore" > "$OUT/quic-budget.frame"
+"$OUT/quic-client" "$IP" "$QPORT" 5000 "$fore" "$KC" "$NG" > "$OUT/quic-budget.frame"
 body "$OUT/quic-budget.frame" "$OUT/quic-budget.body"
 cmp -s "$OUT/quic-budget.body" "$OUT/budget.reply"
 kind "$OUT/quic-budget.frame"
@@ -117,13 +209,50 @@ echo "ok   a 5000-step budget reply equals the Linux process"
 factorial fact2
 echo "ok   factorial again on a new handshake"
 
-"$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" wrong
-echo "ok   a wrong pin is refused by the client"
+"$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NO" wrong
+echo "ok   a client that expects another name refuses the guest"
 
 # The refused handshake was left unfinished. The guest keeps it for two idle
 # seconds and then takes this one, which also loses and reorders datagrams.
 factorial loss loss
 echo "ok   factorial after an abandoned handshake, with loss and reordering"
+
+# A client whose key is not on the guest's list: it accepts the guest, gets
+# no reply and sees its flight given up. The guest lets the refused
+# connection go at once: the allowed client, started 0.1 s later, while the
+# first is still resending, is served within a second.
+"$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" "$KO" "$NG" denied > "$OUT/quic-denied.frame" &
+dpid=$!
+sleep 0.1
+t0=$(date +%s%N)
+factorial after-denied
+t1=$(date +%s%N)
+took=$(( (t1 - t0) / 1000000 ))
+if [ "$took" -ge 1000 ]; then
+    echo "the allowed client waited $took ms behind a refused one" >&2
+    exit 1
+fi
+if ! wait "$dpid"; then
+    echo "a client the guest does not allow was not refused" >&2
+    exit 1
+fi
+[ ! -s "$OUT/quic-denied.frame" ]
+echo "     the allowed client was served in $took ms"
+echo "ok   a client the guest does not allow is refused, and the next client is served at once"
+
+# Plain UDP beside QUIC: a ping to reflect.port is not answered.
+python3 - "$IP" "$PORT" <<'PY'
+import socket, struct, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(2.0)
+s.sendto(b"RFL1" + bytes([2, 0, 0, 0]) + struct.pack("!QQ", 9, 0), (sys.argv[1], int(sys.argv[2])))
+try:
+    s.recvfrom(2048)
+except socket.timeout:
+    sys.exit(0)
+sys.exit("a guest with a QUIC port answered a ping on its plain UDP port")
+PY
+echo "ok   a ping to the plain UDP port of a QUIC guest is not answered"
 
 # A second host at another address, during and after an exchange.
 factorial spoof spoof "$OTHERIP"
@@ -134,7 +263,7 @@ echo "ok   factorial again after the garbage"
 
 # A real first flight with a bad UDP checksum is dropped; the same bytes with
 # a good one are answered.
-"$OUT/quic-client" "$IP" "$QPORT" 1 "$fact" initial > "$OUT/quic-initial.bin"
+"$OUT/quic-client" "$IP" "$QPORT" 1 "$fact" "$KC" "$NG" initial > "$OUT/quic-initial.bin"
 sudo -n python3 - "$TAP" "$OUT/quic-initial.bin" "$QPORT" <<'PY'
 import socket, struct, sys, time
 tap, path, qport = sys.argv[1], sys.argv[2], int(sys.argv[3])
@@ -374,12 +503,19 @@ echo "ok   a first flight from a forged address draws at most three times its by
 factorial fact5
 echo "ok   factorial after the forged first flight"
 
-if grep -v -e "^reflect: ready $IP:$PORT\$" -e "^reflect: quic $QPORT\$" "$OUT/serial.log" | grep -q .; then
+if grep -v -e "^reflect: entity $NG\$" -e "^reflect: ready $IP:$PORT\$" -e "^reflect: quic $QPORT\$" "$OUT/serial.log" | grep -q .; then
     echo "the guest said something unexpected:" >&2
     cat "$OUT/serial.log" >&2
     exit 1
 fi
-kill "$pid" 2>/dev/null || true
-wait "$pid" 2>/dev/null || true
-pid=
+stop
+
+# The same key is the same identity: started again, the guest has the same
+# name and the client that expects it is served.
+boot "$CMD" "$KG"
+serving
+grep -qx "reflect: entity $NG" "$OUT/serial.log"
+factorial again
+stop
+echo "ok   the same key started again is the same name, and the same client is served"
 echo "quic guest ok"
