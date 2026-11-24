@@ -4,7 +4,7 @@ What is built: one program run as processes spread over two network guests, each
 
 ## Purpose
 
-State what a guest records, how two logs combine, what the check accepts, and what is proved, tested and assumed. Delivery order is an input (D4, `docs/DECISIONS.md`): it is recorded by the guest that takes, and a record replays to one configuration. This spec does not say that a guest ran the Lean it claims to, that every honest pair of logs combines, or anything about more than two guests.
+State what a guest records, how two logs combine, what the check accepts, and what is proved, tested and assumed. Delivery order is an input (D4, `docs/DECISIONS.md`): it is recorded by the guest that takes, and a record replays to one configuration. This spec does not say that a guest ran the Lean it claims to, that every honest pair of logs combines (`homoiconic-q59.68`), or anything about more than two guests (`homoiconic-q59.69`).
 
 ## Requirements
 

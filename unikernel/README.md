@@ -319,3 +319,30 @@ of `e9a4c86`): twenty-nine controls, each fix undone in turn, nineteen in
 `quic-self` and ten on real guests, and every one fails at its own step. With
 the frame rule alone undone the guest step still passes, because the second
 gate holds, and `quic-self` exits 68. `host/check.sh` passed on the Mac.
+
+**2026-11-24, `add-recorded-crossing` (`homoiconic-q59.51`).** `check-wire.sh`
+no longer sends one built-in program. Guest A (`reflect.wire_port`) is handed
+a program's bytes over QUIC by `quic-client`; guest B (`reflect.peer`) starts
+with no process and opens the exchanges. Starts and sends cross between them,
+each guest prints its signed record on serial (`reflect: cross …` lines), and
+`out-net/cross-check check <bytes> <record-a> <record-b>` combines the two
+logs, replays the schedule on one machine and compares
+(`openspec/specs/crossing/spec.md`). Final run on morphie from a
+`git archive` export of `ecaa6c8` into `~/hom-ecaa6c8`: `build.sh
+examples/factorial.hom`, `build-net.sh`, `check-net.sh`, `check-quic.sh`,
+`check-wire.sh` and `check.sh` each exited 0; `check.sh` ran last and with
+`CLOUD_HYPERVISOR=~/ch54/cloud-hypervisor`, because the first try found
+v53.0 on the path and stopped before building anything. Logs are
+`evidence/q59.51-ecaa6c8-*.log` (`check.sh` has 60 lines of `ok`,
+`check-wire.sh` 27), exit codes and hashes `evidence/run-ecaa6c8.txt`.
+`reflect-net.elf` is sha256 `f53a6a38…b10a9d`, the same before and after the
+checks; `source.sha256`, `objects.sha256` and `versions.txt` are that run's.
+`evidence/wire-ecaa6c8/` holds the two guests' records of each of the four
+runs and what the check answered: `old.a` and `new.a` are one program
+(`examples/cross-race.hom`) with `reflect.take=old` and `reflect.take=new`,
+their last two entries are the two takings in the two orders, and they replay
+to `[1, 2]` and `[2, 1]`. Keys are made on each run, so the names in those
+records are that run's.
+`evidence/build.log`, `build-net.log`, `check.log`, `check-net.log`,
+`check-quic.log` and `check-wire.log` are copies of this run's logs: it is the
+later tree, and holds `add-entity-keys` as `e9a4c86` had it.

@@ -86,12 +86,16 @@ CONTROLS = [
      "if budget != budget' then .error \"the budgets differ\"",
      "if false then .error \"the budgets differ\"",
      ["another budget"]),
-    # Only a held sender is shown again. With a held starter shown too, the
-    # scheduler puts the same start out over and over, 256 times a call, and
-    # the check does not end in any time worth waiting for.
-    ("a held sender is not hidden from the scheduler", CROSS,
-     "      if g.asked.any (·.place == i) || g.stuck.contains i then ⟨.finished .wrong, []⟩ else q,",
-     "      if (g.asked.any (·.place == i) && !wantsSend q) || g.stuck.contains i then ⟨.finished .wrong, []⟩ else q,",
+    # Only the choice of a local event sees held senders again. With held
+    # processes shown to the whole step, a held process is put out again on
+    # every step, 256 times a call, and the check does not end in any time
+    # worth waiting for.
+    ("a held sender is not hidden when a local event is chosen", CROSS,
+     "  let m := g.masked\n  match pick m with",
+     "  let m := g.masked\n"
+     "  match pick ⟨g.cfg.procs.mapIdx fun i q =>\n"
+     "      if (g.asked.any (·.place == i) && !wantsSend q) || g.stuck.contains i then ⟨.finished .wrong, []⟩ else q,\n"
+     "    g.cfg.names⟩ with",
      ["a send put out is held from a local receiver"]),
     ("a new channel is named as one machine names it", CROSS,
      "    let n := 2 * g.made + (if g.side = .a then 0 else 1)",
@@ -112,11 +116,13 @@ def run(cmd, cwd):
 
 def lines(kernel):
     b = run(["lake", "build", "Surface.Cross"], kernel)
+    if b.returncode == 124:
+        return None, "the build gave " + b.stderr
     if b.returncode != 0:
         return None, b.stdout[-2000:] + b.stderr[-2000:]
     r = run(["lake", "env", "lean", "CrossCheck.lean"], kernel)
     if r.returncode == 124:
-        return None, r.stderr
+        return None, "CrossCheck.lean gave " + r.stderr
     return r.stdout.splitlines(), r.stderr
 
 def main():
@@ -138,7 +144,7 @@ def main():
         got, err = lines(kernel)
         open(path, "w").write(src)
         if got is None:
-            print(f"CONTROL BROKEN {what}: does not build\n{err}"); bad += 1; continue
+            print(f"CONTROL BROKEN {what}: no build or no result\n{err}"); bad += 1; continue
         failed = [l for l in got if l.startswith("FAIL")]
         print(f"undone: {what}: {len(failed)} FAIL")
         for l in failed:

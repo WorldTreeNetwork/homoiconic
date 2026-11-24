@@ -1,0 +1,26 @@
+== build: sh unikernel/build.sh examples/factorial.hom
+   exit 0  2026-11-24T21:25:59Z
+e7eb96ff1f35a52e9416a49dc50029aa3c1ddf01eb5db1263930ef830171a934  unikernel/out/reflect.elf
+3b527a2851870482800a0fdf3ac5eb06842a8efe48aef1a26458bae9a663f11c  unikernel/out/reflect-linux
+== build-net: sh unikernel/build-net.sh
+   exit 0  2026-11-24T21:28:09Z
+f53a6a385eed0aa876dfa1161d684b3d6c5409f37e3bfa7b0373651cc3b10a9d  unikernel/out-net/reflect-net.elf
+02710f32296a961986c8172a0fde35c332399c5fa41adf4ea72dc08de262a13d  unikernel/out-net/reply
+821d4941149ac0eba09a810a6488ec8decf3b09f58ac19cf7b765fa217d0f96e  unikernel/out-net/quic-client
+d78ad991dc5c895f587a4edf16e684751ad75b638952eac6ee1166cda2c7b387  unikernel/out-net/cross-check
+   out and out-net have one source stamp
+   out and out-net have the same objects
+== check-net: sh unikernel/check-net.sh
+   exit 0  2026-11-24T21:29:34Z
+== check-quic: sh unikernel/check-quic.sh
+   exit 0  2026-11-24T21:31:52Z
+== check-wire: sh unikernel/check-wire.sh
+   exit 0  2026-11-24T21:33:26Z
+== cross-controls: python3 kernel/cross-controls.py
+   exit 1  2026-11-24T21:39:01Z
+== check: CLOUD_HYPERVISOR=~/ch54/cloud-hypervisor sh unikernel/check.sh (run last: the first try found v53.0 on the path and stopped before building)
+   exit 0  2026-11-24T21:50:02Z
+== after the checks
+6b6d0cc7fa9fdf5641bffef1fc0680852bed5366e6308a584ebb264945906ea0  unikernel/out/reflect.elf
+f53a6a385eed0aa876dfa1161d684b3d6c5409f37e3bfa7b0373651cc3b10a9d  unikernel/out-net/reflect-net.elf
+== done

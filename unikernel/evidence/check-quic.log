@@ -3,7 +3,7 @@
 3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
 All 3 tests passed.
 quic self ok
-built /home/dorje/hom-e9a4c86/unikernel/out-net/reflect-net.elf
+built /home/dorje/hom-ecaa6c8/unikernel/out-net/reflect-net.elf
 ok   refused: reflect.quic_port with reflect.wire_port=4446
 ok   refused: reflect.quic_port with reflect.peer=192.168.249.3:4446
 ok   refused: reflect.quic_port with no reflect.allow
@@ -18,7 +18,7 @@ ok   a 5000-step budget reply equals the Linux process
 ok   factorial again on a new handshake
 ok   a client that expects another name refuses the guest
 ok   factorial after an abandoned handshake, with loss and reordering
-     the allowed client was served in 6 ms
+     the allowed client was served in 8 ms
 ok   a client the guest does not allow is refused, and the next client is served at once
 ok   a ping to the plain UDP port of a QUIC guest is not answered
 ok   factorial with a second address sending garbage and a new Initial; that address heard nothing

@@ -1,0 +1,6 @@
+accepted
+schedule: [[0, 0, 0], [1, 0], [0, 0, 2], [2, 0, 1], [2, 1, 0]]
+places a: [0]
+places b: [1]
+process 0: 5; holds [#2, #0]
+process 1: []; holds [#2, #0]
