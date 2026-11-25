@@ -1,6 +1,6 @@
 # Let no unlisted host hold the guest's QUIC service
 
-> **ACTIVE BUILD** 2026-11-24 (UTC). Bead `homoiconic-q59.63`. Found by the first review of `add-entity-keys` (finding M5).
+> **FOLDED** 2026-11-25 (UTC) into `openspec/specs/unikernel-net/spec.md`. Was ACTIVE BUILD since 2026-11-24. Bead `homoiconic-q59.63`. Found by the first review of `add-entity-keys` (finding M5). One fresh-context read (Opus), send-back; its findings were answered before code (`review.md`). Checked on morphie from tree `5107fa8`; controls in `unikernel/evidence/q59.63-controls.log`.
 
 **Rigor:** instrument (trusted, unproved image code in `unikernel/`; nothing in Lean changes).
 

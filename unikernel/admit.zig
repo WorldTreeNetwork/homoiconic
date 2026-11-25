@@ -5,7 +5,7 @@
 //! the first pool is full, a first flight that opens is answered with a
 //! Retry and nothing is kept. A connection leaves its slot by its own end,
 //! or 2 seconds after its first Initial if it is not accepted by then.
-//! (`openspec/changes/add-quic-admission/design.md`)
+//! (`openspec/changes/archive/2026-11-25-add-quic-admission/design.md`)
 
 const std = @import("std");
 const quic = @import("quic.zig");

@@ -11,8 +11,8 @@
 - [x] `quic-self`: 70 to 79, and `@sizeOf(quic.Conn)` printed
 - [x] `check-quic.sh`: the flood with five allowed clients, the stalled clients with an allowed client and the client of `e9a4c86`; the old client; all on a fresh boot; revised `spoof`, abandoned handshake and forged first flight steps
 - [x] `check-wire.sh`: one run with the serving guest's first-flight pool flooded, so the calling guest answers Retries
-- [ ] Each new check shown to fail with its fix undone (`unikernel/quic-admission-controls.sh`, `unikernel/evidence/q59.63-controls.log`)
+- [x] Each new check shown to fail with its fix undone (`unikernel/quic-admission-controls.sh`, `unikernel/evidence/q59.63-controls.log`)
 - [x] The guest's cost per datagram of each kind, and the flood rate it keeps up with, measured on morphie and recorded in `unikernel/README.md`
-- [ ] Final run on morphie from a `git archive` export of the rebased tree: `build.sh`, `build-net.sh`, `check.sh`, `check-net.sh`, `check-quic.sh`, `check-wire.sh`; logs `unikernel/evidence/q59.63-<sha>-*.log`, `source.sha256`, `objects.sha256`
+- [x] Final run on morphie (tree `5107fa8`; `check.sh` fails at the deep-bytes step of the kernel deep-walk change `3e0635d`, outside this change) from a `git archive` export of the rebased tree: `build.sh`, `build-net.sh`, `check.sh`, `check-net.sh`, `check-quic.sh`, `check-wire.sh`; logs `unikernel/evidence/q59.63-<sha>-*.log`, `source.sha256`, `objects.sha256`
 - [x] Mjolnir bead `mjolnir-qwo5`: vendor the new `quic.zig` for Retry. Current Mjolnir still works: the client of `e9a4c86` is served with a first-flight slot free (check-quic.sh, morphie)
-- [ ] Specs, `ARCHITECTURE.md`, `LEARNINGS.md`; fold
+- [x] Specs, `ARCHITECTURE.md`, `LEARNINGS.md`; fold
