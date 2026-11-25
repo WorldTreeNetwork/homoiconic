@@ -24,12 +24,19 @@ Zig does not read the syntax, compile, or evaluate.
 
 ```
 size_t reflect_run(const uint8_t *program, size_t length,
-                   uint8_t *out, size_t capacity, uint64_t budget);
+                   uint8_t *out, size_t capacity, uint64_t budget, uint64_t space);
+uint64_t reflect_default_space(uint32_t ignored);
 ```
 
 It borrows the program bytes (no trailing zero required; `kernel/ffi.c`
 copies them into a Lean-owned array), reads the surface syntax, compiles the
-term, runs the bytecode machine for `budget` steps, and renders the state.
+term, runs the bytecode machine for `budget` steps within `space` cells, and
+renders the state. The space is the cells the run may make
+(`Reflect.runSpace`); when they are spent the kernel asks the runtime how many
+cells the state holds (`reflect_live_cells` in `kernel/ffi.c`, a walk of
+objects by address) and goes on if that is at most three quarters of the
+space. A run that passes its space renders as `no result within <space>
+cells`. `reflect_default_space` answers the kernel's default, 4000000.
 It returns the number of bytes the rendering needs. If that is no more than
 `capacity` the bytes are in `out`; otherwise nothing was written and the host
 calls again with a buffer at least that large. There is no numeric result code.
@@ -69,8 +76,8 @@ host/out/run examples/append.hom          # prints [1, 2, 3, 4]
 host/out/run examples/forever.hom 5000    # prints no result within 5000 steps
 ```
 
-The second argument is the step budget; the default is 100000000, about two
-seconds. `run.zig` reads the file, calls `reflect_run`, and prints the bytes
+The second argument is the step budget; the default is 100000000, a few
+seconds. A third is the space in cells; the default is the kernel's. `run.zig` reads the file, calls `reflect_run`, and prints the bytes
 and a newline. It does not look at them, so it exits 0 for a value, an error
 outcome, a syntax error, or a run with no result. It exits 2, with one line on
 standard error that does not repeat the arguments, for a wrong argument count, a budget that is not a whole
@@ -82,7 +89,7 @@ twice.
 
 ```
 size_t reflect_run_bytes(const uint8_t *program, size_t length,
-                         uint8_t *out, size_t capacity, uint64_t budget);
+                         uint8_t *out, size_t capacity, uint64_t budget, uint64_t space);
 size_t reflect_source_bytes(const uint8_t *program, size_t length,
                             uint8_t *out, size_t capacity);
 ```
@@ -104,7 +111,7 @@ host/out/bytes examples/append.hom > append.bytes
 host/out/run --bytes append.bytes         # prints [1, 2, 3, 4]
 ```
 
-`run --bytes <file> [step-budget]` passes the file to `reflect_run_bytes` and
+`run --bytes <file> [step-budget [space]]` passes the file to `reflect_run_bytes` and
 otherwise behaves as `run`. It exits 0 whenever the kernel answered, bad bytes
 included, as `run` does on a syntax error. `bytes <program-file>` passes the
 source to `reflect_source_bytes` and writes the byte form to standard output

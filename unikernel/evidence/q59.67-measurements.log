@@ -1,0 +1,35 @@
+# homoiconic-q59.67 measurements on morphie, tree 48327f6: reflect-linux as a Linux process, budget and levels and space as given, time, peak resident memory from getrusage(RUSAGE_CHILDREN), what it said.
+factorial    100000000 0                           0.01s    12 MiB  '265252859812191058636308480000000' (34 bytes) exit 0
+factorial    100000000 1                           0.01s    12 MiB  '265252859812191058636308480000000' (34 bytes) exit 0
+factorial    100000000 2                           0.27s    12 MiB  '265252859812191058636308480000000' (34 bytes) exit 0
+forever      100000000 0                           5.69s    12 MiB  'no result within 100000000 steps' (33 bytes) exit 0
+forever      100000000 1                           6.66s    12 MiB  'no result within 100000000 steps' (33 bytes) exit 0
+forever      100000000 2                           6.62s    12 MiB  'no result within 100000000 steps' (33 bytes) exit 0
+deep         100000000 0                           2.44s   116 MiB  'no result within 4000000 cells' (31 bytes) exit 0
+deep         100000000 1                          14.83s   104 MiB  'no result within 4000000 cells' (31 bytes) exit 0
+deep         100000000 2                           9.54s    23 MiB  'no result within 100000000 steps' (33 bytes) exit 0
+deep         100000000 2 100000                    9.05s    12 MiB  'no result within 100000 cells' (30 bytes) exit 0
+build        100000000 0                          19.31s   115 MiB  'no result within 4000000 cells' (31 bytes) exit 0
+build        100000000 1                           7.05s    12 MiB  'no result within 100000000 steps' (33 bytes) exit 0
+build        100000000 2                           6.77s    12 MiB  'no result within 100000000 steps' (33 bytes) exit 0
+build        100000000 1 100000                   19.45s    12 MiB  'no result within 100000 cells' (30 bytes) exit 0
+double       100000000 0                           0.03s    12 MiB  'no result within 4000000 cells' (31 bytes) exit 0
+numbers800k  100000000 0                           2.02s    35 MiB  'no result within 4000000 cells' (31 bytes) exit 0
+numbers590k  100000000 0                           2.78s   107 MiB  '[9000000000000000000, 900000000000000000' (12390001 bytes) exit 0
+texts1900k   100000000 0                          10.24s   123 MiB  '["", "", "", "", "", "", "", "", "", "",' (5600001 bytes) exit 0
+texts2200k   100000000 0                          25.23s   168 MiB  '["", "", "", "", "", "", "", "", "", "",' (8800001 bytes) exit 0
+held3990     100000000 0                           0.03s    12 MiB  'no result within 4000000 cells' (31 bytes) exit 0
+held2000     100000000 0                           0.18s    50 MiB  '[[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,' (6004001 bytes) exit 0
+pieces       100000000 0                           4.55s   121 MiB  'no result within 4000000 cells' (31 bytes) exit 0
+grow         100000000 0                           0.00s    12 MiB  'no result within 100000000 steps' (33 bytes) exit 0
+wide         100000000 1                           2.68s   105 MiB  '[70000, 70000, 70000, 70000, 70000, 7000' (210004 bytes) exit 0
+deep         100000000 0 18446744073709551615     23.20s   849 MiB  'no result within 100000000 steps' (33 bytes) exit 0
+
+# time, the same runs built from 451a5de (before) and 48327f6 (after): reflect-linux, the best of three, what starting the process takes subtracted.
+program    levels      steps   before s    after s   before steps/s    after steps/s   change
+factorial       0       1165    0.00005    0.00012         21516457          9577345  +124.7%
+factorial       1      55543    0.00329    0.00372         16861352         14936977   +12.9%
+factorial       2    4036172    0.23446    0.26257         17214879         15371734   +12.0%
+forever         0  100000000    4.92466    5.33166         20305981         18755899    +8.3%
+forever         1  100000000    5.67262    6.33101         17628535         15795268   +11.6%
+forever         2  100000000    5.67254    6.28898         17628787         15900827   +10.9%

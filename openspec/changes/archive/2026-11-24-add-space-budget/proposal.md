@@ -1,6 +1,6 @@
 # Give a run a space limit beside its step budget
 
-> **ACTIVE BUILD**, 2026-11-24. Bead `homoiconic-q59.67`. The direction, option 1 of the bead (a space budget in the priced run), was chosen by the orchestrator and is to be confirmed by Duke. It is built so that it can be taken out again: see "Taking it out" in `design.md`.
+> **FOLDED** 2026-11-24 into `openspec/specs/bytecode-machine/spec.md`, `wire-bytes`, `zig-host`, `unikernel-image` and `unikernel-net`. Was ACTIVE BUILD, 2026-11-24. Bead `homoiconic-q59.67`. The direction, option 1 of the bead (a space budget in the priced run), was chosen by the orchestrator and is still Duke's to confirm. It is built so that it can be taken out again: see "Taking it out" in `design.md`, and "Options this leaves to Duke" for what the measurements changed about that choice.
 
 **Rigor:** architecture (a new run function and theorems in `Reflect`, a new reply, a new argument on four exports, a C function that reads what the runtime shares).
 

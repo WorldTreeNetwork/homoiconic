@@ -38,8 +38,8 @@ and the image cannot refuse it. On morphie a file of 500 MiB, or of 512 MiB
 less 4 KiB, gave an empty serial port, `InternalError` from the processor and
 exit status 0.
 
-The command line is `[step-budget [levels]]`, at most 1023 bytes; a longer one
-stops the image with a line instead of being cut. The budget is a whole number
+The command line is `[step-budget [levels [space]]]`, at most 1023 bytes; a
+longer one stops the image with a line instead of being cut. The budget is a whole number
 below 2^64 and defaults to the one built in. The levels are a whole number from
 0 to 8 and default to 1: the bytes run through `reflect_interp`, the
 interpreter written in the language, on the machine. Level 0 runs the program
@@ -47,8 +47,10 @@ itself; level 2 runs the interpreter in the interpreter. The kernel builds the
 tower before the budget counts a step, so the levels are bounded by the
 kernel (`Surface.maxLevels`, which `main.zig` asks for by `reflect_max_levels`),
 not by the budget. A word that is not a number, and a number past these
-limits, each end in a line of their own and `reflect: exit 2`. With no
-`--initramfs` the image runs the source built into it through `reflect_run`.
+limits, each end in a line of their own and `reflect: exit 2`. The space is
+the cells the run may make, a whole number below 2^64, and defaults to the
+kernel's, 4000000 (see "A run's space"). With no `--initramfs` the image runs
+the source built into it through `reflect_run`, with the kernel's space.
 
 `--initramfs` is only how Cloud Hypervisor carries a file into guest memory;
 there is no file system. The layer finds the bytes as the one PVH boot module,
@@ -106,19 +108,130 @@ image booted through `given.sh` with 512 MiB):
 | forever, level 0, a frame per tail call (control) | 19 MiB | 121 MiB | 349 MiB | 1151 MiB | `INTERNAL PANIC: out of memory` |
 | forever, level 1, control | 11 MiB | 53 MiB | 145 MiB | 463 MiB | `INTERNAL PANIC: out of memory` |
 | forever, level 2, control | 11 MiB | 19 MiB | 45 MiB | 135 MiB | `no result within 100000000 steps` |
-| list of zeros, 1 MiB, one interpreter | 64 MiB | 176 MiB | 317 MiB (answer) | 317 MiB (answer) | the answer |
+| list of zeros, 1 MiB, one interpreter (before the space limit; see below) | 64 MiB | 176 MiB | 317 MiB (answer) | 317 MiB (answer) | the answer |
 | the same, control | 68 MiB | 228 MiB | 463 MiB | 461 MiB (answer) | `INTERNAL PANIC: out of memory` |
 | `def deep x = [x, ...deep x]`, 55 bytes | 15 MiB | 91 MiB | 259 MiB | 849 MiB | `INTERNAL PANIC: out of memory` |
 
 What a run keeps live still grows with its steps where the program keeps it:
 a recursion whose calls wait on each other keeps a frame per pending call
 (`depth_bound` allows one a step), and built data is kept. `deep` is such a
-run, and no byte limit or budget limit stops it from ending the machine
-(`homoiconic-q59.67`). The network image takes at most 1176 program bytes (a
-1200-byte frame less its 24-byte header) and a budget of at most 100000000
-steps, so what its bytes cost is small; its runs have the same growth where
-the program keeps something, and none where it does not: forever at
+run, and no byte limit or budget limit stops it. What stops it is the space
+limit (`homoiconic-q59.67`, next section). The network image takes at most
+1176 program bytes (a 1200-byte frame less its 24-byte header) and a budget of
+at most 100000000 steps, so what its bytes cost is small; forever at
 100000000 is the budget reply and the guest answers after it (`check-net.sh`).
+
+## A run's space
+
+A run has a space limit beside its step budget: the cells it may make. A cell
+is one object of the run's state: a list cell, a closure, a frame, a box
+around a number or an array, at most 24 bytes. The kernel counts the cells
+each step makes in a ledger (`Reflect.runSpace`). When the ledger is spent it
+asks how many cells the state holds, each object counted once
+(`reflect_live_cells`, a walk by address); at most three quarters of the
+limit, and the run goes on with the difference; more, and the run ends with
+the kernel's line, `no result within <cells> cells`, and `reflect: exit 0`, as
+a run out of steps ends. On the network image the reply is `81 07`, beside the
+budget reply `81 01`, and the guest answers the next request.
+
+The limit comes from whoever starts the machine, not from whoever sends a
+program:
+
+```sh
+sh unikernel/given.sh deep.bytes 100000000 0            # the kernel's default, 4000000 cells
+sh unikernel/given.sh deep.bytes 100000000 2 100000     # 100000 cells, through two interpreters
+cloud-hypervisor ... --cmdline "reflect.ip=... reflect.port=4444 reflect.space=2000000"
+unikernel/out/reply run 100000000 deep.bytes 100000     # the same export, as a Linux process
+```
+
+The `RFL1` frame is unchanged. A guest of a crossing runs each turn with the
+kernel's `turnSpace` whatever `reflect.space` says, so its record replays the
+same elsewhere; what such a guest holds between turns is not bounded
+(`homoiconic-q59.71`).
+
+An answer is checked before it is written. A value is written as the tree it
+is, which can be far more than the cells it holds: forty cells built by
+doubling are 2^40 bytes, and a function's byte form writes each environment
+where it is held. An answer that would take more than four bytes written for
+each cell of the space, 16 MB for the default, ends in the same line or reply.
+An item of an array is counted five bytes and itself, three more than it
+writes, because the printer's memory goes by items (about 75 bytes for each
+while it prints); so an answer has at most 2.28 million items, however they
+are held.
+
+### Why 4000000 cells
+
+The image has less than its 512 MiB for a run: `kernel.zig` gives a quarter of
+what lies between the image and the stack to `brk` and the rest, about 360
+MiB, to `mmap`, where Lean's allocator and the walk's table come from. Against
+that, for a limit of `n` cells: at most `24 n` bytes of state; for a moment,
+the answer an operation makes before it is charged (at worst two cells and a
+spare list cell for each character of a text the run holds); the walk's own
+table and stack, at most `17 n` bytes while a count runs; the program itself,
+up to about 100 MiB for a 2 MiB literal at boot; and the answer written. The
+limit is not in proportion to a machine's memory, since the image and the
+program are fixed costs: a guest with other memory is given a limit from this
+sum against its own `mmap` area.
+
+Measured on morphie (2026-11-25 UTC, tree `48327f6`; `evidence/q59.67-measurements.log`), each run with the budget
+100000000: as the Linux process `out/reflect-linux`, with its peak from
+`getrusage`, and on the image started by `given.sh` with 512 MiB.
+
+| run | Linux process | peak | image |
+|---|---|---|---|
+| factorial, through 0, 1, 2 interpreters | the answer | 12 MiB | the answer |
+| forever, through 0, 1, 2 | `no result within 100000000 steps` | 12 MiB | the same |
+| `def deep x = [x, ...deep x]`, through 0 | `no result within 4000000 cells` | 116 MiB | the same |
+| the same, through 1 | `no result within 4000000 cells` | 104 MiB | the same |
+| the same, through 2 | `no result within 100000000 steps` (270046 cells held at the end) | 23 MiB | the same |
+| the same, through 2, space 100000 | `no result within 100000 cells` | 12 MiB | the same |
+| `def build acc = build [0, ...acc]`, through 0 | `no result within 4000000 cells` | 115 MiB | the same |
+| the same, through 1 and 2 | `no result within 100000000 steps` (101274 and 4974 cells) | 12 MiB | the same |
+| the same, through 1, space 100000 | `no result within 100000 cells` | 12 MiB | the same |
+| an answer built by doubling forty times | `no result within 4000000 cells` | 12 MiB | the same |
+| 800000 numbers of 19 digits answered | `no result within 4000000 cells` | 35 MiB | the same |
+| 590000 numbers of 19 digits answered | the answer, 12390001 bytes | 107 MiB |  |
+| 2200000 empty texts answered, the most items an answer may have | the answer, 8800001 bytes | 168 MiB |  |
+| an array of 1000 zeros held 3990 times, 21000 cells | `no result within 4000000 cells` | 12 MiB | the same |
+| the same held 2000 times | the answer, 6004001 bytes | 50 MiB |  |
+| a text of 1200000 characters, its `codes` kept, one `cons` onto it | `no result within 4000000 cells` | 121 MiB | the same |
+| a number squared again and again | `no result within 100000000 steps` (the product's cost stops it) | 12 MiB |  |
+| a list of 30000 items written out, through 1 | the answer | 105 MiB |  |
+| `deep` behind a literal of 2 MiB (2097100 empty texts) | `no result within 4000000 cells` |  | the same |
+| `deep` through 0, with the largest space there is | `no result within 100000000 steps` | 849 MiB | `INTERNAL PANIC: out of memory` |
+
+Over UDP (`check-net.sh`), `deep`, `build`, the doubled answer and a function
+answered from thirty definitions are each `81 07` at the budget 100000000, the
+Linux export's reply, and factorial is answered after each. A guest started
+with `reflect.space=18446744073709551615` runs out of memory on `deep` and
+answers nothing more, as every guest did before the limit.
+
+One run the table under "Why 2 MiB" records no longer answers: the list of
+209715 zeros written out, 1 MiB, through one interpreter. It holds 3.7 million
+cells of program as data before it starts, more than three quarters of the
+default, and ends in the space line at its first count. It took 317 MiB of the
+360 MiB the image has; a run that large is past any limit that protects the
+image. A larger space on the command line runs it.
+
+What the limit costs in time, the same runs built from this tree and from
+`451a5de` (`out/reflect-linux`, the best of three, what starting the process
+takes subtracted):
+
+| run | steps | before, steps a second | after | time |
+|---|---|---|---|---|
+| factorial, through 1 interpreter | 55543 | 16.9 M | 14.9 M | +12.9% |
+| factorial, through 2 | 4036172 | 17.2 M | 15.4 M | +12.0% |
+| forever, through 0 | 100000000 | 20.3 M | 18.8 M | +8.3% |
+| forever, through 1 | 100000000 | 17.6 M | 15.8 M | +11.6% |
+| forever, through 2 | 100000000 | 17.6 M | 15.9 M | +10.9% |
+
+Factorial itself is 1165 steps, a twentieth of a millisecond, too short to
+time this way. The cost is the ledger on every step; a count happens once in
+millions of steps and does not show. With the charge read from the state
+before and after each step, as first written, it was 40% (measured on the Mac);
+charging before the step, so that `step` is given the state to use up, is what
+brought it to this.
+
 
 `build.sh` runs Lake, compiles generated C for Surface.Host's local imports,
 and links identical Lean objects into `out/reflect.elf` and
@@ -395,3 +508,35 @@ table under "Why 2 MiB", for `8300d8f` and for the control, the same tree with
 on that control, failing at `forever at the default budget through 0` with
 `INTERNAL PANIC: out of memory`. `host/check.sh` passed on the Mac, and with
 the baseline binary its new case fails at 1181376 KiB.
+
+**2026-11-25 (UTC), a run's space (`homoiconic-q59.67`, `add-space-budget`).**
+On morphie, Cloud Hypervisor 54.0, tree `48327f6` exported with `git archive`
+to `~/hom-48327f6`: `build.sh examples/factorial.hom`, `build-net.sh`,
+`check.sh`, `check-net.sh`, `check-quic.sh` and `check-wire.sh` each exited 0.
+Logs are `evidence/q59.67-48327f6-*.log` (`check.sh` has 80 lines of `ok`,
+`check-net.sh` 19 and the four space replies, `check-quic.sh` 26,
+`check-wire.sh` 27), exit codes and hashes `evidence/run-48327f6.txt`.
+`reflect.elf` built from factorial is sha256 `0562b1c0…d137c43b`;
+`reflect-net.elf` is `bba55325…b62ee6cd`, the same before and after the
+checks. `source.sha256` and `objects.sha256` are this build's (the Lean side
+changed); `versions.txt` came out the same. `check.sh` boots `deep` and
+`build` at 100000000 steps: each ends in `no result within 4000000 cells`,
+equal to the Linux process, and with the largest space on the command line
+`deep` ends in `INTERNAL PANIC: out of memory`, as it did before the limit.
+`check-net.sh` gets `81 07` for `deep`, `build`, the doubled answer and a
+function from thirty definitions, each equal to the Linux export's, factorial
+after each, and a guest started with `reflect.space=18446744073709551615` runs
+out of memory. `evidence/q59.67-measurements.log` has the peaks and the times
+in the tables under "Why 4000000 cells". `evidence/q59.67-controls.log` is
+`host/check.sh`, `check.sh` and `check-net.sh` on a copy of the tree
+(`~/hom-48327f6-undone`) whose one change is that `reflect_default_space`
+answers the largest space: `host/check.sh` fails at `deep` (the budget line
+where the space line is wanted), `check.sh` at `a recursion that waits ends
+out of space through 0` with `INTERNAL PANIC: out of memory`, and
+`check-net.sh` with no reply to `deep` and the same panic on the guest's
+serial port. `host/check.sh` passed on the Mac on the same tree, and ran on
+morphie as far as that control's failure. An earlier export of the tree before
+the read of the landed code (`761ef8a` with these checks, `~/hom-pre-9582bbf`)
+passed `check.sh` and `check-net.sh`; its first try failed only at the
+control's own assertion, which expected no `reflect: exit` line after the
+panic, and the image prints `reflect: exit 1`.

@@ -124,7 +124,7 @@ The step budget is tested first, so a run out of both is out of steps. A run sta
 
 Each is at least the objects Lean makes for that step in `step` (the frame and its list cell, the environment cells, the boxes around data), counted from the right-hand sides in `kernel/Reflect/Machine.lean`; the advise read counted them again and found `access`, `apply`, `cons` and the text case of `dcase` exact and the rest with room. A matched value that is built again (the three checks) is charged as new, though the compiled C reuses it when it is held once. Where a step makes fewer (a tail call pushes no frame) the charge is not lowered: charging too much costs only an earlier count.
 
-Only an operation's charge reads `s'`. `runSpace` is written in two shapes for that reason, one for an operation and one for every other step, and `runSpace_running` says they are the one rule above: when the charge is known before the step, the state need not be held while the step is taken, and the compiled run does not hold it. Held across every step, as first written, the run was 40% slower than the priced run on the Mac (3.29 s to 4.65 s for 100000000 steps of `forever.hom`); as landed it is 5 to 6% slower (4.09 s to 4.27 s through one interpreter).
+Only an operation's charge reads `s'`. `runSpace` is written in two shapes for that reason, one for an operation and one for every other step, and `runSpace_running` says they are the one rule above: when the charge is known before the step, the state need not be held while the step is taken, and the compiled run does not hold it. Held across every step, as first written, the run was 40% slower than the priced run on the Mac (3.29 s to 4.65 s for 100000000 steps of `forever.hom`); as landed it was 5 to 6% slower there (4.09 s to 4.27 s through one interpreter), and on morphie it is 8 to 13% slower (below).
 
 `Data.cells` is defined by recursion on the value, once for each level of nesting. It is called on the answer of an operation only, and an answer of `arith` is nested at most once. The checks of a written answer (below) walk with a work list and do not recurse.
 
@@ -235,30 +235,33 @@ Measured on morphie on what landed, as the Linux process `unikernel/out/reflect-
 
 | run, budget 100000000 | ends in | peak, Linux process |
 |---|---|---|
-| factorial 30, through 0, 1, 2 interpreters | the answer | 13 MiB |
-| `forever.hom`, through 0, 1, 2 | the budget line | 13 MiB |
-| `deep`, through 0 | `no result within 4000000 cells` | 117 MiB |
-| `deep`, through 1 | the space line | 105 MiB |
-| `deep`, through 2 | the budget line (it holds 270046 cells when the steps end) | 23 MiB |
-| `deep`, through 2, space 100000 | `no result within 100000 cells` | 13 MiB |
-| `build`, through 0 | the space line | 115 MiB |
-| `build`, through 1 and 2 | the budget line (101274 and 4974 cells) | 13 MiB |
-| `build`, through 1, space 100000 | the space line | 13 MiB |
-| an answer built by doubling forty times | the space line, at once | 13 MiB |
-| 800000 numbers of 19 digits answered | the space line (too much to write) | 35 MiB |
-| 1400000 empty texts answered | the answer, 5600001 bytes | 123 MiB |
-| a text of 1200000 characters, its `codes` kept, one `cons` onto it | the space line | 121 MiB |
-| a number squared again and again | the budget line (the product's cost stops it) | 13 MiB |
-| a list of 30000 items written out, through 1 | the answer | 102 MiB |
-| `deep`, through 0, with the limit undone | the budget line as a process, 849 MiB; `INTERNAL PANIC: out of memory` on the image | 849 MiB |
+| factorial, through 0, 1, 2 interpreters | the answer | 12 MiB |
+| forever, through 0, 1, 2 | `no result within 100000000 steps` | 12 MiB |
+| `def deep x = [x, ...deep x]`, through 0 | `no result within 4000000 cells` | 116 MiB |
+| the same, through 1 | `no result within 4000000 cells` | 104 MiB |
+| the same, through 2 | `no result within 100000000 steps` (270046 cells held at the end) | 23 MiB |
+| the same, through 2, space 100000 | `no result within 100000 cells` | 12 MiB |
+| `def build acc = build [0, ...acc]`, through 0 | `no result within 4000000 cells` | 115 MiB |
+| the same, through 1 and 2 | `no result within 100000000 steps` (101274 and 4974 cells) | 12 MiB |
+| the same, through 1, space 100000 | `no result within 100000 cells` | 12 MiB |
+| an answer built by doubling forty times | `no result within 4000000 cells` | 12 MiB |
+| 800000 numbers of 19 digits answered | `no result within 4000000 cells` | 35 MiB |
+| 590000 numbers of 19 digits answered | the answer, 12390001 bytes | 107 MiB |
+| 2200000 empty texts answered, the most items an answer may have | the answer, 8800001 bytes | 168 MiB |
+| an array of 1000 zeros held 3990 times, 21000 cells | `no result within 4000000 cells` | 12 MiB |
+| the same held 2000 times | the answer, 6004001 bytes | 50 MiB |
+| a text of 1200000 characters, its `codes` kept, one `cons` onto it | `no result within 4000000 cells` | 121 MiB |
+| a number squared again and again | `no result within 100000000 steps` (the product's cost stops it) | 12 MiB |
+| a list of 30000 items written out, through 1 | the answer | 105 MiB |
+| `deep` through 0, with the largest space there is | `no result within 100000000 steps` | 849 MiB |
 
-The most any of these takes is 123 MiB, a third of what the image has. The limit could be larger; it is left where the sum above, not the measurement, says it is safe, since the sum's worst case (a state that is one text, taken apart) is not one of these runs.
+The most any of these takes is 168 MiB, less than half of what the image has, and that one is the printer on the most items an answer may have. The limit could be larger; it is left where the sum above, not the measurement, says it is safe, since the sum's worst case (a state that is one text, taken apart) is not one of these runs.
 
 `deep` through two interpreters and `build` through one or two do not reach the limit in 100000000 steps and end in the budget line, in a few MiB. The checks give those a smaller space where that shows the limit working, and say so.
 
 Cells made, by the charge that landed (`madeIn`, by `#eval`): factorial 30 makes 2437 cells in 1165 steps, 145813 in 55543 through one interpreter and 10094393 in 4036172 through two; `forever.hom` makes 1.76 cells a step, and 2.47 and 2.49 through one and two interpreters. So a ledger of 4000000 cells alone would stop `forever.hom` inside 2.3 million steps and factorial through two interpreters before its answer, which is result 1 above with the landed figures.
 
-What the limit costs in time, the same runs with and without it (`reflect-linux` built from this tree and from `451a5de`, the best of three, the process's start taken off): see `unikernel/README.md`.
+What the limit costs in time, the same runs with and without it on morphie (`reflect-linux` built from `48327f6` and from `451a5de`, the best of three, the process's start taken off): `forever.hom` 20.3 million steps a second before and 18.8 after (8.3% more time), 17.6 and 15.8 through one interpreter (11.6%), 17.6 and 15.9 through two (10.9%); factorial through one interpreter 16.9 and 14.9 (12.9%), through two 17.2 and 15.4 (12.0%). Factorial itself, 1165 steps, is too short to time.
 
 ## Taking it out
 

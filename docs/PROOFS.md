@@ -132,6 +132,10 @@ and nothing else.
 | `decompile_compile` | Bytecode converts back to the exact term |
 | `depth_bound` | Stack depth plus pending frames grows by at most one per step |
 | `run_cycle`, `runPriced_cycle` | A run that comes back to a state it held stays in its first `a + p` states, at any step count or budget |
+| `runSpace_run`, `runSpace_priced`, `machine_never_faults_space`, `machine_exact_space` | A run with a space limit takes `run`'s steps and, when it is not stopped for space, is the priced run; it never faults, and what it halts with is the outcome of the program. For every count a host supplies |
+| `runSpace_full`, `runSpace_within` | A run is stopped for space only when the cells made would pass the credit it began with, so a run that stays inside its ledger is the priced run whatever the count |
+| `trail_held`, `trail_last`, `runSpace_ledger`, `runIn_ledger` | Every state a space-limited run is in was reached from its start by steps that made no more cells than its credit, or from a state it counted at no more than three quarters of its limit by steps that made no more than the rest; with no count, the steps made at most the limit |
+| `runTurn_reach` | Where a driver's turn is left, `run` gets to: the driver theorems hold of turns under a space limit |
 | `omega_cycle`, `forever_cycle`, `forever_cycle_interp`, `forever_bounded` | A tail loop keeps no frame per call: `omega` and `examples/forever.hom` repeat a state exactly, forever also through one interpreter, so a run of any budget holds one of finitely many states |
 
 ### Requests
@@ -317,10 +321,26 @@ theorems; `advance` is tested against it.
 - **Memory.** A step budget bounds the stack and the frames (`depth_bound`),
   and a tail call keeps no frame, so a tail loop runs in constant memory
   (`forever_bounded` for `examples/forever.hom`, measured at about 7 MiB at
-  every budget, `homoiconic-q59.65`). Nothing bounds the environments,
-  closures and data a state holds: a recursion that waits keeps a frame per
-  pending call, and built data is kept, so what such a run holds grows with
-  its steps. P3 (`docs/DECISIONS.md`) is not proved (`homoiconic-q59.67`).
+  every budget, `homoiconic-q59.65`). The environments, closures and data a
+  run keeps are bounded by a space limit, and what is proved of it is about
+  cells made, not cells held (`trail_held`, `homoiconic-q59.67`). Three things
+  between that theorem and the machine's memory are not proved. That `charge`
+  covers the objects a step allocates is checked by reading `step`. That a
+  state holds no more than it began with and what was made since is true of
+  memory and cannot be stated: the state is a tree, and a part held in two
+  places is not marked as one (counted as a tree, a program of 20 definitions
+  is 20 million cells for 152 objects). And the count a run asks for when its
+  ledger is spent is the runtime's, a walk of objects by address in C
+  (`reflect_live_cells`), which is not a function of the state; the theorems
+  hold for every count, so they hold of that one, but past its ledger a
+  run's outcome is a fact about one build of the kernel. What a cell is in
+  bytes, the allocator, the walk's own table and the printer are measured
+  (`unikernel/README.md`). P3 as stated, a bound linear in steps, is false:
+  one step of `cons` onto a text makes cells without bound. The lazy machine
+  of a kept session has no space limit (`homoiconic-q59.70`), and a guest of
+  a crossing bounds each turn but not what it holds between turns
+  (`homoiconic-q59.71`). Data nested deeper than the native stack still ends
+  the image in a full stack (`homoiconic-q59.72`).
 - **Reader, renderer, Zig host.** Tested, not proved.
 - **Running through the interpreter, and text.** `reflect_interp` runs the
   closed term `interp` on the machine, so what runs is covered by the

@@ -1,0 +1,40 @@
+# homoiconic-q59.67 controls on morphie: tree 48327f6 with the limit undone.
+# The one change, in kernel/Surface/Host.lean:
+38c38
+< def reflectDefaultSpace (_ : UInt32) : UInt64 := Reflect.defaultSpace.toUInt64
+---
+> def reflectDefaultSpace (_ : UInt32) : UInt64 := 18446744073709551615
+
+== sh host/check.sh
+398 of 398 checks passed
+reflect_run checks passed
+run /home/dorje/hom-48327f6-undone/host/out/deep.hom 100000000: expected 'no result within 4000000 cells' under 262144 KiB, got 'no result within 100000000 steps' at 0 KiB
+   exit 1  2026-11-25T05:05:33Z
+
+== sh unikernel/check.sh
+ok   bytes at boot: the quine
+ok   bytes at boot: a budget of 5000 steps
+ok   bytes at boot: forever at the default budget through 0
+ok   bytes at boot: forever at the default budget through 1
+ok   bytes at boot: forever at the default budget through 2
+FAIL bytes at boot: a recursion that waits ends out of space through 0: the image and the Linux process differ
+  serial: INTERNAL PANIC: out of memory
+  serial: reflect: exit 1
+   exit 1  2026-11-25T05:11:20Z
+
+== sh unikernel/check-net.sh
+ok   functions over one environment are counted where it is held
+ok   a function from two definitions is its value
+ok   a 40-digit product at 200 steps is the budget reply
+ok   a 40-digit product at 200000 steps is the product
+ok   bytes that are not a program are refused
+ok   a function value round-trips
+ok   a trailing byte is refused
+no reply ident=30
+   exit 1  2026-11-25T05:20:01Z
+== done
+
+# the guest serial of the check-net.sh control:
+reflect: ready 192.168.249.2:4444
+INTERNAL PANIC: out of memory
+reflect: exit 1
