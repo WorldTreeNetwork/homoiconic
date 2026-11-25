@@ -272,6 +272,55 @@ Whoever starts the guest holds the key: they chose its memory and can read
 it. Giving the key as a file keeps it out of the image, its hash, the process
 list and the hypervisor's log, and no more. Never put it on the command line.
 
+## Who a QUIC guest admits
+
+A guest with `reflect.quic_port` or `reflect.wire_port` keeps up to 12 server
+connections (`unikernel/admit.zig`): 4 for first flights that show nothing and
+8 for first flights that answered a Retry, at most one handshake in progress
+there per IPv4 address. Nothing is evicted. A connection not accepted 2 s after
+its first Initial leaves, whatever it sends; an accepted one leaves when its
+reply is acknowledged or given up, or after 2 s with nothing in flight and
+nothing opened. When the first pool is full a first Initial that opens is
+answered with a 71-byte Retry and nothing is kept; the client's next Initial
+carries the token (its address, port and the Retry's ID under the guest's key,
+good for 10 s) and goes to the second pool. A connection is 70360 bytes; the
+table is 844736. Packets whose number was opened before do not count. The
+property, its assumptions and what a host on the path can still do are in
+`openspec/specs/unikernel-net/spec.md` ("A host with no allowed key cannot
+shut an allowed client out").
+
+What a flood costs, measured on morphie on 2026-11-25 UTC (`quic-self`'s
+code built for that host, then a guest):
+
+| | Time |
+|---|---|
+| A first Initial checked and answered with a Retry (host, baseline x86_64, ReleaseSmall as the guest is built) | 66 µs to open, 3 µs for the Retry |
+| The same, ReleaseFast; with AES-NI and PCLMUL as well | 45 µs + 2 µs; no faster with the instructions |
+| A first Initial admitted (the server's first flight: X25519 twice, an Ed25519 signature) | 270 to 390 µs |
+
+A guest flooded from a second address with the mix of `quic-client ... flood`
+(a third new first flights, a third one first flight again, a third the
+datagrams of a finished exchange), four allowed clients timed in each run:
+
+| Datagrams a second | Allowed clients served in | Retries the flooder heard a second |
+|---|---|---|
+| 1000 | 6, 6, 6, 7 ms | 371 |
+| 2000 | 6, 6, 7, 5 ms | 702 |
+| 5000 | 11, 9, 7, 7 ms | 1755 |
+| 10000 | 694, 1708, 455, 414 ms | 2614 |
+| 20000 | 700, 786, 1524, 514 ms | 2285 |
+| as fast as one host process sends (about 220000) | 7645 ms (gave up), 5, 5, 5 ms | 2649 |
+
+So the guest keeps up with about 5000 datagrams a second of this mix (about 6
+MB/s) and falls behind by 10000, where it answers about 2600 Retries a second;
+past that the host's TAP queue (1000 datagrams) drops without regard to
+sender, and allowed clients wait for their resends. That is the rate under
+which the property's first assumption holds on this host. Under it the queue
+ahead of a client's datagram is at most the 8 receive buffers and the TAP queue
+at about 0.37 ms each, under 0.4 s, so its two datagrams before acceptance fit
+the 2 s cap. `check-quic.sh` floods at 4000 a second (`FLOOD_RATE`). Building
+the network layer ReleaseFast would buy about a third; it was not done here.
+
 ## Runtime audit (Lean v4.35.0)
 
 The permitted entry is `main.zig` -> module initializer ->

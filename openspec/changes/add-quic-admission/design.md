@@ -11,7 +11,7 @@ X holds no key on the guest's `reflect.allow`. X is **off the path**: it receive
 **Property.** Suppose
 
 - (A0) X is not on the guest's Ethernet segment: X's frames reach the guest through a router (on morphie, the host itself) and carry the router's MAC. The guest answers to the source MAC of the frame it got (`net.zig` `sendUdp`), so a host on the segment receives whatever it asks for at any IPv4 address it names (§6);
-- (A1) the guest reads every datagram that reaches it: X's datagrams arrive no faster than the guest handles them (§5 gives the cost of each kind, measured);
+- (A1) the guest reads every datagram that reaches it: X's datagrams arrive no faster than the guest handles them (§5 gives the cost of each kind, measured). On morphie, measured 2026-11-25: about 5000 datagrams a second of the flood's mix are kept up with (allowed clients served in 5 to 11 ms); by 10000 the guest falls behind (0.4 to 1.7 s); one host process can send 220000;
 - (A2) h + a ≤ 7, where a is the number of connections other allowed entities hold in the address pool (§2) while C connects;
 - (A3) C's handshake, once admitted, finishes within 2 seconds of guest time not spent in runs (the cap, §2), counting the queue ahead of each of its datagrams: its handshake time with no X plus, for its two datagrams before acceptance, the 8 receive buffers and the host's TAP queue (1000 on morphie) at the largest cost per datagram in §5. With the measured costs (README) this is well under 2 s; it is computed there, not assumed.
 

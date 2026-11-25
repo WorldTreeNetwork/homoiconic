@@ -138,6 +138,17 @@ def self_controls():
             sys.exit(f"{bad} controls did not fail")
 
 
+def quiet():
+    """Other trees run the same checks on the same addresses: wait for them."""
+    import time
+    while True:
+        r = subprocess.run(["pgrep", "-af", "unikernel/check-(net|quic|wire).sh"], capture_output=True, text=True)
+        others = [l for l in r.stdout.splitlines() if os.path.dirname(HERE) not in l and "pgrep" not in l]
+        if not others:
+            return
+        time.sleep(5)
+
+
 def guest_controls():
     print("== real guests, each fix undone ==")
     bad = 0
@@ -148,6 +159,7 @@ def guest_controls():
         new_src = patched(path, old, new)
         open(path, "w").write(new_src)
         print(f"control: {what}")
+        quiet()
         try:
             r = subprocess.run(["sh", os.path.join(HERE, script)], capture_output=True, text=True, env=env)
         finally:
