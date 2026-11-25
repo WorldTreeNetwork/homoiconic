@@ -79,7 +79,7 @@ def channelsText (program schedule : ByteArray) (budget limit : Nat) : String :=
         match read schedule with
         | .error msg => "schedule: " ++ renderSyntaxError msg
         | .ok scheduleTerm =>
-          match runPriced budget (load (compile scheduleTerm)) with
+          match runTurn budget (load (compile scheduleTerm)) with
           | .halted (.value (.data (.arr ds))) =>
             match dataEvents 0 ds with
             | .error k => s!"schedule: entry {k} is not an event"

@@ -204,6 +204,49 @@ def main : IO UInt32 := do
       || interpText "1".toUTF8 maxLevels 1000 == levelsError then
     IO.println s!"FAIL levels: more than {maxLevels} levels are not refused, or {maxLevels} are"
     fails := fails + 1
+  -- A space limit beside the budget (`add-space-budget`). With no count a run
+  -- has its ledger alone, so these outcomes depend on nothing outside Lean.
+  let deep := "def deep x = [x, ...deep x]\ndeep 0\n"
+  let build := "def build acc = build [0, ...acc]\nbuild []\n"
+  let double := "def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\ndbl [0] 40\n"
+  let spaced : List (String × String × Nat × Nat × Nat × String) := [
+    ("a recursion that waits", deep, 0, 10000000, 100000, "no result within 100000 cells"),
+    ("a recursion that waits, through one interpreter", deep, 1, 10000000, 100000,
+      "no result within 100000 cells"),
+    ("a loop that builds", build, 0, 10000000, 100000, "no result within 100000 cells"),
+    -- A tail loop keeps nothing, and a ledger alone still stops it: it makes
+    -- more than a cell a step. Taking back what was dropped needs a count.
+    ("a tail loop under a ledger alone", "def loop x = loop x\nloop 0\n", 0, 10000000, 100000,
+      "no result within 100000 cells"),
+    ("a tail loop out of steps first", "def loop x = loop x\nloop 0\n", 0, 5000, 100000,
+      "no result within 5000 steps"),
+    -- Forty cells that are 2^40 written: refused before anything is written.
+    ("an answer built by doubling", double, 0, 1000000, 4000000, "no result within 4000000 cells"),
+    ("an answer built by doubling, through one interpreter", double, 1, 10000000, 4000000,
+      "no result within 4000000 cells"),
+    ("factorial inside its ledger", "def f n =\n  case n\n    0 -> 1\n    m + 1 -> mul n (f m)\n\nf 30\n",
+      1, 10000000, 4000000, "265252859812191058636308480000000")]
+  for (what, text, levels, budget, cells, out) in spaced do
+    total := total + 1
+    let got := interpText text.toUTF8 levels budget false (.ledger cells)
+    if got != out then
+      IO.println s!"FAIL space, {what}: printed `{show1 got}`, expected `{out}`"
+      fails := fails + 1
+  -- `writes` is `written`, and two for the value as an item, on each shape.
+  let shapes : List Data := [.nat 0, .nat 9, .nat 1000000, .nat (2 ^ 200), .name 7, .text [],
+    .text "héllo".toList, .arr [], .arr [.nat 0, .nat 0], .arr [.arr [], .text "a".toList, .arr [.arr [.nat 5]]]]
+  for d in shapes do
+    total := total + 1
+    let w := d.written + 2
+    if !(d.writes w) || d.writes (w - 1) || (renderData d).utf8ByteSize > d.written then
+      IO.println s!"FAIL written: {renderData d} is counted {d.written}, written in {(renderData d).utf8ByteSize} bytes"
+      fails := fails + 1
+  -- Cells of data as a tree, and of a number past a machine word.
+  total := total + 1
+  if (Data.arr [.nat 0, .text "ab".toList, .arr []]).cells != 9 || natCells (2 ^ 63 - 1) != 1
+      || natCells (2 ^ 63) != 4 || natCells (2 ^ 200) != 7 then
+    IO.println "FAIL cells: an array of three items, or a large number, is miscounted"
+    fails := fails + 1
   IO.println s!"{total - fails} of {total} checks passed"
   if fails > 0 then
     throw (IO.userError s!"{fails} check(s) failed")

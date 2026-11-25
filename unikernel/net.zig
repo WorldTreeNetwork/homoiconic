@@ -9,7 +9,8 @@ const max_dgram: usize = 1200;
 const max_payload: usize = 1176;
 const budget_max: u64 = 100000000;
 
-extern fn reflect_reply_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
+extern fn reflect_reply_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, space: u64) usize;
+extern fn reflect_default_space(ignored: u32) u64;
 extern fn reflect_abort_alloc(unused: usize) usize;
 extern fn reflect_command_line() [*]const u8;
 extern fn reflect_boot_take(out: [*]u8, capacity: usize) usize;
@@ -40,6 +41,14 @@ const Endpoint = struct {
     guarded: bool,
     spawn_far: bool,
     take_new: bool,
+    /// The cells a run may make (`reflect.space=`); null is the kernel's
+    /// default. The guest's owner chooses it, not whoever sends a program:
+    /// the frame carries a step budget and no space.
+    space: ?u64,
+
+    fn cells(ep: Endpoint) u64 {
+        return ep.space orelse reflect_default_space(0);
+    }
 };
 const std = @import("std");
 const quic_mod = @import("quic.zig");
@@ -159,6 +168,7 @@ fn parse(s: []const u8) ?Endpoint {
     var saw_spawn = false;
     var take_new = false;
     var saw_take = false;
+    var space: ?u64 = null;
     var i: usize = 0;
     while (i < s.len) {
         while (i < s.len and s[i] == ' ') i += 1;
@@ -172,6 +182,9 @@ fn parse(s: []const u8) ?Endpoint {
         } else if (starts(word, "reflect.port=")) {
             if (port != null) return null;
             port = parsePort(word["reflect.port=".len..]) orelse return null;
+        } else if (starts(word, "reflect.space=")) {
+            if (space != null) return null;
+            space = parseCells(word["reflect.space=".len..]) orelse return null;
         } else if (eql(word, "reflect.hook=alloc")) {
             if (hook) return null;
             hook = true;
@@ -226,7 +239,20 @@ fn parse(s: []const u8) ?Endpoint {
         .guarded = guarded,
         .spawn_far = spawn_far,
         .take_new = take_new,
+        .space = space,
     };
+}
+
+/// A whole number below 2^64 in decimal digits and nothing else.
+fn parseCells(s: []const u8) ?u64 {
+    if (s.len == 0) return null;
+    var v: u64 = 0;
+    for (s) |c| {
+        if (c < '0' or c > '9') return null;
+        v = std.math.mul(u64, v, 10) catch return null;
+        v = std.math.add(u64, v, c - '0') catch return null;
+    }
+    return v;
 }
 
 fn parseIp(s: []const u8) ?[4]u8 {
@@ -543,7 +569,7 @@ fn onDatagram(frame: []const u8, payload: []const u8, nic: Nic, ep: Endpoint) vo
         _ = reflect_abort_alloc(0);
         halt("allocation failure");
     }
-    const need = reflect_reply_bytes(body.ptr, body.len, &reply_buf, reply_buf.len, budget);
+    const need = reflect_reply_bytes(body.ptr, body.len, &reply_buf, reply_buf.len, budget, ep.cells());
     if (need > max_payload) {
         sendApp(frame, nic, ep, 1, 2, id, budget, &.{});
         return;
@@ -920,7 +946,7 @@ fn answerBytes(payload: []const u8, ep: Endpoint) []const u8 {
         _ = reflect_abort_alloc(0);
         halt("allocation failure");
     }
-    const need = reflect_reply_bytes(body.ptr, body.len, &reply_buf, reply_buf.len, budget);
+    const need = reflect_reply_bytes(body.ptr, body.len, &reply_buf, reply_buf.len, budget, ep.cells());
     if (need > max_payload) return fillAnswer(1, 2, id, budget, "");
     return fillAnswer(1, 0, id, budget, reply_buf[0..need]);
 }

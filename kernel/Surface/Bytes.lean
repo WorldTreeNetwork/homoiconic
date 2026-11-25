@@ -10,10 +10,10 @@ def renderBytesError (msg : String) : String := "bytes error: " ++ msg
 
 /-- Read a program from its byte form, compile, run the machine for `budget`
     steps, and render. The same run as `runText` gives the source. -/
-def runBytes (bytes : ByteArray) (budget : Nat) : String :=
+def runBytes (bytes : ByteArray) (budget : Nat) (sp : Space := .ledger defaultSpace) : String :=
   match Wire.readProgram bytes with
   | .error msg => renderBytesError msg
-  | .ok t => renderState budget (runPriced budget (load (compile t)))
+  | .ok t => renderEnded budget sp (runIn sp budget (load (compile t)))
 
 /-- An outcome the interpreter gave as data, read back: `[0, [1, d]]` is the
     data `d`, `[0, [0, body, env]]` a function, `[1, i]` an unbound variable,
@@ -41,13 +41,19 @@ def unlift : Nat → MOutcome → Option MOutcome
     finish. With `asText` a result that is a text is written raw, with no
     quotes and no escapes. An answer that is not an outcome's data form cannot happen and
     renders as an internal error. -/
-def renderInterpreted (k budget : Nat) (asText : Bool) (t : Term) : String :=
-  match runPriced budget (load (compile (level k t))) with
-  | .halted o =>
+def renderInterpreted (k budget : Nat) (asText : Bool) (t : Term)
+    (sp : Space := .ledger defaultSpace) : String :=
+  match runIn sp budget (load (compile (level k t))) with
+  | .full _ => renderSpace sp.cells
+  | .reached (.halted o) =>
     match unlift k o with
+    | some (.value (.data d)) =>
+      if d.writes (4 * sp.cells) then
+        (if asText then renderMOutcomeText (.value (.data d)) else renderData d)
+      else renderSpace sp.cells
     | some o => if asText then renderMOutcomeText o else renderMOutcome o
     | none => "error: the interpreter answered something that is not an outcome"
-  | s => renderState budget s
+  | .reached s => renderState budget s
 
 /-- The most interpreters a program is run through. The machine is given the
     whole tower, `level k t`, and `unlift k` reads the answer back by
@@ -63,33 +69,42 @@ def levelsError : String :=
 
 /-- `runBytes` through `k` interpreters. The program's bytes are already its
     data form; `level` quotes it once more for each level above the first. -/
-def interpBytes (bytes : ByteArray) (k budget : Nat) (asText : Bool := false) : String :=
+def interpBytes (bytes : ByteArray) (k budget : Nat) (asText : Bool := false)
+    (sp : Space := .ledger defaultSpace) : String :=
   if k > maxLevels then levelsError else
   match Wire.readProgram bytes with
   | .error msg => renderBytesError msg
-  | .ok t => renderInterpreted k budget asText t
+  | .ok t => renderInterpreted k budget asText t sp
 
 /-- `runText` through `k` interpreters. -/
-def interpText (src : ByteArray) (k budget : Nat) (asText : Bool := false) : String :=
+def interpText (src : ByteArray) (k budget : Nat) (asText : Bool := false)
+    (sp : Space := .ledger defaultSpace) : String :=
   if k > maxLevels then levelsError else
   match read src with
   | .error msg => renderSyntaxError msg
-  | .ok t => renderInterpreted k budget asText t
+  | .ok t => renderInterpreted k budget asText t sp
 
 /-- Program bytes in, the bounded-run reply bytes out. One evaluation, with
     the budget charged as `runText` charges it (`runPriced`): one a step, and
-    an operation its cost before it runs. -/
-def replyBytes (bytes : ByteArray) (budget : Nat) : ByteArray :=
+    an operation its cost before it runs, within the space `sp` (`runIn`). A
+    run out of space is the space reply, and so is an answer whose data form
+    would take more than four bytes for each cell of the space
+    (`Wire.fitsValue`), which is found before the form is built. -/
+def replyBytes (bytes : ByteArray) (budget : Nat) (sp : Space := .ledger defaultSpace) :
+    ByteArray :=
   let reply := match Wire.readProgram bytes with
     | .error _ => Wire.RunReply.refused
     | .ok t =>
-        match runPriced budget (load (compile t)) with
-        | .halted (.value v) =>
-            if (Wire.valueData v).isSome then .value v else .unrepresentable
-        | .halted (.unbound i) => .unbound i
-        | .halted .wrong => .wrong
-        | .fault => .fault
-        | .running _ _ _ _ => .budget
+        match runIn sp budget (load (compile t)) with
+        | .full _ => .space
+        | .reached (.halted (.value v)) =>
+            if Wire.fitsValue v (4 * sp.cells) then
+              (if (Wire.valueData v).isSome then .value v else .unrepresentable)
+            else .space
+        | .reached (.halted (.unbound i)) => .unbound i
+        | .reached (.halted .wrong) => .wrong
+        | .reached .fault => .fault
+        | .reached (.running _ _ _ _) => .budget
   Wire.runReplyBytes reply
 
 /-- Read a program's source and give its byte form. The first byte answered is

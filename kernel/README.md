@@ -51,6 +51,8 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 | `Reflect/MachineSpace.lean` | `run_cycle`, `runPriced_cycle`, `omega_cycle`, `forever_cycle`, `forever_cycle_interp`, `forever_bounded`: a tail loop keeps no frame per call and holds finitely many states |
 | `Reflect/MachineSafe.lean` | `machine_never_faults` and its `runUntil` and `runPriced` forms: a compiled program never reaches `fault`, halting or not |
 | `Reflect/RunUntil.lean`, `RunUntilProof.lean` | `runUntil`, which stops when the machine stops, and `runUntil_eq` |
+| `Reflect/Space.lean` | `charge`, the cells a step makes; `madeIn`; `Space`, a limit in cells and a count a host supplies; `runSpace`, the priced run with a ledger of cells; `runTurn`, the run every driver makes; `Data.cells`, `Data.writes` |
+| `Reflect/SpaceProof.lean` | `runSpace_run`, `runSpace_priced`, `runSpace_full`, `runSpace_within`, `trail_held`, `runIn_ledger`, `runTurn_reach`: a space-limited run takes `run`'s steps and makes no more cells than it has |
 | `Reflect/Request.lean` | `askTerm`, `payloadTerm`, `resumeTerm`; `Sys`, a way of evaluating; `Drive`, the driver over any `Sys`; `Interact`, `InteractI`, `InteractM`; `driveRun` and `converse`, the executable driver |
 | `Reflect/RequestProof.lean` | Determinism, resume and extra answers; `Sim.drive`, which lifts turn-by-turn agreement to runs; the interpreter and machine instances; soundness of `converse` |
 | `Reflect/Channel.lean` | `classify`, which reads a payload as a channel request; `PSys`; `Settle`, `Turn`; `Event`, `Step`, `Sched`, `Network`; `stepRun`, `schedRun`, `autoRun`, the executable scheduler; `pick`, which chooses an event |

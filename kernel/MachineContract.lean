@@ -70,6 +70,63 @@ example : ∀ fuel,
       run j (load (compile (level 1 loopForever)))) :=
   Reflect.forever_bounded
 
+-- A space limit beside the step budget (`add-space-budget`, `homoiconic-q59.67`),
+-- for every table and every count a host might supply. These bound the cells a
+-- run makes; none says what a state holds.
+example : ∀ [Ops], ∀ (sp : Space) fuel credit s,
+    ∃ n, n ≤ fuel ∧ (runSpace sp fuel credit s).state = run n s :=
+  Reflect.runSpace_run
+
+example : ∀ [Ops], ∀ (sp : Space) fuel credit s t,
+    runSpace sp fuel credit s = .reached t → t = runPriced fuel s :=
+  Reflect.runSpace_priced
+
+example : ∀ [Ops], ∀ (sp : Space) fuel credit s t,
+    runSpace sp fuel credit s = .full t →
+      ∃ k, k < fuel ∧ run k s = t ∧ credit < madeIn (k + 1) s :=
+  Reflect.runSpace_full
+
+example : ∀ [Ops], ∀ (sp : Space) fuel credit s,
+    madeIn fuel s ≤ credit → runSpace sp fuel credit s = .reached (runPriced fuel s) :=
+  Reflect.runSpace_within
+
+example : ∀ (sp : Space), sp.bar = sp.cells - sp.cells / 4 := fun _ => rfl
+
+example : ∀ [Ops], ∀ (sp : Space) (credit : Nat) (s u : State),
+    Held sp credit s u ↔
+      ((∃ k, run k s = u ∧ madeIn k s ≤ credit) ∨
+       (∃ j k, run k (run j s) = u ∧ sp.count (run j s) ≤ sp.bar ∧
+         sp.count (run j s) + madeIn k (run j s) ≤ sp.cells)) :=
+  fun _ _ _ _ => Iff.rfl
+
+example : ∀ [Ops], ∀ (sp : Space) fuel credit s,
+    (trail sp fuel credit s).getLast? = some (runSpace sp fuel credit s).state :=
+  Reflect.trail_last
+
+example : ∀ [Ops], ∀ (sp : Space) fuel credit s u,
+    u ∈ trail sp fuel credit s → Held sp credit s u :=
+  Reflect.trail_held
+
+example : ∀ [Ops], ∀ (sp : Space) fuel credit s,
+    Held sp credit s (runSpace sp fuel credit s).state :=
+  Reflect.runSpace_ledger
+
+example : ∀ [Ops], ∀ cells fuel s,
+    ∃ k, run k s = (runIn (.ledger cells) fuel s).state ∧ madeIn k s ≤ cells :=
+  Reflect.runIn_ledger
+
+example : ∀ [Ops], ∀ (sp : Space) t fuel credit,
+    (runSpace sp fuel credit (load (compile t))).state ≠ .fault :=
+  Reflect.machine_never_faults_space
+
+example : ∀ [Ops], ∀ (sp : Space) t fuel credit w,
+    (runSpace sp fuel credit (load (compile t))).state = .halted w →
+      ∃ o, Direct [] t o ∧ w = MP.injO o :=
+  Reflect.machine_exact_space
+
+example : ∀ [Ops], ∀ {budget : Nat} {s t : State}, runTurn budget s = t → ∃ n, run n s = t :=
+  Reflect.runTurn_reach
+
 #print axioms Reflect.machine_correct
 #print axioms Reflect.machine_exact
 #print axioms Reflect.machine_never_halts
@@ -91,3 +148,14 @@ example : ∀ fuel,
 #print axioms Reflect.forever_cycle
 #print axioms Reflect.forever_cycle_interp
 #print axioms Reflect.forever_bounded
+#print axioms Reflect.runSpace_run
+#print axioms Reflect.runSpace_priced
+#print axioms Reflect.runSpace_full
+#print axioms Reflect.runSpace_within
+#print axioms Reflect.trail_last
+#print axioms Reflect.trail_held
+#print axioms Reflect.runSpace_ledger
+#print axioms Reflect.runIn_ledger
+#print axioms Reflect.machine_never_faults_space
+#print axioms Reflect.machine_exact_space
+#print axioms Reflect.runTurn_reach

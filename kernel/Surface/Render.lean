@@ -72,4 +72,8 @@ def renderMOutcomeText : MOutcome → String
 
 def renderSyntaxError (msg : String) : String := "syntax error: " ++ msg
 
+/-- The line for a run that passed its space, or whose answer is too large to
+    write within it. -/
+def renderSpace (cells : Nat) : String := s!"no result within {cells} cells"
+
 end Surface

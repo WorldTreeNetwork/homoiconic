@@ -1,5 +1,5 @@
 import Reflect.Interpreter
-import Reflect.RunUntil
+import Reflect.Space
 
 /-!
 Requests. A program that needs something from outside finishes its turn with a
@@ -119,22 +119,24 @@ def InteractM (p : Term) (answers asked : List Data) (e : Ending MValue MOutcome
   ∃ n w, run n (load (compile p)) = .halted w ∧ Drive machine w answers asked e
 
 /-- How the executable driver stops. `unfinished`: a turn did not halt within
-    its budget. -/
+    its budget, or within the cells a turn may make (`runTurn`): the two are
+    not told apart here. -/
 inductive Stop where
   | finished : MOutcome → Stop
   | waiting : MValue → Stop
   | unfinished : Stop
 
 /-- The executable driver, on the machine. Each turn gets a budget of `budget`,
-    charged as `runPriced` charges it: one a step, and an operation its cost. -/
+    charged as `runPriced` charges it: one a step, and an operation its cost.
+    A turn is `runTurn`: it may make `turnSpace` cells and no more. -/
 def driveRun (budget : Nat) : List Data → MOutcome → List Data × Stop
   | as, .value (.closure k e) =>
-    match runPriced budget (.running (compile payloadTerm) [.closure k e] [] []) with
+    match runTurn budget (.running (compile payloadTerm) [.closure k e] [] []) with
     | .halted (.value (.data p)) =>
       match as with
       | [] => ([p], .waiting (.closure k e))
       | a :: rest =>
-        match runPriced budget (.running (compile (resumeTerm a)) [.closure k e] [] []) with
+        match runTurn budget (.running (compile (resumeTerm a)) [.closure k e] [] []) with
         | .halted w =>
           let r := driveRun budget rest w
           (p :: r.1, r.2)
@@ -146,7 +148,7 @@ def driveRun (budget : Nat) : List Data → MOutcome → List Data × Stop
 
 /-- Run a program against a list of answers on the machine. -/
 def converse (budget : Nat) (p : Term) (answers : List Data) : List Data × Stop :=
-  match runPriced budget (load (compile p)) with
+  match runTurn budget (load (compile p)) with
   | .halted w => driveRun budget answers w
   | _ => ([], .unfinished)
 

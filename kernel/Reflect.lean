@@ -8,6 +8,8 @@ import Reflect.RunUntil
 import Reflect.RunUntilProof
 import Reflect.MachineSafe
 import Reflect.MachineSpace
+import Reflect.Space
+import Reflect.SpaceProof
 import Reflect.Request
 import Reflect.RequestProof
 import Reflect.Channel

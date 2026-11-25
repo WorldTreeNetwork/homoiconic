@@ -60,8 +60,15 @@ def natCells (n : Nat) : Nat := if n < 2 ^ 63 then 1 else 4 + Nat.log2 n / 64
     each item, one and the item. -/
 def Data.cells : Data → Nat
 
+/-- Whether the next step runs an operation. -/
+def atPrim : State → Bool
+/-- Cells the step from `s` makes, for every step but an operation. -/
+def owed : State → Nat
+/-- Cells an operation's step made: two and the cells of the answer on top. -/
+def answered : State → Nat
+
 /-- Cells the step from `s` to `s'` makes. Nothing for a state that is not running. -/
-def charge (s s' : State) : Nat
+def charge (s s' : State) : Nat := if atPrim s then answered s' else owed s
 
 /-- Cells the first `n` steps from `s` make. -/
 def madeIn : Nat → State → Nat
@@ -73,17 +80,20 @@ structure Space where
   cells : Nat
   count : State → Nat
 
+/-- The most a state may be counted at for its run to go on. -/
+def Space.bar (sp : Space) : Nat := sp.cells - sp.cells / 4
+
 /-- No count: the ledger is all the run has. -/
 def Space.ledger (cells : Nat) : Space := ⟨cells, fun _ => cells + 1⟩
 
-inductive Ran where
-  | reached : State → Ran   -- halted, or out of steps, or (never, for a program) fault
-  | full : State → Ran      -- the next step would make more cells than are left
+inductive Ended where
+  | reached : State → Ended   -- halted, or out of steps, or (never, for a program) fault
+  | full : State → Ended      -- the next step would make more cells than are left
 
-def Ran.state : Ran → State
+def Ended.state : Ended → State
 
-def runSpace (sp : Space) : (fuel credit : Nat) → State → Ran
-def runIn (sp : Space) (fuel : Nat) (s : State) : Ran := runSpace sp fuel sp.cells s
+def runSpace (sp : Space) : (fuel credit : Nat) → State → Ended
+def runIn (sp : Space) (fuel : Nat) (s : State) : Ended := runSpace sp fuel sp.cells s
 
 /-- The states a run is in, in order; the same recursion as `runSpace`. -/
 def trail (sp : Space) : (fuel credit : Nat) → State → List State
@@ -92,9 +102,9 @@ def trail (sp : Space) : (fuel credit : Nat) → State → List State
 `runSpace` is `runPriced` with one more test. With fuel left and a running state it reads `stepCost s`; a step the fuel cannot pay for ends the run at `s` as `reached s`, exactly as `runPriced` ends. Otherwise, with `s' = step s` and `a = charge s s'`:
 
 - `a ≤ credit`: go on from `s'` with `credit - a`.
-- else, with `m = sp.count s`: if `m ≤ sp.cells / 2` and `a ≤ sp.cells - m`, go on from `s'` with `sp.cells - m - a`; otherwise the run ends as `full s`. The step is not taken.
+- else, with `m = sp.count s`: if `m ≤ sp.bar` and `a ≤ sp.cells - m`, go on from `s'` with `sp.cells - m - a`; otherwise the run ends as `full s`. The step is not taken. `sp.bar` is `sp.cells - sp.cells / 4`, three quarters of the limit.
 
-The step budget is tested first, so a run out of both is out of steps. A run starts with `sp.cells` of credit and no count: what the start state holds is on top of the limit, and is bounded by the limit on the program's bytes. Half the limit is the bar for going on so that a run cannot ask again and again: after a count the run has at least half the limit to make before the next, and a count looks at no more than half the limit of cells, so counting costs at most about one cell looked at for each cell made. It follows that a run that holds more than half its limit when it asks is refused: the limit is on cells made since a count, and half of it on cells held across one. The line says `within <cells> cells` for both.
+The step budget is tested first, so a run out of both is out of steps. A run starts with `sp.cells` of credit and no count: what the start state holds is on top of the limit, and is bounded by the limit on the program's bytes. There is a bar below the limit so that a run cannot ask again and again: after a count the run has at least a quarter of the limit to make before the next, and a count looks at no more than three quarters of it, so counting costs at most three cells looked at for each cell made. It follows that a run that holds more than three quarters of its limit when it asks is refused: the limit is on cells made since a count, and the bar on cells held across one. The bar was half the limit as first written; `host/check.sh`'s list of 30000 items through one interpreter holds 2.6 million cells and was refused under 4000000, so the bar moved rather than the limit. The line says `within <cells> cells` for both.
 
 `charge`, by the instruction `s` is at:
 
@@ -108,10 +118,12 @@ The step budget is tested first, so a run out of both is out of steps. A run sta
 | `cons` onto a text of `n` characters | 4 + 2n |
 | `dcase` | 8, and for a number `natCells` of the predecessor |
 | `prim` | 2 and `Data.cells` of the answer |
-| a halt (the step ends in a halted state) | 2 |
+| the end of the program (`done` with no frame) | 2 |
 | the end of a block with a frame to go back to; any step from a state that is not running | 0 |
 
 Each is at least the objects Lean makes for that step in `step` (the frame and its list cell, the environment cells, the boxes around data), counted from the right-hand sides in `kernel/Reflect/Machine.lean`; the advise read counted them again and found `access`, `apply`, `cons` and the text case of `dcase` exact and the rest with room. A matched value that is built again (the three checks) is charged as new, though the compiled C reuses it when it is held once. Where a step makes fewer (a tail call pushes no frame) the charge is not lowered: charging too much costs only an earlier count.
+
+Only an operation's charge reads `s'`. `runSpace` is written in two shapes for that reason, one for an operation and one for every other step, and `runSpace_running` says they are the one rule above: when the charge is known before the step, the state need not be held while the step is taken, and the compiled run does not hold it. Held across every step, as first written, the run was 40% slower than the priced run on the Mac (3.29 s to 4.65 s for 100000000 steps of `forever.hom`); as landed it is 5 to 6% slower (4.09 s to 4.27 s through one interpreter).
 
 `Data.cells` is defined by recursion on the value, once for each level of nesting. It is called on the answer of an operation only, and an answer of `arith` is nested at most once. The checks of a written answer (below) walk with a work list and do not recurse.
 
@@ -142,7 +154,7 @@ theorem runSpace_within : madeIn fuel s ≤ credit →
 /-- What the ledger says of a state `u` of a run begun at `s` with `credit`. -/
 def Held (sp : Space) (credit : Nat) (s u : State) : Prop :=
   (∃ k, run k s = u ∧ madeIn k s ≤ credit) ∨
-  (∃ j k, run k (run j s) = u ∧ sp.count (run j s) ≤ sp.cells / 2 ∧
+  (∃ j k, run k (run j s) = u ∧ sp.count (run j s) ≤ sp.bar ∧
     sp.count (run j s) + madeIn k (run j s) ≤ sp.cells)
 
 theorem trail_last : (trail sp fuel credit s).getLast? = some (runSpace sp fuel credit s).state
@@ -159,7 +171,7 @@ theorem machine_exact_space : (runSpace sp fuel credit (load (compile t))).state
     ∃ o, Direct [] t o ∧ w = MP.injO o
 ```
 
-`trail_held` is the space bound: every state a run is in was reached from the start by steps that made no more than its credit, or from a state it passed through, counted at `m ≤ cells / 2`, by steps that made no more than `cells - m`. `trail` is a second function with `runSpace`'s recursion; `trail_last` ties the two. `runIn_ledger` is the bound with no count: the steps made at most `cells` cells. `runSpace_full` and `runSpace_within` are what is pure: no count can stop a run whose first `fuel` steps stay inside its credit, and such a run is the priced run. `madeIn` does not fall as `n` grows and a run takes at most `fuel` steps, which is why the hypothesis is at `fuel`.
+`trail_held` is the space bound: every state a run is in was reached from the start by steps that made no more than its credit, or from a state it passed through, counted at `m ≤ sp.bar`, by steps that made no more than `cells - m`. `trail` is a second function with `runSpace`'s recursion; `trail_last` ties the two. `runIn_ledger` is the bound with no count: the steps made at most `cells` cells. `runSpace_full` and `runSpace_within` are what is pure: no count can stop a run whose first `fuel` steps stay inside its credit, and such a run is the priced run. `madeIn` does not fall as `n` grows and a run takes at most `fuel` steps, which is why the hypothesis is at `fuel`.
 
 `runPriced` and its theorems are untouched.
 
@@ -178,13 +190,13 @@ The chain from the theorem to bytes:
 4. Not in the ledger at all:
    - the start state: the program's code and literals, bounded by the byte limit (2 MiB at boot, about 4.2 million cells at worst; 1176 bytes on the network);
    - an answer made before it is charged (above);
-   - the walk's table and stack. The table is sized once for a count, the least power of two that is at least twice the cut and two, 8 bytes a slot: 32 MiB for the default. The stack grows by doubling to at most the cells counted, 16 MiB at the default;
+   - the walk's table and stack. The table starts at 4096 slots of 8 bytes and is made four times as large when it is three quarters full, up to the least power of two that is at least four thirds of the cut and two: 32 MiB for the default, whose cut is 3000000, and 8 MiB more for a moment when it last grows. A count of a small state takes kilobytes. (It was first one allocation of the largest size, which is simpler to bound and made every count of a tail loop clear 32 MiB: `forever.hom`'s peak went from 7 to 39 MiB.) The stack grows by doubling to at most the cells counted, 24 MiB at the default and half as much again for a moment when it grows;
    - the reader's and the compiler's working memory, by the byte limit;
    - the answer written: the printer's per-item memory and the bytes, by `4 * cells`;
    - the state object itself and a step's garbage, freed at once under reference counting.
 5. A count happens when the ledger is spent, so between counts the bound is the ledger's.
 
-The image's memory for all of this is not 512 MiB. `unikernel/kernel.zig` gives a quarter of what lies between the image and the stack to `brk` and the rest, about 360 MiB, to `mmap`, which is where Lean's allocator and the walk's table come from. The sum for `n` cells on the network guest is `24 n` bytes of state, up to `40 n` for a moment when the state is one text and `codes` is called on it, and `12 n` for the walk; at boot the start state, up to 100 MiB, is on top. That sum is over 360 MiB at 8000000 cells (the advise read measured 387 MiB on the Mac for a 2.5 million character text, its `codes` kept, and one `cons` onto it), which is why the default is not 8000000.
+The image's memory for all of this is not 512 MiB. `unikernel/kernel.zig` gives a quarter of what lies between the image and the stack to `brk` and the rest, about 360 MiB, to `mmap`, which is where Lean's allocator and the walk's table come from. The sum for `n` cells on the network guest is `24 n` bytes of state, up to `40 n` for a moment when the state is one text and `codes` is called on it, and up to `17 n` for the walk (its table and its stack); at boot the start state, up to 100 MiB, is on top. That sum is over 360 MiB at 8000000 cells (the advise read measured 387 MiB on the Mac for a 2.5 million character text, its `codes` kept, and one `cons` onto it), which is why the default is not 8000000.
 
 ## The outcome and its bytes
 
@@ -197,7 +209,7 @@ The image's memory for all of this is not 512 MiB. `unikernel/kernel.zig` gives 
 ## Where the limit comes from
 
 - `Reflect.defaultSpace`, in the kernel; a host asks for it with `reflect_default_space`, as it asks for `reflect_max_levels`.
-- `reflect_run`, `reflect_run_bytes`, `reflect_interp` and `reflect_reply_bytes` take `space : u64` after `budget`. `Host.lean` makes the `Space` from it with the runtime's count, cut at half.
+- `reflect_run`, `reflect_run_bytes`, `reflect_interp` and `reflect_reply_bytes` take `space : u64` after `budget`. `Host.lean` makes the `Space` from it with the runtime's count, cut at the bar.
 - `host/out/run … <program-file> [step-budget [space]]`; `unikernel/out/reply run <budget> <bytes> [space]`.
 - The boot image: the command line is `[step-budget [levels [space]]]`.
 - The network image: the word `reflect.space=<cells>`, default the kernel's. It applies to every run frame, over UDP and over QUIC. The `RFL1` frame keeps its 24 bytes: a sender does not choose the guest's memory, the guest's owner does.
@@ -216,7 +228,7 @@ The image's memory for all of this is not 512 MiB. `unikernel/kernel.zig` gives 
 
 ## The default
 
-`Reflect.defaultSpace = 4000000`: 96 MiB of state at 24 bytes a cell, 160 MiB for a moment at worst, 48 MiB for the walk, and at boot up to 100 MiB of program, against 360 MiB.
+`Reflect.defaultSpace = 4000000`: 96 MiB of state at 24 bytes a cell, 160 MiB for a moment at worst, up to 68 MiB for the walk, and at boot up to 100 MiB of program, against 360 MiB. These are worst cases of different runs and are not all reached by one.
 
 To be confirmed on morphie and recorded here and in `unikernel/README.md`, on the 512 MiB image started by `given.sh` and with the peak of the Linux process beside each: `deep` and `build` at levels 0, 1 and 2; a 2 million character text built, its `codes` kept and one `cons` onto it; an array of 2 million numbers of 19 digits answered, and of 2 million empty texts; a number squared until the budget stops it; an answer built by doubling; a function answered from a program of thirty definitions; and each of these behind a 2 MiB literal at boot. Each has to end in the kernel's text. If one does not, the default comes down until it does.
 
@@ -231,15 +243,15 @@ The change adds; it replaces little. To take it out: the exports call `runPriced
 `reviews/2026-11-24-advise.md` (Fable, fresh context, send-back, fourteen findings). Each is answered above; in its order:
 
 1. The printer runs out of memory on an answer that fits in cells: the answer has its own bound in bytes written, `4 * cells`, and the default's worst case is measured.
-2. The memory sum for 8000000 cells does not hold: the sum is redone against the `mmap` area with the start state, the answer made before it is charged and the walk; the table is sized once; the default is 4000000.
+2. The memory sum for 8000000 cells does not hold: the sum is redone against the `mmap` area with the start state, the answer made before it is charged and the walk; the table grows by four to a fixed largest size, a quarter over it for a moment; the default is 4000000.
 3. The 1 MiB list through one interpreter changes sides: named and decided under "A run that changes sides".
 4. `runSpace_within` was vacuous: its hypothesis is at `fuel`, and a state that is not running is charged nothing.
 5. The new walkers could recurse on nesting: `Data.writes` and `Wire.fitsValue` use a work list; `Data.cells` is called on an operation's answer only.
 6. The turn's limit must not move with the image's default: `turnSpace` is its own constant, and the proposal says a guest can still be ended.
 7. The table's figures were the harness's charge: said, and measured again on what landed.
-8. "Every state the run is in" was not a theorem: `trail`, `trail_last`, `trail_held`; `Ran.state` is in the definitions.
+8. "Every state the run is in" was not a theorem: `trail`, `trail_last`, `trail_held`; `Ended.state` is in the definitions.
 9. The runtime's count is not a function of the state: said under "The choice".
-10. A failed allocation in the walk makes a reply depend on the allocator: said under "The choice"; the table is one allocation of a known size.
+10. A failed allocation in the walk makes a reply depend on the allocator: said under "The choice"; the table has a known largest size.
 11. `natCells` and the walk disagreed by one for a large number: the walk counts the number's object as `natCells` less the box around it.
 12. A turn out of space reads as out of steps: said, the comments corrected, `homoiconic-q59.75` for a line of its own.
 13. The deltas: unobservable outcomes removed, the claim about replies narrowed to runs within their space, P3 stated as it is proved, the default one number.

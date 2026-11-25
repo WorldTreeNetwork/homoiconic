@@ -191,10 +191,11 @@ def interpretedP : PSys Data Data where
     steps: beginning a program, reading a payload, and running the rest on an
     answer. -/
 
-/-- `none`: a machine run did not halt within the budget. -/
+/-- `none`: a machine run did not halt within the budget, or within the cells
+    a turn may make (`runTurn`). -/
 def settleRun (budget : Nat) : MOutcome → Option (Status MValue MOutcome)
   | .value (.closure k e) =>
-    match runPriced budget (.running (compile payloadTerm) [.closure k e] [] []) with
+    match runTurn budget (.running (compile payloadTerm) [.closure k e] [] []) with
     | .halted (.value (.data p)) => some (.waiting (.closure k e) p)
     | .halted (.value (.closure _ _)) => some (.finished .wrong)
     | .halted w => some (.finished w)
@@ -202,14 +203,15 @@ def settleRun (budget : Nat) : MOutcome → Option (Status MValue MOutcome)
   | w => some (.finished w)
 
 def turnRun (budget : Nat) (c : MValue) (a : Data) : Option (Status MValue MOutcome) :=
-  match runPriced budget (.running (compile (resumeTerm a)) [c] [] []) with
+  match runTurn budget (.running (compile (resumeTerm a)) [c] [] []) with
   | .halted w => settleRun budget w
   | _ => none
 
 abbrev MConfig := Config MValue MOutcome
 
 /-- What trying an event gives: the next configuration, a refusal because the
-    event cannot happen, or a machine run that did not halt in its budget. -/
+    event cannot happen, or a machine run that did not halt in its budget or
+    in the cells a turn may make. -/
 inductive Tried where
   | ok : MConfig → Tried
   | refused : Tried
@@ -232,7 +234,7 @@ def stepRun (budget : Nat) (cfg : MConfig) : Event → Tried
     | some ⟨.waiting c p, held⟩ =>
       match classify p with
       | .spawn t arg =>
-        match runPriced budget (load (compile (.app t (.lit arg)))) with
+        match runTurn budget (load (compile (.app t (.lit arg)))) with
         | .halted w =>
           match settleRun budget w, turnRun budget c (.arr []) with
           | some child, some st =>
@@ -287,7 +289,7 @@ def schedRun (budget : Nat) : MConfig → List Event → List Event × MConfig �
 
 /-- The first configuration, on the machine. `none`: a run did not halt. -/
 def beginRun (budget : Nat) (p : Term) : Option MConfig :=
-  match runPriced budget (load (compile p)) with
+  match runTurn budget (load (compile p)) with
   | .halted w =>
     match settleRun budget w with
     | some st => some ⟨[⟨st, []⟩], []⟩

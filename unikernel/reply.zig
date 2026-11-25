@@ -9,7 +9,8 @@ extern fn close(fd: c_int) c_int;
 
 extern fn initialize_circularKernel_Surface_Host(builtin: u8) *anyopaque;
 extern fn kernel_finish_initialization(result: *anyopaque) u8;
-extern fn reflect_reply_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
+extern fn reflect_reply_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, space: u64) usize;
+extern fn reflect_default_space(ignored: u32) u64;
 extern fn reflect_source_bytes(program: [*]const u8, length: usize, out: [*]u8, capacity: usize) usize;
 
 export fn initialize_libuv() void {}
@@ -31,13 +32,18 @@ pub fn main(init: std.process.Init.Minimal) u8 {
         return 0;
     }
     if (std.mem.eql(u8, cmd, "run")) {
-        if (v.len != 4) return usage();
+        if (v.len != 4 and v.len != 5) return usage();
         const budget_s = std.mem.span(v[2]);
         const path = std.mem.span(v[3]);
         const budget = std.fmt.parseInt(u64, budget_s, 10) catch return 2;
+        // The cells the run may make: the kernel's default unless one is given.
+        const space = if (v.len == 5)
+            std.fmt.parseInt(u64, std.mem.span(v[4]), 10) catch return 2
+        else
+            reflect_default_space(0);
         const n = readFile(path, &buf) orelse return 2;
         var out: [1 << 20]u8 = undefined;
-        const need = reflect_reply_bytes(buf[0..n].ptr, n, &out, out.len, budget);
+        const need = reflect_reply_bytes(buf[0..n].ptr, n, &out, out.len, budget, space);
         if (need > out.len) return 2;
         writeAll(out[0..need]);
         return 0;
@@ -49,11 +55,11 @@ pub fn main(init: std.process.Init.Minimal) u8 {
         const budget = std.fmt.parseInt(u64, budget_s, 10) catch return 2;
         const n = readFile(path, &buf) orelse return 2;
         var small: [16]u8 = .{0xaa} ** 16;
-        const need = reflect_reply_bytes(buf[0..n].ptr, n, &small, 4, budget);
+        const need = reflect_reply_bytes(buf[0..n].ptr, n, &small, 4, budget, reflect_default_space(0));
         if (need <= 4) return 2;
         for (small) |b| if (b != 0xaa) return 2;
         var out: [1 << 20]u8 = undefined;
-        const again = reflect_reply_bytes(buf[0..n].ptr, n, &out, out.len, budget);
+        const again = reflect_reply_bytes(buf[0..n].ptr, n, &out, out.len, budget, reflect_default_space(0));
         if (again != need) return 2;
         writeAll(out[0..again]);
         return 0;
@@ -62,7 +68,7 @@ pub fn main(init: std.process.Init.Minimal) u8 {
 }
 
 fn usage() u8 {
-    std.debug.print("usage: reply source <file> | reply run <budget> <bytes> | reply capacity <budget> <bytes>\n", .{});
+    std.debug.print("usage: reply source <file> | reply run <budget> <bytes> [space] | reply capacity <budget> <bytes>\n", .{});
     return 2;
 }
 fn readFile(path: []const u8, buf: []u8) ?usize {

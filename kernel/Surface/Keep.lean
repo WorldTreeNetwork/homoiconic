@@ -617,7 +617,7 @@ def answer (root : String) (src : ByteArray) (budget : Nat) : Session :=
       match Surface.read src with
       | .error msg => failed ("answer: " ++ renderSyntaxError msg)
       | .ok t =>
-          match runPriced budget (load (compile t)) with
+          match runTurn budget (load (compile t)) with
           | .halted (.value (.data d)) =>
               let s : Session := { budget, left := budget, phase := .resuming r d }
               advance s.fuel s
@@ -674,7 +674,7 @@ def readLog (src : ByteArray) (budget : Nat) : Except String (List Entry) :=
   match Surface.read src with
   | .error msg => .error ("log: " ++ renderSyntaxError msg)
   | .ok t =>
-      match runPriced budget (load (compile t)) with
+      match runTurn budget (load (compile t)) with
       | .halted (.value (.data (.arr ds))) =>
           match dataEntries (.arr []) 0 ds with
           | .error msg => .error msg
@@ -724,7 +724,7 @@ def readOps (src : ByteArray) (budget : Nat) : Except String (List Op) :=
   match Surface.read src with
   | .error msg => .error ("log: " ++ renderSyntaxError msg)
   | .ok t =>
-      match runPriced budget (load (compile t)) with
+      match runTurn budget (load (compile t)) with
       | .halted (.value (.data (.arr ds))) =>
           match dataOps (.arr []) 0 ds with
           | .error msg => .error msg

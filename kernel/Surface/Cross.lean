@@ -129,7 +129,7 @@ def Guest.takeIn (g : Guest) : Option Guest :=
     | .arr [.nat 0, .nat k, prog, start, .arr held] =>
       match unreify prog, numbers held with
       | some t, some hs =>
-        match runPriced g.budget (load (compile (.app t (.lit start)))) with
+        match runTurn g.budget (load (compile (.app t (.lit start)))) with
         | .halted w =>
           match settleRun g.budget w with
           | some child =>
@@ -342,7 +342,7 @@ def readData (s : String) : Option Data :=
   match Surface.read s.toUTF8 with
   | .error _ => none
   | .ok t =>
-    match runPriced 10000000 (load (compile t)) with
+    match runTurn 10000000 (load (compile t)) with
     | .halted (.value (.data d)) => some d
     | _ => none
 

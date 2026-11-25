@@ -3,14 +3,17 @@
 //! at the answer.
 //!
 //!   reflect                                  the source built in, by reflect_run
-//!   reflect <bytes-file> [step-budget [levels]]
+//!   reflect <bytes-file> [step-budget [levels [space]]]
 //!                                            a program's byte form, by reflect_interp
 //!
 //! In the image the second form is what bytes given at boot start: the layer
 //! names them `/boot/program` and passes the command line's words after it.
 //! The budget defaults to the one built in, and the levels to 1. The budget is
 //! a whole number below 2^64 and the levels a whole number up to the kernel's
-//! bound (`reflect_max_levels`, `Surface.maxLevels`);
+//! bound (`reflect_max_levels`, `Surface.maxLevels`). The space is the cells
+//! the run may make, a whole number below 2^64, and defaults to the kernel's
+//! (`reflect_default_space`, `Reflect.defaultSpace`); a run that passes it
+//! ends in the kernel's own line, not in the machine's memory;
 //! a word that is not a whole number, and a number past these, are refused with
 //! a line of their own and status 2 before the kernel is called.
 
@@ -18,9 +21,10 @@ const program = @import("program");
 
 extern fn initialize_circularKernel_Surface_Host(builtin: u8) *anyopaque;
 extern fn kernel_finish_initialization(result: *anyopaque) u8;
-extern fn reflect_run(source: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64) usize;
-extern fn reflect_interp(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, levels: u32, flags: u8) usize;
+extern fn reflect_run(source: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, space: u64) usize;
+extern fn reflect_interp(program: [*]const u8, length: usize, out: [*]u8, capacity: usize, budget: u64, space: u64, levels: u32, flags: u8) usize;
 extern fn reflect_max_levels(ignored: u32) u32;
+extern fn reflect_default_space(ignored: u32) u64;
 extern fn open(path: [*:0]const u8, flags: c_int) c_int;
 extern fn read(fd: c_int, buf: [*]u8, n: usize) isize;
 extern fn close(fd: c_int) c_int;
@@ -50,11 +54,12 @@ var first: [65536]u8 = undefined;
 const Run = struct {
     input: []const u8,
     budget: u64,
+    space: u64,
     levels: ?u32, // null: source, by reflect_run
 
     fn into(r: Run, out: []u8) usize {
-        if (r.levels) |k| return reflect_interp(r.input.ptr, r.input.len, out.ptr, out.len, r.budget, k, 1);
-        return reflect_run(r.input.ptr, r.input.len, out.ptr, out.len, r.budget);
+        if (r.levels) |k| return reflect_interp(r.input.ptr, r.input.len, out.ptr, out.len, r.budget, r.space, k, 1);
+        return reflect_run(r.input.ptr, r.input.len, out.ptr, out.len, r.budget, r.space);
     }
 };
 
@@ -123,9 +128,9 @@ pub export fn main(argc: c_int, argv: [*]const [*:0]const u8) c_int {
         say("reflect: the kernel did not start\n");
         return 2;
     }
-    var run: Run = .{ .input = program.source, .budget = program.budget, .levels = null };
-    if (argc > 4) {
-        say("reflect: usage: reflect [bytes-file [step-budget [levels]]]\n");
+    var run: Run = .{ .input = program.source, .budget = program.budget, .space = reflect_default_space(0), .levels = null };
+    if (argc > 5) {
+        say("reflect: usage: reflect [bytes-file [step-budget [levels [space]]]]\n");
         return 2;
     }
     if (argc > 1) {
@@ -155,6 +160,17 @@ pub export fn main(argc: c_int, argv: [*]const [*:0]const u8) c_int {
                 say("reflect: the levels must be at most ");
                 say(decimal(&digits, most));
                 say("\n");
+                return 2;
+            },
+        };
+        if (argc > 4) run.space = switch (number(argv[4], @import("std").math.maxInt(u64))) {
+            .value => |v| v,
+            .not_number => {
+                say("reflect: the space must be a whole number\n");
+                return 2;
+            },
+            .too_large => {
+                say("reflect: the space must be below 18446744073709551616\n");
                 return 2;
             },
         };

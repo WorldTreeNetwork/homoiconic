@@ -14,6 +14,8 @@ inductive RunReply where
   | wrong
   | fault
   | unrepresentable
+  /-- The run passed its space, or its answer is too large to write within it. -/
+  | space
   deriving Repr
 
 /-- Tag 6 is an absent machine-value encoding, including a `.value` whose
@@ -29,6 +31,7 @@ def runReplyData : RunReply → Data
   | .wrong => .arr [.nat 4]
   | .fault => .arr [.nat 5]
   | .unrepresentable => .arr [.nat 6]
+  | .space => .arr [.nat 7]
 
 def runReplyBytes (r : RunReply) : ByteArray := write (runReplyData r)
 
@@ -44,6 +47,7 @@ def readRunReply (b : ByteArray) : Except String RunReply := do
   | .arr [.nat 4] => .ok .wrong
   | .arr [.nat 5] => .ok .fault
   | .arr [.nat 6] => .ok .unrepresentable
+  | .arr [.nat 7] => .ok .space
   | _ => .error "the reply is not a bounded run"
 
 end Wire

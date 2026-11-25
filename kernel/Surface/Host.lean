@@ -17,12 +17,33 @@ private unsafe def copyBytes (_address _length : USize) : ByteArray :=
 @[extern "reflect_store_bytes"]
 private unsafe opaque storeBytes (out capacity : USize) (bytes : @& ByteArray) : USize
 
-/-- C ABI: program pointer and length, output pointer and capacity, step budget.
-    Returns the number of bytes the rendering needs. If that is more than
-    `capacity`, nothing was written and the caller calls again with more room. -/
+/-- Native-only: how many cells `s` holds, each object counted once however
+    often it is held, stopping past `cut` (`reflect_live_cells`, `ffi.c`).
+    Objects are told apart by address, so this is a fact about the runtime's
+    memory and not a function of the value `s`. -/
+@[extern "reflect_live_cells"]
+private unsafe opaque liveCells (s : @& Reflect.State) (cut : USize) : USize
+
+/-- The space a run export gives its run: `cells` to make, and the runtime's
+    count of what a state holds, cut at three quarters of them
+    (`Reflect.Space.bar`), which is as far as `Reflect.runSpace` ever compares
+    it. The kernel library takes the count as a parameter; this is where it is
+    supplied. -/
+private unsafe def spaceOf (cells : UInt64) : Reflect.Space :=
+  ⟨cells.toNat, fun s => (liveCells s (cells.toNat - cells.toNat / 4).toUSize).toNat⟩
+
+/-- C ABI: the space a host gives a run when it is told none
+    (`Reflect.defaultSpace`). The argument is ignored. -/
+@[export reflect_default_space]
+def reflectDefaultSpace (_ : UInt32) : UInt64 := Reflect.defaultSpace.toUInt64
+
+/-- C ABI: program pointer and length, output pointer and capacity, step budget
+    and space, in cells. Returns the number of bytes the rendering needs. If
+    that is more than `capacity`, nothing was written and the caller calls
+    again with more room. -/
 @[export reflect_run]
-unsafe def reflectRun (program length out capacity : USize) (budget : UInt64) : USize :=
-  let text := Surface.runText (copyBytes program length) budget.toNat
+unsafe def reflectRun (program length out capacity : USize) (budget space : UInt64) : USize :=
+  let text := Surface.runText (copyBytes program length) budget.toNat (spaceOf space)
   storeBytes out capacity text.toUTF8
 
 /-- C ABI: program pointer and length, answers pointer and length, output
@@ -46,11 +67,14 @@ unsafe def reflectChannels (program length schedule scheduleLength out capacity 
     (copyBytes schedule scheduleLength) budget.toNat limit.toNat
   storeBytes out capacity text.toUTF8
 
-/-- C ABI: program wire bytes in, bounded-run reply bytes out. Returns how many
-    bytes the reply needs. Writes nothing when they do not fit. -/
+/-- C ABI: program wire bytes in, bounded-run reply bytes out, within `space`
+    cells. Returns how many bytes the reply needs. Writes nothing when they do
+    not fit. -/
 @[export reflect_reply_bytes]
-unsafe def reflectReplyBytes (program length out capacity : USize) (budget : UInt64) : USize :=
-  storeBytes out capacity (Surface.replyBytes (copyBytes program length) budget.toNat)
+unsafe def reflectReplyBytes (program length out capacity : USize) (budget space : UInt64) :
+    USize :=
+  storeBytes out capacity
+    (Surface.replyBytes (copyBytes program length) budget.toNat (spaceOf space))
 
 /-! A guest of a run on two machines (`Surface.Cross`). The guest is a Lean
     value the image holds between calls and cannot look inside, as a kept
@@ -119,23 +143,25 @@ unsafe def reflectAbortAlloc (_: USize) : USize :=
 
 /-- C ABI: as `reflect_run`, for a program given in its byte form. -/
 @[export reflect_run_bytes]
-unsafe def reflectRunBytes (program length out capacity : USize) (budget : UInt64) : USize :=
-  let text := Surface.runBytes (copyBytes program length) budget.toNat
+unsafe def reflectRunBytes (program length out capacity : USize) (budget space : UInt64) :
+    USize :=
+  let text := Surface.runBytes (copyBytes program length) budget.toNat (spaceOf space)
   storeBytes out capacity text.toUTF8
 
 /-- C ABI: as `reflect_run`, but the program runs through `levels`
     interpreters: the closed term `interp` on the program as data, on the
     machine. Level 0 runs the program itself. `flags` bit 0 is set when the
     program is given in its byte form, not as source. Bit 1 is set to write a
-    result that is a text raw, with no quotes and no escapes. -/
+    result that is a text raw, with no quotes and no escapes. `space` is the
+    cells the whole tower may make. -/
 @[export reflect_interp]
-unsafe def reflectInterp (program length out capacity : USize) (budget : UInt64)
+unsafe def reflectInterp (program length out capacity : USize) (budget space : UInt64)
     (levels : UInt32) (flags : UInt8) : USize :=
   let input := copyBytes program length
   let asText := flags &&& 2 == 2
   let text := if flags &&& 1 == 1 then
-      Surface.interpBytes input levels.toNat budget.toNat asText
-    else Surface.interpText input levels.toNat budget.toNat asText
+      Surface.interpBytes input levels.toNat budget.toNat asText (spaceOf space)
+    else Surface.interpText input levels.toNat budget.toNat asText (spaceOf space)
   storeBytes out capacity text.toUTF8
 
 /-- C ABI: the most levels `reflect_interp` runs a program through

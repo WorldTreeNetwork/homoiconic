@@ -25,6 +25,13 @@ if grep -q "^FAIL" "$OUT/scenarios.txt"; then
     exit 1
 fi
 
+# The reply bytes, the two mjolnir holds among them, and the space reply.
+lake env lean WireReplyCheck.lean > "$OUT/reply.txt"
+if grep -q "^FAIL" "$OUT/reply.txt" || [ "$(grep -c "^ok" "$OUT/reply.txt")" -ne 18 ] || grep -q "error" "$OUT/reply.txt"; then
+    cat "$OUT/reply.txt" >&2
+    exit 1
+fi
+
 lake env lean WireCheck.lean > "$OUT/wire.txt"
 if grep -q "^FAIL" "$OUT/wire.txt" || ! grep -q "^ok" "$OUT/wire.txt"; then
     cat "$OUT/wire.txt" >&2
@@ -67,7 +74,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store Reflect/Crossing \
+for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Space Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store Reflect/Crossing \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece Wire/Reply \
               Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Cross Surface/Host; do
     name="$(echo "$module" | tr / -)"
@@ -142,6 +149,57 @@ for levels in "" --interp=1 --interp=2; do
     fi
     echo "run $levels forever.hom 100000000 => $got (peak $kib KiB)"
 done
+# A run has a space limit beside its budget (homoiconic-q59.67): the cells it
+# may make, 4000000 unless one is given after the budget. A recursion whose
+# calls wait, and a loop that builds data, keep what they make; each ends in
+# the kernel's space line and not in the machine's memory. The control beside
+# each is the same run with the limit undone (the largest space there is): it
+# goes on to its budget, so the limit and not the budget is what stopped it.
+SPACE="no result within 4000000 cells"
+UNDONE=18446744073709551615
+printf 'def deep x = [x, ...deep x]\ndeep 0\n' > "$OUT/deep.hom"
+printf 'def build acc = build [0, ...acc]\nbuild []\n' > "$OUT/build.hom"
+spaced() {
+    wanted="$1"; most="$2"; shift 2
+    kib="$(peak_kib "$OUT/run" "$@")"
+    got="$(cat "$OUT/peak.out")"
+    if [ "$got" != "$wanted" ] || [ "$kib" -gt "$most" ]; then
+        echo "run $*: expected '$wanted' under $most KiB, got '$got' at $kib KiB" >&2
+        exit 1
+    fi
+    echo "run $* => $got (peak $kib KiB)"
+}
+spaced "$SPACE" 262144 "$OUT/deep.hom" 100000000
+spaced "$SPACE" 262144 --interp=1 "$OUT/deep.hom" 100000000
+spaced "$SPACE" 262144 "$OUT/build.hom" 100000000
+# Through two interpreters `deep` holds 270046 cells when 100000000 steps end,
+# and `build` through one holds 101274: the budget ends them first, in a few
+# MiB. A smaller space shows the limit at those levels.
+spaced "no result within 100000 cells" 65536 --interp=2 "$OUT/deep.hom" 100000000 100000
+spaced "no result within 100000 cells" 65536 --interp=1 "$OUT/build.hom" 100000000 100000
+spaced "no result within 100000000 steps" 131072 --interp=2 "$OUT/deep.hom" 100000000
+spaced "no result within 100000000 steps" 65536 --interp=1 "$OUT/build.hom" 100000000
+spaced "no result within 100000000 steps" 65536 --interp=2 "$OUT/build.hom" 100000000
+# The limit undone: the same runs go on to the budget.
+expect "$SPACE" "$OUT/deep.hom" 10000000
+expect "no result within 10000000 steps" "$OUT/deep.hom" 10000000 $UNDONE
+expect "no result within 100000 cells" "$OUT/build.hom" 2000000 100000
+expect "no result within 2000000 steps" "$OUT/build.hom" 2000000 $UNDONE
+# An answer is written as the tree it is. Forty cells built by doubling are
+# 2^40 written, and 800000 numbers of 19 digits are more than four bytes for
+# each cell of the space: each is refused before anything is written. 100000
+# such numbers are written.
+printf 'def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\ndbl [0] 40\n' > "$OUT/double.hom"
+spaced "$SPACE" 65536 "$OUT/double.hom"
+spaced "$SPACE" 65536 --interp "$OUT/double.hom"
+printf 'def b m acc =\n  case m\n    0 -> acc\n    k + 1 -> b k [9000000000000000000, ...acc]\n\nb 800000 []\n' > "$OUT/numbers.hom"
+spaced "$SPACE" 262144 "$OUT/numbers.hom"
+printf 'def b m acc =\n  case m\n    0 -> acc\n    k + 1 -> b k [9000000000000000000, ...acc]\n\nb 100000 []\n' > "$OUT/fewer.hom"
+"$OUT/run" "$OUT/fewer.hom" > "$OUT/fewer.txt"
+awk 'BEGIN { printf "["; for (i = 1; i < 100000; i++) printf "9000000000000000000, "; printf "9000000000000000000]\n" }' > "$OUT/fewer.expected"
+cmp "$OUT/fewer.expected" "$OUT/fewer.txt"
+echo "a run that passes its space ends in the kernel's line, and an answer too large to write does"
+
 # An answer longer than the command's first buffer is printed in full: every
 # byte is compared.
 printf 'def fill n =\n  case n\n    0 -> []\n    m + 1 -> [n, ...fill m]\n\nfill 20000\n' > "$OUT/long.hom"
@@ -151,8 +209,9 @@ cmp "$OUT/long.expected" "$OUT/long.txt"
 
 # A call the command cannot make: exit 2, nothing on standard output, and
 # exactly the one expected line on standard error, byte for byte.
-USAGE="usage: run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget]   (default budget: 100000000 machine steps)"
+USAGE="usage: run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget [space]]   (default budget: 100000000 machine steps; default space: the kernel's, in cells)"
 BUDGET="run: the step budget must be a whole number"
+ROOM="run: the space must be a whole number"
 NEWLINE="x
 y"
 refuse() {
@@ -169,7 +228,10 @@ refuse() {
     echo "run refused: $wanted"
 }
 refuse "$USAGE"
-refuse "$USAGE" "$EXAMPLES/append.hom" 1 extra
+refuse "$USAGE" "$EXAMPLES/append.hom" 1 2 extra
+refuse "$ROOM" "$EXAMPLES/append.hom" 1 extra
+refuse "$ROOM" "$EXAMPLES/append.hom" 1 -1
+refuse "$ROOM" "$EXAMPLES/append.hom" 1 18446744073709551616
 refuse "run: cannot read the program file: FileNotFound" "$EXAMPLES/missing.hom"
 refuse "run: cannot read the program file: FileNotFound" "$EXAMPLES/$NEWLINE"
 refuse "run: cannot read the program file: IsDir" "$EXAMPLES"

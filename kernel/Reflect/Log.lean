@@ -158,7 +158,7 @@ def handleRun (budget : Nat) : Option MVm → Entry → Option MVm
       | none => none
 
 def bootRun (budget : Nat) (p : Term) : Option MVm :=
-  match runPriced budget (load (compile p)) with
+  match runTurn budget (load (compile p)) with
   | .halted w =>
     match settleRun budget w with
     | some st => some ⟨st, []⟩
