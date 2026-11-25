@@ -1,0 +1,45 @@
+1/3 pvclock.test.time runs forward far past 2^32 shifted ticks...OK
+2/3 pvclock.test.a 3 GHz counter gives a second per 3e9 ticks, for a day...OK
+3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
+All 3 tests passed.
+  admission: no flood 1 ms, flood round 0 2 ms
+  admission: no flood 1 ms, flood round 1 2 ms
+  admission: no flood 1 ms, flood round 2 2 ms
+  admission: no flood 1 ms, flood round 3 2 ms
+  admission: no flood 1 ms, flood round 4 2 ms
+  admission: on-path replay delayed the next connection to 2522 ms
+a connection is 70360 bytes; the table of 12 is 844736 bytes
+quic self ok
+built /home/dorje/hom-6662086/unikernel/out-net/reflect-net.elf
+ok   factorial reply is the known integer
+ok   factorial reply reads and writes the same bytes
+ok   forever at 5000 steps is the budget reply
+ok   factorial at 100000000 steps is 82008200c24e0d13f6370f96865df5dd54000000
+ok   forever at 5000 steps is 8101
+ok   the space reply is 8107 and reads back
+ok   a reply tag past 7 is refused
+ok   a recursion that waits is the space reply
+ok   a loop that builds is the space reply
+ok   out of steps before out of space is the budget reply
+ok   an answer built by doubling is the space reply
+ok   a function from thirty definitions is the space reply
+ok   functions over one environment are counted where it is held
+ok   a function from two definitions is its value
+ok   a 40-digit product at 200 steps is the budget reply
+ok   a 40-digit product at 200000 steps is the product
+ok   bytes that are not a program are refused
+ok   a function value round-trips
+ok   a trailing byte is refused
+space reply ok: a recursion that waits
+space reply ok: a loop that builds
+space reply ok: an answer built by doubling
+space reply ok: a function from thirty definitions
+deep ok: data a million deep compared with itself
+deep ok: data a million deep as the answer is too large for a datagram
+guest cases ok 20
+abort named
+unikernel/check-net.sh: line 360: wait: pid 3793498 is not a child of this shell
+limit undone: a chain of 300000 functions is too large for a datagram
+limit undone: the guest ran out of memory
+unikernel/check-net.sh: line 443: wait: pid 3793517 is not a child of this shell
+network check passed
