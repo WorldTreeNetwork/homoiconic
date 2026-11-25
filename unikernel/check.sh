@@ -68,7 +68,7 @@ same() {
 
 # given <bytes-file> <command-line>: boot the image as it is, with a file handed
 # to it at boot, through the documented launch (given.sh). The command line is
-# `[step-budget [levels]]`, split into words as the launch takes them.
+# `[step-budget [levels [space]]]`, split into words as the launch takes them.
 # GIVEN_LIMIT, when set, is the time limit instead of LIMIT: an answer of
 # megabytes takes minutes to leave through the serial port.
 given() {
@@ -183,11 +183,12 @@ real="$(nm "$OUT/reflect.elf" | awk '$3 == "initialize_libuv" { print $1 }')"
 mine="$(nm "$OUT/reflect.elf" | awk '$3 == "main.initialize_libuv" { print $1 }')"
 [ -n "$real" ] && [ "$real" = "$mine" ] || fail "initialize_libuv is not the program's empty one"
 echo "ok   the event loop's start is the empty one"
-# The layer names nothing in the kernel, and the program names five things in
-# it: the initializers, the two runs, and the kernel's bound on levels.
+# The layer names nothing in the kernel, and the program names six things in
+# it: the initializers, the two runs, the kernel's bound on levels and its
+# default space.
 if nm -u "$OUT/kernel.o" | awk '{ print $2 }' | grep -q "^reflect_\|^circularKernel\|^lean_\|^l_"; then fail "the layer refers to the kernel"; fi
 uses="$(nm -u "$OUT/main.o" | awk '{ print $2 }' | grep "^reflect_\|circularKernel\|^kernel_\|^lean_\|^l_" | sort | tr '\n' ' ')"
-[ "$uses" = "initialize_circularKernel_Surface_Host kernel_finish_initialization reflect_interp reflect_max_levels reflect_run " ] ||
+[ "$uses" = "initialize_circularKernel_Surface_Host kernel_finish_initialization reflect_default_space reflect_interp reflect_max_levels reflect_run " ] ||
     fail "the program refers to: $uses"
 echo "ok   the program calls reflect_run and reflect_interp and nothing else that evaluates or reads"
 (cd "$OUT" && sha256sum --quiet -c objects.sha256) || fail "the objects are not the ones compiled at the start"
@@ -219,6 +220,62 @@ for levels in 0 1 2; do
     same_given "bytes at boot: forever at the default budget through $levels"
     says "forever at the default budget through $levels" "no result within 100000000 steps"
 done
+# A run has a space limit beside its budget (homoiconic-q59.67): the cells it
+# may make, 4000000 unless the third word says otherwise. A recursion whose
+# calls wait on each other and a loop that builds data keep what they make.
+# Each used to end the 512 MiB machine in `INTERNAL PANIC: out of memory`
+# inside the default budget; each now ends in the kernel's line, the same as
+# the Linux process's.
+printf 'def deep x = [x, ...deep x]\ndeep 0\n' > "$OUT/deep-run.hom"
+printf 'def build acc = build [0, ...acc]\nbuild []\n' > "$OUT/build.hom"
+bytes "$OUT/deep-run.hom" "$OUT/deep-run.bytes" deep
+bytes "$OUT/build.hom" "$OUT/build.bytes" build
+for levels in 0 1; do
+    given "$OUT/deep-run.bytes" "100000000 $levels"
+    same_given "bytes at boot: a recursion that waits ends out of space through $levels"
+    says "a recursion that waits through $levels" "no result within 4000000 cells"
+done
+given "$OUT/build.bytes" "100000000 0"; same_given "bytes at boot: a loop that builds ends out of space"
+says "a loop that builds" "no result within 4000000 cells"
+# Through two interpreters `deep` holds 270046 cells when 100000000 steps end,
+# and `build` through one holds 101274 and through two 4974: the budget ends
+# them first, in a few MiB. A smaller space shows the limit at those levels.
+given "$OUT/deep-run.bytes" "100000000 2"; same_given "bytes at boot: a recursion that waits, through 2, ends in its budget"
+says "a recursion that waits through 2" "no result within 100000000 steps"
+given "$OUT/deep-run.bytes" "100000000 2 100000"; same_given "bytes at boot: a recursion that waits, through 2, in 100000 cells"
+says "a recursion that waits through 2 in 100000 cells" "no result within 100000 cells"
+for levels in 1 2; do
+    given "$OUT/build.bytes" "100000000 $levels"; same_given "bytes at boot: a loop that builds, through $levels, ends in its budget"
+    says "a loop that builds through $levels" "no result within 100000000 steps"
+done
+given "$OUT/build.bytes" "100000000 1 100000"; same_given "bytes at boot: a loop that builds, through 1, in 100000 cells"
+says "a loop that builds through 1 in 100000 cells" "no result within 100000 cells"
+# The limit undone, with the largest space there is: the same recursion ends
+# the machine as it used to. The limit, not the budget, is what stops it.
+given "$OUT/deep-run.bytes" "100000000 0 18446744073709551615"
+printf 'INTERNAL PANIC: out of memory\nreflect: exit 1\n' > "$OUT/wanted.txt"
+cmp "$OUT/wanted.txt" "$OUT/serial.log" || fail "deep with the limit undone: the machine did not run out of memory"
+echo "ok   bytes at boot: with the limit undone the recursion that waits ends in out of memory"
+# An answer is written as the tree it is, which can be far more than it holds.
+# Forty cells built by doubling are 2^40 written; 800000 numbers of 19 digits
+# are more than four bytes written for each cell; each is refused before
+# anything is written.
+printf 'def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\ndbl [0] 40\n' > "$OUT/double.hom"
+bytes "$OUT/double.hom" "$OUT/double.bytes" double
+for levels in 0 1; do
+    given "$OUT/double.bytes" "100000000 $levels"; same_given "bytes at boot: an answer built by doubling, through $levels"
+    says "an answer built by doubling through $levels" "no result within 4000000 cells"
+done
+printf 'def b m acc =\n  case m\n    0 -> acc\n    k + 1 -> b k [9000000000000000000, ...acc]\n\nb 800000 []\n' > "$OUT/numbers.hom"
+bytes "$OUT/numbers.hom" "$OUT/numbers.bytes" numbers
+given "$OUT/numbers.bytes" "100000000 0"; same_given "bytes at boot: 800000 numbers of 19 digits are too much to write"
+says "800000 numbers of 19 digits" "no result within 4000000 cells"
+# A text of 1200000 characters, its code points kept, and one more array made
+# of it: the array an operation makes exists before it is charged.
+printf 'def fill n acc =\n  case n\n    0 -> acc\n    m + 1 -> fill m [97, ...acc]\n\nlet t = text (fill 1200000 [])\nlet c = codes t\n[c, [0, ...t]]\n' > "$OUT/pieces.hom"
+bytes "$OUT/pieces.hom" "$OUT/pieces.bytes" pieces
+given "$OUT/pieces.bytes" "100000000 0"; same_given "bytes at boot: a text taken apart twice and kept"
+says "a text taken apart twice" "no result within 4000000 cells"
 # The levels on the command line are the ones that count: 10000 steps are
 # enough for factorial itself and not through one interpreter, and 100000 are
 # enough through one and not through two.
@@ -269,6 +326,12 @@ given "$OUT/texts.bytes" ""; same_given "bytes at boot: a literal array of 20971
 { printf '\202\002\172'; be32 $((limit - 7)); head -c $((limit - 7)) /dev/zero | tr '\0' '\n'; } > "$OUT/lines.bytes"
 given "$OUT/lines.bytes" ""; same_given "bytes at boot: a literal text of 2097145 line ends"
 unset GIVEN_LIMIT
+# The recursion behind a literal of 2 MiB: what the program's bytes cost is on
+# top of what the run makes, and the two together fit the machine.
+{ printf '\203\000\202\001'; cat "$OUT/deep-run.bytes"; printf '\202\002\232'; be32 $((limit - 11 - $(wc -c < "$OUT/deep-run.bytes"))); head -c $((limit - 11 - $(wc -c < "$OUT/deep-run.bytes"))) /dev/zero | tr '\0' '\140'; } > "$OUT/behind.bytes"
+[ "$(wc -c < "$OUT/behind.bytes")" = "$limit" ] || fail "the recursion behind a literal is not 2 MiB"
+given "$OUT/behind.bytes" "100000000 0"; same_given "bytes at boot: a recursion that waits behind a literal of 2 MiB"
+says "a recursion behind a literal of 2 MiB" "no result within 4000000 cells"
 # A program of 2 MiB is read, lifted and started through one interpreter
 # within the machine: a list of 419429 zeros written out, given 1000 steps.
 # (What a run takes after that grows with its steps, not its bytes.)
@@ -296,6 +359,8 @@ given "$OUT/factorial.bytes" "18446744073709551616"; refused_given "bytes at boo
 given "$OUT/factorial.bytes" "1000 x"; refused_given "bytes at boot: levels that are not a number" "reflect: the levels must be a whole number"
 given "$OUT/factorial.bytes" "1000 9"; refused_given "bytes at boot: nine levels" "reflect: the levels must be at most 8"
 given "$OUT/factorial.bytes" "1000 4294967296"; refused_given "bytes at boot: 2^32 levels" "reflect: the levels must be at most 8"
+given "$OUT/factorial.bytes" "1000 0 much"; refused_given "bytes at boot: a space that is not a number" "reflect: the space must be a whole number"
+given "$OUT/factorial.bytes" "1000 0 18446744073709551616"; refused_given "bytes at boot: a space of 2^64" "reflect: the space must be below 18446744073709551616"
 # A command line is kept whole up to 1023 bytes, and one longer is refused, not cut.
 words="$(awk 'BEGIN { for (i = 0; i < 1019; i++) printf "0"; printf "5000" }')"
 [ "${#words}" = 1023 ] || fail "the long command line is not 1023 bytes"

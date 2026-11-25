@@ -1,6 +1,7 @@
 #!/bin/sh
-# Real guest: ping, factorial, a budget reply, factorial again, bad frames,
-# an allocation abort, and the one-program image check is separate.
+# Real guest: ping, factorial, a budget reply, factorial again, runs that pass
+# their space, bad frames, an allocation abort, and a guest with the space
+# limit undone. The one-program image check is separate.
 set -eu
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$HERE/.." && pwd)"
@@ -154,8 +155,9 @@ def must(app, kind, status, ident, budget):
 def prog(path):
     return subprocess.check_output([reply, "source", path])
 
-def linux_run(budget, blob):
-    p = subprocess.run([reply, "run", str(budget), "/dev/stdin"], input=blob, capture_output=True)
+def linux_run(budget, blob, space=None):
+    words = [reply, "run", str(budget), "/dev/stdin"] + ([str(space)] if space is not None else [])
+    p = subprocess.run(words, input=blob, capture_output=True)
     if p.returncode != 0:
         sys.exit(p.stderr.decode())
     return p.stdout
@@ -187,6 +189,44 @@ if b4 != linux_run(100000000, fore) or b4 != bytes.fromhex("8101"):
 b5 = must(exchange(0, 0, 15, 100000000, fact_bytes, wait=30), 1, 0, 15, 100000000)
 if b5 != body:
     sys.exit("factorial after forever differs")
+# A run has a space limit beside its budget (homoiconic-q59.67). A recursion
+# whose calls wait on each other and a loop that builds data keep what they
+# make; within the largest budget each used to end the guest in `INTERNAL
+# PANIC: out of memory`, which powers it off. Each is now the space reply,
+# `81 07`, equal to the Linux export's, and the guest answers the next
+# request. So are an answer that is 2^40 bytes written from forty cells, and a
+# function whose byte form writes thirty environments each inside the last.
+def source(name, text):
+    path = "/tmp/uk-" + name + ".hom"
+    open(path, "w").write(text)
+    return prog(path)
+
+hostile = [
+    ("a recursion that waits", "def deep x = [x, ...deep x]\ndeep 0\n"),
+    ("a loop that builds", "def build acc = build [0, ...acc]\nbuild []\n"),
+    ("an answer built by doubling",
+     "def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\ndbl [0] 40\n"),
+    ("a function from thirty definitions",
+     "def f0 x = x\n" + "".join(f"def f{i} x = f{i - 1} x\n" for i in range(1, 30)) + "fn x -> f29 x\n"),
+]
+ident = 30
+for what, text in hostile:
+    blob = source("space", text)
+    got = must(exchange(0, 0, ident, 100000000, blob, wait=300), 1, 0, ident, 100000000)
+    if got != bytes.fromhex("8107") or got != linux_run(100000000, blob):
+        sys.exit(f"{what}: the guest gave {got.hex()}, not the space reply")
+    after = must(exchange(0, 0, ident + 1, 100000000, fact_bytes, wait=30), 1, 0, ident + 1, 100000000)
+    if after != body:
+        sys.exit(f"factorial after {what} differs")
+    print("space reply ok:", what)
+    ident += 2
+# The Linux export with the limit undone goes on to its budget on a shorter
+# run: the space, not the budget, is what gave `81 07` above.
+deep_blob = source("space", hostile[0][1])
+if linux_run(10000000, deep_blob) != bytes.fromhex("8107"):
+    sys.exit("the recursion at 10000000 steps is not the space reply")
+if linux_run(10000000, deep_blob, 18446744073709551615) != bytes.fromhex("8101"):
+    sys.exit("with the limit undone the recursion at 10000000 steps is not the budget reply")
 big_path = "/tmp/uk-big.hom"
 open(big_path, "w").write(
     "def factorial n =\n  case n\n    0 -> 1\n    m + 1 -> mul n (factorial m)\n\nfactorial 1200\n"
@@ -301,4 +341,52 @@ if grep -q "reflect: ready" "$OUT/serial.log"; then
     count=$(grep -c "reflect: ready" "$OUT/serial.log" || true)
     [ "$count" = 1 ]
 fi
+
+# The space limit undone: a guest told `reflect.space=` the largest space
+# there is runs the recursion until its memory is gone, says so, and answers
+# nothing more. This is what one small message did before the limit.
+pid=$(boot "reflect.space=18446744073709551615")
+python - "$TAP" "$OUT/serial.log" "$OUT/reply" <<'PY'
+import socket, struct, subprocess, sys, time, os
+tap, serial_path, reply = sys.argv[1:]
+end = time.time() + 40
+while time.time() < end:
+    if os.path.exists(serial_path) and "reflect: ready " in open(serial_path).read():
+        break
+    time.sleep(0.05)
+else:
+    sys.exit("the guest with the limit undone was never ready")
+s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
+s.bind((tap, 0))
+s.settimeout(2)
+host_mac = s.getsockname()[4]
+guest_ip = bytes([192,168,249,2]); host_ip = bytes([192,168,249,1])
+s.send(b"\xff"*6 + host_mac + b"\x08\x06" + b"\x00\x01\x08\x00\x06\x04\x00\x01" + host_mac + host_ip + b"\x00"*6 + guest_ip)
+s.recv(2048)
+def csum(data):
+    if len(data)%2: data += b"\x00"
+    t = sum(struct.unpack("!%dH"%(len(data)//2), data))
+    while t>>16: t=(t&0xffff)+(t>>16)
+    return (~t)&0xffff
+open("/tmp/uk-undone.hom", "w").write("def deep x = [x, ...deep x]\ndeep 0\n")
+blob = subprocess.check_output([reply, "source", "/tmp/uk-undone.hom"])
+app = b"RFL1" + bytes([0,0,0,0]) + (40).to_bytes(8,"big") + (100000000).to_bytes(8,"big") + blob
+ulen=8+len(app); ip=bytearray(20); ip[0]=0x45; ip[2:4]=struct.pack("!H", 20+ulen); ip[8]=64; ip[9]=17
+ip[12:16]=host_ip; ip[16:20]=guest_ip; ip[10:12]=struct.pack("!H", csum(ip))
+u=bytearray(ulen); u[0:2]=struct.pack("!H", 1); u[2:4]=struct.pack("!H", 4444); u[4:6]=struct.pack("!H", ulen); u[8:]=app
+pseudo=host_ip+guest_ip+b"\x00\x11"+struct.pack("!H", ulen)
+u[6:8]=struct.pack("!H", csum(pseudo+u) or 0xffff)
+s.send(bytes.fromhex("020000000002")+host_mac+b"\x08\x00"+bytes(ip)+bytes(u))
+end = time.time() + 300
+while time.time() < end:
+    if "out of memory" in open(serial_path).read():
+        break
+    time.sleep(0.5)
+else:
+    sys.exit("with the limit undone the guest did not run out of memory\n" + open(serial_path).read())
+print("limit undone: the guest ran out of memory")
+PY
+wait "$pid" || true
+grep -q "INTERNAL PANIC: out of memory" "$OUT/serial.log"
+[ "$(grep -c "reflect: ready" "$OUT/serial.log")" = 1 ]
 echo "network check passed"
