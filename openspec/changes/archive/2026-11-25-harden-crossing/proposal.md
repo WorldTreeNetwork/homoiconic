@@ -1,6 +1,6 @@
 # Harden the crossing: own budgets, a bound on what a guest holds, a root of each state
 
-> **ACTIVE BUILD** 2026-11-25. Advise read (Opus): send-back, answered in `design.md`. Beads `homoiconic-q59.79`, `homoiconic-q59.71`, `homoiconic-q59.69`. Asked by Duke, through the orchestrator, as one change.
+> **FOLDED** 2026-11-25 into `openspec/specs/crossing/spec.md`, `unikernel-net` and `zig-host`. Was ACTIVE BUILD, 2026-11-25. Advise read (Opus): send-back, answered in `design.md`. Beads `homoiconic-q59.79`, `homoiconic-q59.71`, `homoiconic-q59.69`. Asked by Duke, through the orchestrator, as one change.
 
 **Rigor:** architecture (new note kinds and a ledger in `Reflect`, theorems extended, a new record form, a guest protocol change in trusted image code).
 

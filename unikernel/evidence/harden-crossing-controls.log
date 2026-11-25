@@ -1,0 +1,174 @@
+unchanged: 85 ok, 0 FAIL
+undone: the parent link is not checked: 3 FAIL
+    FAIL an entry moved
+    FAIL an entry dropped
+    FAIL an entry repeated
+  ok   `an entry dropped` fails with the check undone
+  ok   `an entry repeated` fails with the check undone
+undone: neither the parent link nor the order is checked: 4 FAIL
+    FAIL an entry moved
+    FAIL an entry dropped
+    FAIL an entry repeated
+    FAIL an order that is not the place
+  ok   `an entry moved` fails with the check undone
+  ok   `an entry dropped` fails with the check undone
+  ok   `an entry repeated` fails with the check undone
+  ok   `an order that is not the place` fails with the check undone
+undone: a mark with no order is read as a link: 1 FAIL
+    FAIL a mark with no order
+  ok   `a mark with no order` fails with the check undone
+undone: the head is not checked: 1 FAIL
+    FAIL the last entry dropped
+  ok   `the last entry dropped` fails with the check undone
+undone: a crossing can be taken whatever its state: 1 FAIL
+    FAIL a taking repeated
+  ok   `a taking repeated` fails with the check undone
+undone: an acknowledgement needs no taking (honest logs then stop combining): 34 FAIL
+    FAIL race, oldest taken first: accepted
+    FAIL race, oldest taken first: schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 1, 0], [2, 2, 0]]
+    FAIL race, oldest taken first: process 0: [1, 2]; holds [#0]
+    FAIL race, newest taken first: accepted
+    FAIL race, newest taken first: schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 2, 0], [2, 1, 0]]
+    FAIL race, newest taken first: process 0: [2, 1]; holds [#0]
+    FAIL a function crosses and keeps running: accepted
+    FAIL a function crosses and keeps running: process 0: [20, 22]; holds [#0]
+    FAIL a function crosses and keeps running: process 1: 7; holds [#0]
+    FAIL a function crosses and keeps running: process 2: 9; holds [#0]
+    FAIL a function crosses and keeps running: places b: [1, 2]
+    FAIL a name crosses in a message: accepted
+    FAIL a name crosses in a message: process 0: 5; holds [#2, #0]
+    FAIL a name crosses in a message: process 1: []; holds [#2, #0]
+    FAIL a send put out is held from a local receiver: accepted
+    FAIL a send put out is held from a local receiver: process 0: 1; holds [#0]
+    FAIL a send put out is held from a local receiver: process 1: []; holds [#0]
+    FAIL a send put out is held from a local receiver: process 2: waiting on [2, #0]; holds [#0]
+    FAIL the acknowledgements in another order
+    FAIL and so with the takings the other way
+    FAIL a resealed record is read
+    FAIL a local event repeated
+    FAIL the takings in another order
+    FAIL an answer from outside in a log
+    FAIL a name not handed over
+    FAIL a process not reported
+    FAIL and the two replay
+    FAIL processes started on the other guest that each hold a turn's worth: accepted
+    FAIL and the other guest is full
+    FAIL counts recorded where the ledger was spent: accepted
+    FAIL a count dropped
+    FAIL a count where nothing was spent
+    FAIL a count past the bar
+    FAIL full within the bar
+undone: a taken crossing may stay unacknowledged: 1 FAIL
+    FAIL an acknowledgement dropped
+  ok   `an acknowledgement dropped` fails with the check undone
+undone: a crossing number need not be the count: 1 FAIL
+    FAIL a crossing number that is not the count
+  ok   `a crossing number that is not the count` fails with the check undone
+undone: a held process may be named: 1 FAIL
+    FAIL an entry that names a held process
+  ok   `an entry that names a held process` fails with the check undone
+undone: a schedule that stops is taken as run: 1 FAIL
+    FAIL a local event repeated
+  ok   `a local event repeated` fails with the check undone
+undone: the processes are not compared: 2 FAIL
+    FAIL a name not handed over
+    FAIL a different run of the same program, its state as it was, re-signed
+  ok   `a name not handed over` fails with the check undone
+  ok   `a different run of the same program, its state as it was, re-signed` fails with the check undone
+undone: the number of processes is not compared: 1 FAIL
+    FAIL a process not reported
+  ok   `a process not reported` fails with the check undone
+undone: the names are not compared: 1 FAIL
+    FAIL another peer
+  ok   `another peer` fails with the check undone
+undone: the budgets are not compared: 2 FAIL
+    FAIL another budget
+    FAIL another turn space
+  ok   `another budget` fails with the check undone
+  ok   `another turn space` fails with the check undone
+undone: a held sender is not hidden when a local event is chosen: 4 FAIL
+    FAIL a send put out is held from a local receiver: accepted
+    FAIL a send put out is held from a local receiver: process 0: 1; holds [#0]
+    FAIL a send put out is held from a local receiver: process 1: []; holds [#0]
+    FAIL a send put out is held from a local receiver: process 2: waiting on [2, #0]; holds [#0]
+  ok   `a send put out is held from a local receiver` fails with the check undone
+undone: a new channel is named as one machine names it: 2 FAIL
+    FAIL a name crosses in a message: process 0: 5; holds [#2, #0]
+    FAIL a name crosses in a message: process 1: []; holds [#2, #0]
+  ok   `a name crosses in a message` fails with the check undone
+undone: the peer's numbers are taken as they are: 7 FAIL
+    FAIL a record is of form 2 and says what it ran with and its own limits
+    FAIL another budget
+    FAIL another turn space
+    FAIL a record that asks more than this check runs
+    FAIL a budget that stops the first turn: nothing is recorded
+    FAIL a peer announces a huge budget: the guest runs with its own
+    FAIL a lower budget after the guest ran is not taken 
+  ok   `a peer announces a huge budget: the guest runs with its own` fails with the check undone
+undone: the guest given the program begins before it hears the peer: 1 FAIL
+    FAIL the guest given the program does not begin before it hears the peer 
+  ok   `the guest given the program does not begin before it hears the peer` fails with the check undone
+undone: a budget is not compared with its own limits: 1 FAIL
+    FAIL a budget above its own limits
+  ok   `a budget above its own limits` fails with the check undone
+undone: the check runs whatever a record asks: 1 FAIL
+    FAIL a record that asks more than this check runs
+  ok   `a record that asks more than this check runs` fails with the check undone
+undone: a record's form is not read: 1 FAIL
+    FAIL a record of the old form
+  ok   `a record of the old form` fails with the check undone
+undone: the guest keeps no ledger: 6 FAIL
+    FAIL a process that holds more and more: accepted
+    FAIL and its guest is full
+    FAIL processes started on the other guest that each hold a turn's worth: accepted
+    FAIL and the other guest is full
+    FAIL counts recorded where the ledger was spent: accepted
+    FAIL an entry after full
+  ok   `and its guest is full` fails with the check undone
+  ok   `and the other guest is full` fails with the check undone
+undone: the walk lets a spent ledger go uncounted: 1 FAIL
+    FAIL a count dropped
+  ok   `a count dropped` fails with the check undone
+undone: the walk takes a count where nothing was spent: 1 FAIL
+    FAIL a count where nothing was spent
+  ok   `a count where nothing was spent` fails with the check undone
+undone: the walk takes a count past the bar: 1 FAIL
+    FAIL a count past the bar
+  ok   `a count past the bar` fails with the check undone
+undone: the walk takes full within the bar: 1 FAIL
+    FAIL full within the bar
+  ok   `full within the bar` fails with the check undone
+undone: the walk takes anything after full: 1 FAIL
+    FAIL an entry after full
+  ok   `an entry after full` fails with the check undone
+undone: the walk has no cap: 3 FAIL
+    FAIL a log at its cap followed by full is accepted 
+    FAIL a log at its cap and not full is refused 
+    FAIL a log at its cap with a count that is not full is refused 
+  ok   `a log at its cap and not full is refused` fails with the check undone
+undone: the walk lets a cap go on: 1 FAIL
+    FAIL a log at its cap with a count that is not full is refused 
+  ok   `a log at its cap with a count that is not full is refused` fails with the check undone
+undone: the queue has no limit: 1 FAIL
+    FAIL a batch of 200 packets: 128 are accepted got 200
+  ok   `a batch of 200 packets: 128 are accepted` fails with the check undone
+undone: packets not counted have no limit: 1 FAIL
+    FAIL a peer that never counts: the guest stops at 128 packets sent 192
+  ok   `a peer that never counts: the guest stops at 128 packets` fails with the check undone
+undone: crossings out have no limit: 1 FAIL
+    FAIL seventy sends for a peer that takes none: 64 are put out asked 70
+  ok   `seventy sends for a peer that takes none: 64 are put out` fails with the check undone
+undone: a line carries no digest: 4 FAIL
+    FAIL a line carries a root
+    FAIL a name not handed over
+    FAIL a function whose form does not fit: the line has the data digest
+    FAIL a different run of the same program, its state as it was, re-signed
+  ok   `a different run of the same program, its state as it was, re-signed` fails with the check undone
+undone: the acknowledgements are not compared with the takings: 3 FAIL
+    FAIL the acknowledgements in another order
+    FAIL and so with the takings the other way
+    FAIL the takings in another order
+  ok   `the acknowledgements in another order` fails with the check undone
+  ok   `and so with the takings the other way` fails with the check undone
+  ok   `the takings in another order` fails with the check undone
+controls ok

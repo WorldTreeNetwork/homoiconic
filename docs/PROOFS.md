@@ -210,19 +210,37 @@ op is an event with an identifier.
 
 A run on two guests. Each guest logs its local events and its halves of the
 crossings; `combine` walks two logs into one schedule, and `accept` replays it.
+Since `harden-crossing` the two guests agree on a step budget and a turn
+space, a guest keeps a ledger of what it made (`Reflect.Hold`), and the check
+replays in the order the merge placed the entries (`traceRun`), charging each
+as its guest did.
 
 | Theorem | Says |
 |---|---|
-| `accepted_network` | A record the check accepts is a run of the one-machine network from the program: the schedule the two logs make leads the program, by direct evaluation, to a configuration whose compiled form is the one the check reports. This is `replay_true` applied to the merge; the check accepts by replaying |
+| `accepted_network` | A record the check accepts is a run of the one-machine network from the program: the schedule the two logs make leads the program, by direct evaluation, to a configuration whose compiled form is the one the check reports, for every turn space and budget the guests agreed on. This is `replayIn_true` applied to the merge; the check accepts by replaying |
 | `combine_merged` | The walk does only what the table of placements allows (`Merged`, a relation defined apart from the order the walk chooses) |
 | `merged_exact` | A walk keeps each guest's log whole and in its order |
 | `merged_once`, `Walk.once` | In a walk no crossing is taken twice |
+| `combineTrace_walk` | The order the check replays in is such a walk, and its events are the schedule `combine` gives |
+| `traceRun_sched` | The check's replay, which charges each entry, is `schedIn` on that schedule when it runs every event: `accepted_network` speaks of what the check ran |
+| `runTurnMade_fst`, `settleMade_fst`, `turnMade_fst`, `beginMade_fst`, `stepMade_fst` | The measured runs a guest and the check charge with are the runs (`runTurnIn`, `settleIn`, `turnIn`, `beginIn`, `stepIn`); `runSpaceLeft_eq_within` runs them with each step's charge capped by its fuel |
+| `hold_stretch` | In a side's ledger the check accepts, the entries from the start or a count up to the next count charged, without the last, at most the credit the stretch began with |
+| `hold_count` | A count the guest went on from is at most three quarters of its hold, and the next stretch begins with the hold less the count |
+| `hold_full` | After `full` come only acknowledgements, at most `outLimit` |
+| `hold_entries` | A side the check accepts has at most `entryLimit + outLimit + 2` entries |
 
-Axioms: `propext`, and `Quot.sound` for the first (`kernel/CrossingContract.lean`).
+The channel soundness theorems (`settleIn_sound` to `replayIn_true`) hold for
+every turn space; the old statements at `turnSpace` follow from them.
+Axioms: `propext`, `Quot.sound`, and `Classical.choice` for
+`runSpaceLeft_eq_within` (`kernel/CrossingContract.lean`).
 Nothing is proved of a guest: that two guests following `Surface.Cross` produce
-logs that combine, and that the replay ends where they report, is tested by
-`kernel/CrossCheck.lean` and on two real guests by `unikernel/check-wire.sh`.
-That the walk finds a schedule whenever the table allows one is not proved.
+logs that combine, that the replay ends where they report, and that the
+replay's charges are the guest's, is tested by `kernel/CrossCheck.lean` and on
+two real guests by `unikernel/check-wire.sh`. That the walk finds a schedule
+whenever the table allows one is not proved. A guest's counts (`held m`,
+`full m`) are its runtime's and are not verified: the check verifies where
+they are, not what they say. What a guest that lies can still hand over is in
+the design of `harden-crossing`, D-3.
 
 ### Stored state
 
@@ -370,9 +388,9 @@ theorems; `advance` is tested against it.
   bytes, the allocator, the walk's own table and the printer are measured
   (`unikernel/README.md`). P3 as stated, a bound linear in steps, is false:
   one step of `cons` onto a text makes cells without bound. The lazy machine
-  of a kept session has no space limit (`homoiconic-q59.70`), and a guest of
-  a crossing bounds each turn but not what it holds between turns
-  (`homoiconic-q59.71`). How deep data, programs, code and functions nest is
+  of a kept session has no space limit (`homoiconic-q59.70`). A guest of a
+  crossing bounds what it holds by a ledger of what it made and the runtime's
+  count when the ledger is spent (`harden-crossing`, `hold_stretch`). How deep data, programs, code and functions nest is
   bounded by memory and the space limit, not by the native stack: every
   function the compiled kernel runs on them is a walk proved equal to its
   definition (see Walks, `homoiconic-q59.72`). The source reader is not: it
