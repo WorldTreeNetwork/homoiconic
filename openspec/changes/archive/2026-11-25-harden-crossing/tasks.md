@@ -8,6 +8,6 @@
 - [x] `kernel/CrossCheck.lean`: 85 checks, every test of design D-7 marked Lean; `kernel/cross-controls.py`: 34 controls, each test fails with its check undone, `controls ok` (`unikernel/evidence/harden-crossing-controls.log`)
 - [x] `unikernel/net.zig`: `reflect.budget=`, `reflect.turn=`, `reflect.hold=`; the record buffer from the heap (a static 16 MiB one kept QUIC from answering); `unikernel/cross-check.zig`: `me` after `form`, larger buffers (`788c69f`, `0a5acac`)
 - [x] `unikernel/check-wire.sh`: every test of design D-7 marked wire; the hold undone ends in `INTERNAL PANIC: out of memory`; passed on morphie on a scratch copy before the final run (`0a5acac`)
-- [ ] morphie: the six scripts on a clean export of the folded tree; logs and hashes in `unikernel/evidence/`
+- [x] morphie: `build.sh`, `build-net.sh`, `check.sh` (88 `ok`), `check-net.sh` (19), `check-quic.sh` (29), `check-wire.sh` (46) on a `git archive` export of `73fefe9` into `~/hom-73fefe9`, each exit 0; `reflect-net.elf` `3ba11a46…3424254`; logs `unikernel/evidence/harden-crossing-73fefe9-*.log`, `run-73fefe9.txt`; `source.sha256`, `objects.sha256`
 - [x] A bead for more than two guests: `homoiconic-q59.83`
 - [x] Fold: specs (`crossing`, `unikernel-net`, `zig-host`), `ARCHITECTURE.md`, `docs/PROOFS.md`, `docs/LEARNINGS.md`

@@ -627,6 +627,38 @@ old kernel filled the stack are in `evidence/q59.72-measurements.log`.
 `host/check.sh` passed on the Mac, with output identical to the old tree's
 apart from the new lines.
 
+**2026-11-25 (UTC), the crossing hardened (`harden-crossing`: `homoiconic-q59.79`,
+`q59.71`, `q59.69`).** On morphie, Cloud Hypervisor 54.0, tree `73fefe9`
+exported with `git archive` to `~/hom-73fefe9`: `build.sh examples/factorial.hom`,
+`build-net.sh`, `check.sh` (88 `ok`), `check-net.sh` (19), `check-quic.sh` (29)
+and `check-wire.sh` (46, `wire guests ok`) each exited 0. Logs are
+`evidence/harden-crossing-73fefe9-*.log`, exit codes and hashes
+`evidence/run-73fefe9.txt`; `source.sha256` and `objects.sha256` are this
+build's. `reflect-net.elf` is sha256 `3ba11a46…3424254`, the same before and
+after the checks; `reflect.elf` built from factorial is `fbd45c8c…0fba4d4`.
+(Another session extracted the same commit into that directory again while
+`check-wire.sh` ran; the files were byte-identical and only their times moved.)
+New in `check-wire.sh`: a calling guest that allows any budget, and one that
+allows 50000 steps and 300000 cells, each run `cross-reply.hom` and both records
+say what the lower allows (`budget 100000 500000`, `budget 50000 300000`). With
+the default hold of 2000000 cells, `cross-grow-forever.hom` ends `full a: entry
+791, 1500001 cells counted` (the count stops past the bar), `cross-fan.hom`
+under `spawn=far` ends `full b: entry 211`, and `cross-chatter.hom`, a meeting
+loop that holds nothing new, stops at its cap, `full a: entry 60000, 180439
+cells counted`, a record of about 7 MB printed on serial; each record is
+accepted and no guest stopped. `cross-worst.hom` makes the largest local start
+built here on top of 1476097 cells counted, and the guest goes on. The same
+growing process with `reflect.hold=18446744073709551615` ends guest A in
+`INTERNAL PANIC: out of memory`. A run of `cross-hidden.hom` with its two local
+deliveries swapped and signed again is refused at the root of process 0; A's
+record of the `old` run with B's of the `new` run is refused by the order of the
+acknowledgements. A first wire run of `788c69f` failed before any crossing: a
+static 16 MiB record buffer in `.bss` kept QUIC from answering (the host client
+gave up, exit 6); the same build with 256 KiB answered, and the buffer is now
+taken from the heap (`0a5acac`). The 34 controls of `kernel/cross-controls.py`
+are `evidence/harden-crossing-controls.log` (`controls ok`). `host/check.sh`
+passed on the Mac on `788c69f`.
+
 2026-11-25 UTC, on morphie, Cloud Hypervisor 54.0, tree `5107fa8` (add-quic-admission,
 homoiconic-q59.63) exported with `git archive` to `~/hom-5107fa8` and built from
 nothing: `build.sh examples/factorial.hom`, `build-net.sh`, `check-net.sh` (19
