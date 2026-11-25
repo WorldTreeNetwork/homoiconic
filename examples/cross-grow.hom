@@ -1,0 +1,12 @@
+; one process that keeps more on every turn: 300 turns, each making a new
+; channel and keeping a thousand more numbers, then it waits. It holds about
+; a million cells at the end.
+def make n acc =
+  case n
+    0 -> acc
+    m + 1 -> make m [m, ...acc]
+def grow k acc =
+  case k
+    0 -> ask [0] (fn c -> ask [2, c] (fn x -> acc))
+    j + 1 -> ask [0] (fn c -> grow j (make 1000 acc))
+grow 300 []

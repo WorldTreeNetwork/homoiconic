@@ -1,0 +1,14 @@
+; two processes on one guest that pass a message back and forth without end:
+; each turn holds nothing new, but each meeting is an entry of the log, and
+; the log is printed whole. The cap on a log's entries stops it.
+let echo = quote (fn chs ->
+  case chs
+    [a, b] ->
+      (fn self -> self self)
+        (fn self -> ask [2, a] (fn x -> ask [1, b, x] (fn sent -> self self)))
+    _ -> 0)
+ask [0] (fn a ->
+  ask [0] (fn b ->
+    ask [3, echo, [a, b]] (fn started ->
+      (fn self -> self self)
+        (fn self -> ask [1, a, 1] (fn sent -> ask [2, b] (fn x -> self self))))))

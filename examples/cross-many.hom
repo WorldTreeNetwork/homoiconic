@@ -1,0 +1,8 @@
+; seventy processes, each waiting to send on a channel that no process on
+; its guest receives on, so that every send is put out to the other guest.
+let sender = quote (fn ch -> ask [1, ch, 1] (fn sent -> 0))
+def many k ch =
+  case k
+    0 -> ask [0] (fn other -> ask [2, other] (fn x -> x))
+    m + 1 -> ask [3, sender, ch] (fn started -> many m ch)
+ask [0] (fn ch -> many 70 ch)

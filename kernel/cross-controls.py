@@ -15,6 +15,7 @@ print = functools.partial(print, flush=True)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CROSS = "Surface/Cross.lean"
 MIX = "Reflect/Crossing.lean"
+HOLD = "Reflect/Hold.lean"
 
 # (what is undone, file, source, replacement, tests that must fail)
 CONTROLS = [
@@ -67,25 +68,25 @@ CONTROLS = [
      "  | some g => some g",
      ["an entry that names a held process"]),
     ("a schedule that stops is taken as run", CROSS,
-     "          | (_, _, .refused ev) => .error (renderData (eventData ev) ++ \" cannot happen\")",
-     "          | (_, cfg, .refused _) => pure (renderProcs 0 cfg.procs)",
+     "  | .refused ev => .error (renderData (eventData ev) ++ \" cannot happen\")",
+     "  | .refused _ => pure ()",
      ["a local event repeated"]),
     ("the processes are not compared", CROSS,
-     "      if procLine q == l then compare who cfg (i + 1) gs ls",
-     "      if true then compare who cfg (i + 1) gs ls",
-     ["the takings in another order", "a name not handed over"]),
+     "    if r == l then compare who (i + 1) gs ls rs",
+     "    if true then compare who (i + 1) gs ls rs",
+     ["a name not handed over", "a different run of the same program, its state as it was, re-signed"]),
     ("the number of processes is not compared", CROSS,
-     "  | _, gs, ls =>\n    .error s!\"record {who} reports {ls.length} more processes and its log {gs.length} more\"",
-     "  | _, _, _ => .ok ()",
+     "  | _, gs, ls, _ =>\n    .error s!\"record {who} reports {ls.length} more processes and its log {gs.length} more\"",
+     "  | _, _, _, _ => .ok ()",
      ["a process not reported"]),
     ("the names are not compared", CROSS,
      "if ra.me != rb.peer || rb.me != ra.peer then .error \"the records do not name each other\"",
      "if false then .error \"the records do not name each other\"",
      ["another peer"]),
     ("the budgets are not compared", CROSS,
-     "if budget != budget' then .error \"the budgets differ\"",
+     "if ra.budget != rb.budget then .error \"the budgets differ\"",
      "if false then .error \"the budgets differ\"",
-     ["another budget"]),
+     ["another budget", "another turn space"]),
     # Only the choice of a local event sees held senders again. With held
     # processes shown to the whole step, a held process is put out again on
     # every step, 256 times a call, and the check does not end in any time
@@ -101,16 +102,92 @@ CONTROLS = [
      "    let n := 2 * g.made + (if g.side = .a then 0 else 1)",
      "    let n := nextName g.cfg.names",
      ["a name crosses in a message"]),
+    # harden-crossing: budgets are the guest's own (q59.79).
+    ("the peer's numbers are taken as they are", CROSS,
+     "budget := if g.fixed then g.budget else min g.budget steps,\n                      cells := if g.fixed then g.cells else min g.cells cells }",
+     "budget := if g.fixed then g.budget else steps,\n                      cells := if g.fixed then g.cells else cells }",
+     ["a peer announces a huge budget: the guest runs with its own"]),
+    ("the guest given the program begins before it hears the peer", CROSS,
+     "  if !g.waiting || !g.heard then none else",
+     "  if !g.waiting then none else",
+     ["the guest given the program does not begin before it hears the peer"]),
+    ("a budget is not compared with its own limits", CROSS,
+     "    if r.own.getD 0 0 < steps || r.own.getD 1 0 < cells then",
+     "    if false then",
+     ["a budget above its own limits"]),
+    ("the check runs whatever a record asks", CROSS,
+     "  if defaultLimit < steps || turnSpace < cells || checkHold < holdA || checkHold < holdB then",
+     "  if false then",
+     ["a record that asks more than this check runs"]),
+    ("a record's form is not read", CROSS,
+     "    if !r.form then .error s!\"record {who}: not of form 2\"",
+     "    if false then .error s!\"record {who}: not of form 2\"",
+     ["a record of the old form"]),
+    # What a guest holds (q59.71).
+    ("the guest keeps no ledger", CROSS,
+     "  if cost ≤ g.credit && !cap then { g with credit := g.credit - cost } else",
+     "  if true then { g with credit := g.credit - cost } else",
+     ["and its guest is full", "and the other guest is full"]),
+    ("the walk lets a spent ledger go uncounted", HOLD,
+     "      if must then .error (k, \"the ledger was spent and not counted\")\n      else if e.cost",
+     "      if false then .error (k, \"the ledger was spent and not counted\")\n      else if e.cost",
+     ["a count dropped"]),
+    ("the walk takes a count where nothing was spent", HOLD,
+     "    | .held m =>\n      if !must then .error (k, \"a count where the ledger was not spent\")",
+     "    | .held m =>\n      if false then .error (k, \"a count where the ledger was not spent\")",
+     ["a count where nothing was spent"]),
+    ("the walk takes a count past the bar", HOLD,
+     "      else if holdBar hold < m then .error (k, \"a count past the bar that is not full\")",
+     "      else if false then .error (k, \"a count past the bar that is not full\")",
+     ["a count past the bar"]),
+    ("the walk takes full within the bar", HOLD,
+     "      else if !cap && m ≤ holdBar hold then .error (k, \"full within the bar\")",
+     "      else if false then .error (k, \"full within the bar\")",
+     ["full within the bar"]),
+    ("the walk takes anything after full", HOLD,
+     "  match rest.findIdx? (fun e => !e.note.isAck) with\n  | some i => .error (k + i, \"an entry after full\")",
+     "  match (none : Option Nat) with\n  | some i => .error (k + i, \"an entry after full\")",
+     ["an entry after full"]),
+    ("the walk has no cap", HOLD,
+     "      else if e.cost ≤ credit && !(entryLimit ≤ k + 1 || procLimit ≤ e.procs) then",
+     "      else if e.cost ≤ credit then",
+     ["a log at its cap and not full is refused"]),
+    ("the walk lets a cap go on", HOLD,
+     "      else if cap then .error (k, \"a cap reached and not full\")",
+     "      else if false then .error (k, \"a cap reached and not full\")",
+     ["a log at its cap with a count that is not full is refused"]),
+    ("the queue has no limit", CROSS,
+     "        if seq == g.got && g.inbox.length + g.pending.length < queueLimit then",
+     "        if seq == g.got then",
+     ["a batch of 200 packets: 128 are accepted"]),
+    ("packets not counted have no limit", CROSS,
+     "      if !g.full && queueLimit ≤ g.sent.length then none else",
+     "      if false then none else",
+     ["a peer that never counts: the guest stops at 128 packets"]),
+    ("crossings out have no limit", CROSS,
+     "def Guest.outFull (g : Guest) : Bool := outLimit ≤ g.asked.length || queueLimit ≤ g.sent.length",
+     "def Guest.outFull (g : Guest) : Bool := queueLimit ≤ g.sent.length",
+     ["seventy sends for a peer that takes none: 64 are put out"]),
+    # What the check compares (q59.69).
+    ("a line carries no digest", CROSS,
+     "    ((statusText q ++ \"; holds \" ++ namesText q.held ++ \"; \" ++ d.1) :: acc.1, d.2))",
+     "    ((statusText q ++ \"; holds \" ++ namesText q.held) :: acc.1, d.2))",
+     ["a different run of the same program, its state as it was, re-signed"]),
+    ("the acknowledgements are not compared with the takings", CROSS,
+     "  if acksOf nb != takingsOf na then .error \"the acknowledgements of b are not the order a took them in\"",
+     "  if false then .error \"the acknowledgements of b are not the order a took them in\"",
+     ["the acknowledgements in another order", "and so with the takings the other way",
+      "the takings in another order"]),
 ]
 
 class Late:
     returncode = 124
     stdout = ""
-    stderr = "no result in 300 seconds"
+    stderr = "no result in 900 seconds"
 
 def run(cmd, cwd):
     try:
-        return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=300)
+        return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=900)
     except subprocess.TimeoutExpired:
         return Late()
 

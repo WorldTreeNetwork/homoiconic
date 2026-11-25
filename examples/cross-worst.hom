@@ -1,0 +1,22 @@
+; the largest local start on one guest that I could build, after the guest
+; holds close to three quarters of its hold: the child's start builds what a
+; run may make and keeps it, and the starter's turn after the start builds
+; as much again and keeps it. `fill` runs 450 turns of a thousand numbers.
+let worker = quote (fn n ->
+  (fn mk -> (fn big -> ask [0] (fn c -> ask [2, c] (fn x -> big))) (mk mk 8000 []))
+    (fn self -> fn k -> fn acc ->
+      case k
+        0 -> acc
+        m + 1 -> self self m [m, ...acc]))
+def make n acc =
+  case n
+    0 -> acc
+    m + 1 -> make m [m, ...acc]
+def go kept =
+  ask [3, worker, 0] (fn started ->
+    (fn more -> ask [0] (fn c -> ask [2, c] (fn x -> [kept, more]))) (make 8000 []))
+def fill k acc =
+  case k
+    0 -> go acc
+    j + 1 -> ask [0] (fn c -> fill j (make 1000 acc))
+fill 450 []

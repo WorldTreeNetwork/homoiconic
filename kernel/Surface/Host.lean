@@ -80,24 +80,42 @@ unsafe def reflectReplyBytes (program length out capacity : USize) (budget space
     value the image holds between calls and cannot look inside, as a kept
     session is; a call that takes it uses it up. -/
 
-/-- C ABI: begin a guest with no process. `flags` bit 0: this guest will be
+/-- C ABI: begin a guest with no process, with its own step limit, turn
+    space and hold (0: `Cross.defaultLimit`, `defaultTurn`, `defaultHold`),
+    which the peer can lower and not raise. `flags` bit 0: this guest will be
     given the program (`reflect_cross_give`). Bit 1: its start requests go to
     the peer. Bit 2: of the peer's sends it can take, it takes the newest
     first. Bit 3: it opens the exchanges and closes the run. -/
 @[export reflect_cross_start]
-def crossStart (flags : UInt8) : Cross.Guest :=
+def crossStart (flags : UInt8) (limit turn hold : UInt64) : Cross.Guest :=
   Cross.start (flags &&& 1 == 1) (flags &&& 8 == 8) (flags &&& 2 == 2) (flags &&& 4 == 4)
+    (if limit == 0 then Cross.defaultLimit else limit.toNat)
+    (if turn == 0 then Cross.defaultTurn else turn.toNat)
+    (if hold == 0 then Cross.defaultHold else hold.toNat)
 
-/-- C ABI: give the guest its program, in its byte form, and the budget of
-    each machine run. It is begun as the first process. A guest that is not
+/-- C ABI: give the guest its program, in its byte form, and the step budget
+    it came with, which can only lower the guest's own. It is begun as the
+    first process once the guest has heard the peer. A guest that is not
     waiting for a program is unchanged. -/
 @[export reflect_cross_give]
 unsafe def crossGive (g : Cross.Guest) (program length : USize) (budget : UInt64) : Cross.Guest :=
   g.give (copyBytes program length) budget.toNat
 
-/-- C ABI: work until nothing is possible, or `Cross.workLimit` steps. -/
+/-- Native-only: how many cells a guest holds, each object counted once,
+    stopping past `cut` (`reflect_live_cells`, `ffi.c`): the same walk as
+    `liveCells`, over the whole guest. -/
+@[extern "reflect_live_cells"]
+private unsafe opaque guestCells (g : @& Cross.Guest) (cut : USize) : USize
+
+/-- The runtime's count of what a guest holds, cut at the bar of its hold,
+    which is as far as the guest compares it. -/
+private unsafe def guestCount (g : Cross.Guest) : Nat :=
+  (guestCells g (Reflect.holdBar g.hold).toUSize).toNat
+
+/-- C ABI: work until nothing is possible, or `Cross.workLimit` steps, counting
+    what the guest holds with the runtime when its ledger is spent. -/
 @[export reflect_cross_work]
-def crossWork (g : Cross.Guest) : Cross.Guest := g.work Cross.workLimit
+unsafe def crossWork (g : Cross.Guest) : Cross.Guest := g.work guestCount Cross.workLimit
 
 /-- C ABI: take a batch from the peer. -/
 @[export reflect_cross_take]

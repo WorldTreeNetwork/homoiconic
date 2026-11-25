@@ -58,7 +58,7 @@ if grep -q "^FAIL" "$OUT/node.txt" || ! grep -q "^ok" "$OUT/node.txt" || grep -q
 fi
 
 lake env lean CrossCheck.lean > "$OUT/cross.txt"
-if grep -q "^FAIL" "$OUT/cross.txt" || [ "$(grep -c "^ok" "$OUT/cross.txt")" -ne 48 ] || grep -q "error" "$OUT/cross.txt"; then
+if grep -q "^FAIL" "$OUT/cross.txt" || [ "$(grep -c "^ok" "$OUT/cross.txt")" -ne 85 ] || grep -q "error" "$OUT/cross.txt"; then
     cat "$OUT/cross.txt" >&2
     exit 1
 fi

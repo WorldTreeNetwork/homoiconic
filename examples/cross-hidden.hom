@@ -1,0 +1,13 @@
+; two senders and a receiver on one guest that keeps what it receives and
+; waits for more. The order in which it took the two messages is in what it
+; keeps, not in any line: its payload and the names it holds are the same
+; either way.
+let sender = quote (fn start ->
+  case start
+    [ch, n] -> ask [1, ch, n] (fn sent -> n)
+    _ -> 0)
+def recv ch acc = ask [2, ch] (fn x -> recv ch [x, ...acc])
+ask [0] (fn ch ->
+  ask [3, sender, [ch, 1]] (fn first ->
+    ask [3, sender, [ch, 2]] (fn second ->
+      recv ch [])))

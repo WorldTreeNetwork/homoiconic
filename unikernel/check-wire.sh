@@ -41,11 +41,11 @@ if grep -v "depends on axioms: \[propext\(, Classical.choice\)\?\(, Quot.sound\)
     exit 1
 fi
 ( cd "$ROOT/kernel" && lake env lean CrossCheck.lean ) > "$W/lean.txt"
-if grep -q "^FAIL\|error" "$W/lean.txt" || [ "$(grep -c "^ok" "$W/lean.txt")" -ne 48 ]; then
+if grep -q "^FAIL\|error" "$W/lean.txt" || [ "$(grep -c "^ok" "$W/lean.txt")" -ne 85 ]; then
     cat "$W/lean.txt" >&2
     exit 1
 fi
-echo "ok   two guests in one process: 48 checks"
+echo "ok   two guests in one process: 85 checks"
 
 ( umask 077
   for k in a b host other; do head -c 32 /dev/urandom > "$W/key-$k"; done )
@@ -94,7 +94,7 @@ fail() {
 
 boot() {
     rm -f "$4"
-    timeout 180 "$CH" --kernel "$OUT/reflect-net.elf" --initramfs "$5" --cpus boot=1 --memory size=512M \
+    timeout "${LIFE:-180}" "$CH" --kernel "$OUT/reflect-net.elf" --initramfs "$5" --cpus boot=1 --memory size=512M \
         --serial "file=$4" --console off \
         --net "tap=$1,mac=$2" --cmdline "$3" >"$4.ch" 2>&1 &
 }
@@ -132,8 +132,8 @@ run() {
     boot "$TB" 02:00:00:00:00:03 "reflect.ip=$CHB reflect.port=4444 reflect.peer=$CHA:4446 reflect.allow=$NA $4" "$W/$name-b.log" "$KB"
     pb=$!
     # Under the flood the run must close while the flood still runs.
-    await "$W/$name-a.log" "reflect: cross done" "$([ -n "$fp" ] && echo 30 || echo 90)" || { cat "$W/$name-a.log" "$W/$name-b.log" >&2; fail "$name: guest A did not close"; }
-    await "$W/$name-b.log" "reflect: cross done" 30 || { cat "$W/$name-a.log" "$W/$name-b.log" >&2; fail "$name: guest B did not close"; }
+    await "$W/$name-a.log" "reflect: cross done" "$([ -n "$fp" ] && echo 30 || echo "${WAIT:-90}")" || { cat "$W/$name-a.log" "$W/$name-b.log" >&2; fail "$name: guest A did not close"; }
+    await "$W/$name-b.log" "reflect: cross done" "${WAIT:-30}" || { cat "$W/$name-a.log" "$W/$name-b.log" >&2; fail "$name: guest B did not close"; }
     stop
     if [ -n "$fp" ]; then
         # It heard Retries of its own: the first-flight pool was full.
@@ -144,8 +144,8 @@ run() {
     fi
     grep -qx "reflect: entity $NA" "$W/$name-a.log" || fail "$name: guest A is not the entity of its key"
     grep -qx "reflect: entity $NB" "$W/$name-b.log" || fail "$name: guest B is not the entity of its key"
-    sed -n 's/^reflect: cross \(\(sig\|me\|peer\|budget\|entry\|head\|proc\|error\) .*\)$/\1/p' "$W/$name-a.log" > "$W/$name.a"
-    sed -n 's/^reflect: cross \(\(sig\|me\|peer\|budget\|entry\|head\|proc\|error\) .*\)$/\1/p' "$W/$name-b.log" > "$W/$name.b"
+    sed -n 's/^reflect: cross \(\(sig\|form\|me\|peer\|budget\|own\|entry\|head\|proc\|error\) .*\)$/\1/p' "$W/$name-a.log" > "$W/$name.a"
+    sed -n 's/^reflect: cross \(\(sig\|form\|me\|peer\|budget\|own\|entry\|head\|proc\|error\) .*\)$/\1/p' "$W/$name-b.log" > "$W/$name.b"
 }
 
 # accepted <name> <text>...: the records of <name> are accepted, and the
@@ -216,8 +216,8 @@ run new "$EX/cross-race.hom" "reflect.spawn=far reflect.take=new" ""
 accepted new "schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 2, 0], [2, 1, 0]]" "process 0: [2, 1]; holds [#0]"
 cmp -s "$W/old.bytes" "$W/new.bytes" || fail "the two runs had two programs"
 if cmp -s "$W/old.a" "$W/new.a"; then fail "the two orders gave one record"; fi
-grep -qxF "proc [1, 2]; holds [#0]" "$W/old.a" || fail "guest A did not report [1, 2]"
-grep -qxF "proc [2, 1]; holds [#0]" "$W/new.a" || fail "guest A did not report [2, 1]"
+grep -q "^proc \[1, 2\]; holds \[#0\]; root [0-9a-f]*$" "$W/old.a" || fail "guest A did not report [1, 2]"
+grep -q "^proc \[2, 1\]; holds \[#0\]; root [0-9a-f]*$" "$W/new.a" || fail "guest A did not report [2, 1]"
 echo "ok   one program, two delivery orders, two records, and each replays to its own result"
 
 # Nesting deeper than the native stack (homoiconic-q59.72). The program builds
@@ -228,7 +228,7 @@ echo "ok   one program, two delivery orders, two records, and each replays to it
 # guest in the report of a full stack. Each is a walk now, on the guest and in
 # the replay of the check.
 BUDGET=10000000
-run deep "$EX/cross-deep.hom" "" ""
+run deep "$EX/cross-deep.hom" "reflect.turn=4000000 reflect.hold=16000000" "reflect.turn=4000000 reflect.hold=16000000"
 BUDGET=100000
 if grep -q "processor fault\|INTERNAL PANIC" "$W/deep-a.log" "$W/deep-b.log"; then fail "deep: a guest stopped"; fi
 accepted deep "process 1: 7; holds [#48]"
@@ -280,7 +280,7 @@ sed "$(entry "$A" 0)p" "$A" > "$W/t-event.raw"
 lie "$KA" "$W/t-event.raw" "$W/t-event-lie.a"
 refused "a local event repeated, chain made again" "[0, 0, 0] cannot happen" "$P" "$W/t-event-lie.a" "$B"
 lie "$KA" "$W/t-moved.raw" "$W/t-moved-lie.a"
-refused "the takings in the other order, chain made again" "process 0 (a 0): reported [1, 2]; holds [#0], replayed [2, 1]; holds [#0]" "$P" "$W/t-moved-lie.a" "$B"
+refused "the takings in the other order, chain made again" "the acknowledgements of b are not the order a took them in" "$P" "$W/t-moved-lie.a" "$B"
 # A record made again and signed is still read: the refusals above are of
 # what changed, not of the remaking.
 lie "$KA" "$A" "$W/t-same-lie.a"
@@ -290,4 +290,76 @@ echo "ok   a record made again unchanged and signed is accepted"
 # another program's run.
 refused "another program" "[1, 0] cannot happen" "$W/name.bytes" "$A" "$B"
 refused "a record of another run" "the logs do not combine" "$P" "$A" "$W/reply.b"
+# harden-crossing. A record of one delivery order beside the other guest's
+# record of the other order.
+refused "records of two delivery orders" "the acknowledgements of b are not the order a took them in" "$P" "$W/old.a" "$W/new.b"
+# A budget above the record's own limits, signed by its guest.
+sed 's/^own 100000000 /own 99999 /' "$B" | sed 1d > "$W/t-own.raw"
+sign "$KB" "$W/t-own.raw" "$W/t-own.b"
+refused "a budget above its own limits" "record b: its budget is above its own limits" "$P" "$A" "$W/t-own.b"
+# refusedStart <what> <start of the reason> <program> <a> <b>
+refusedStart() {
+    if "$OUT/cross-check" check "$3" "$4" "$5" > "$W/refused.txt"; then
+        cat "$W/refused.txt" >&2
+        fail "$1: accepted"
+    fi
+    grep -qF "refused: $2" "$W/refused.txt" || { cat "$W/refused.txt" >&2; fail "$1: not refused with '$2...'"; }
+    echo "ok   $1: refused: $2..."
+}
+# full <name> <side>: the check says the side was full, and no guest stopped.
+full() {
+    grep -q "^full $2: entry [0-9]*, [0-9]* cells counted$" "$W/$1.check" || { cat "$W/$1.check" | head -20 >&2; fail "$1: $2 was not full"; }
+    if grep -q "processor fault\|INTERNAL PANIC" "$W/$1-a.log" "$W/$1-b.log"; then fail "$1: a guest stopped"; fi
+    echo "ok   $1: $2 is full, and no guest stopped"
+}
+
+# Budgets are the guest's own (homoiconic-q59.79). B allows anything: both
+# run with what the program came with. B allows less: both run with B's.
+run huge "$EX/cross-reply.hom" "reflect.spawn=far" "reflect.budget=18446744073709551615 reflect.turn=18446744073709551615"
+grep -qx "budget 100000 500000" "$W/huge.a" && grep -qx "budget 100000 500000" "$W/huge.b" || fail "huge: the budgets are not A's"
+grep -qx "own 18446744073709551615 18446744073709551615 2000000" "$W/huge.b" || fail "huge: B's own limits are not in its record"
+accepted huge "process 0: [20, 22]; holds [#0]" "budget 100000 steps, 500000 cells"
+run lower "$EX/cross-reply.hom" "reflect.spawn=far" "reflect.budget=50000 reflect.turn=300000"
+grep -qx "budget 50000 300000" "$W/lower.a" && grep -qx "budget 50000 300000" "$W/lower.b" || fail "lower: the budgets are not B's"
+accepted lower "process 0: [20, 22]; holds [#0]" "budget 50000 steps, 300000 cells"
+
+# What a guest holds (homoiconic-q59.71). A process that keeps more on every
+# turn without end; processes started on B that each keep a turn's worth; a
+# log that grows without end on its cap; the largest local start.
+run grow "$EX/cross-grow-forever.hom" "" ""
+accepted grow "places b: []"
+full grow a
+BUDGET=10000000
+run fan "$EX/cross-fan.hom" "reflect.spawn=far" ""
+accepted fan "places a: [0]"
+full fan b
+run worst "$EX/cross-worst.hom" "" ""
+accepted worst "places a: [0, 1]"
+full worst a
+BUDGET=100000
+WAIT=400 LIFE=600 run chatter "$EX/cross-chatter.hom" "" ""
+accepted chatter "places b: []"
+full chatter a
+grep -q "^full a: entry 60000, " "$W/chatter.check" || fail "chatter: A was not stopped at the cap"
+echo "ok   chatter: the log stops at its cap, 60000 entries"
+# The hold undone: the same growing process ends the guest.
+boot "$TA" 02:00:00:00:00:02 "reflect.ip=$CHA reflect.port=4444 reflect.wire_port=4446 reflect.allow=$NB,$NH reflect.hold=18446744073709551615" "$W/panic-a.log" "$KA"
+pa=$!
+await "$W/panic-a.log" "reflect: wire 4446" 60 || fail "panic: guest A did not come up"
+"$OUT/reply" source "$EX/cross-grow-forever.hom" > "$W/panic.bytes"
+"$OUT/quic-client" "$CHA" 4446 "$BUDGET" "$W/panic.bytes" "$KH" "$NA" > "$W/panic.given" || fail "panic: the program was not taken"
+boot "$TB" 02:00:00:00:00:03 "reflect.ip=$CHB reflect.port=4444 reflect.peer=$CHA:4446 reflect.allow=$NA" "$W/panic-b.log" "$KB"
+pb=$!
+await "$W/panic-a.log" "INTERNAL PANIC: out of memory" 240 || { tail -5 "$W/panic-a.log" >&2; fail "panic: with its hold at the largest, guest A did not run out of memory"; }
+stop
+echo "ok   with its hold at the largest, the growing process ends guest A in INTERNAL PANIC: out of memory"
+
+# What the check compares (homoiconic-q59.69). A race on one guest whose two
+# deliveries leave the same lines; swapped and signed again, the roots differ.
+run hidden "$EX/cross-hidden.hom" "" ""
+accepted hidden "places a: [0, 1, 2]"
+l3=$(entry "$W/hidden.a" 3); l4=$(entry "$W/hidden.a" 4)
+awk -v x="$l3" -v y="$l4" '{ line[NR] = $0 } END { for (i = 1; i <= NR; i++) print (i == x ? line[y] : i == y ? line[x] : line[i]) }' "$W/hidden.a" > "$W/t-hidden.raw"
+lie "$KA" "$W/t-hidden.raw" "$W/t-hidden-lie.a"
+refusedStart "a different run of the same program, its state as it was, re-signed" "process 0 (a 0): reported waiting on [2, #0]; holds [#0]; root " "$W/hidden.bytes" "$W/t-hidden-lie.a" "$W/hidden.b"
 echo "wire guests ok"

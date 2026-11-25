@@ -1,0 +1,9 @@
+; a process that holds data built by doubling forty times: some forty cells
+; held, a tree of 2^40 items written out. The form of its function does not
+; fit the room for a root, so its line carries the digest of its names and
+; its payload alone.
+def dbl k x =
+  case k
+    0 -> x
+    m + 1 -> dbl m [x, x]
+(fn big -> ask [0] (fn c -> ask [2, c] (fn y -> big))) (dbl 40 0)

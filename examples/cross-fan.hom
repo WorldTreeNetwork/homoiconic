@@ -1,0 +1,11 @@
+; processes started without end, each keeping eight thousand numbers and
+; waiting. With its starts put out, every one of them is held by the other
+; guest, which fills.
+let holder = quote (fn n ->
+  (fn mk -> ask [0] (fn c -> (fn big -> ask [2, c] (fn x -> big)) (mk mk 8000 [])))
+    (fn self -> fn k -> fn acc ->
+      case k
+        0 -> acc
+        m + 1 -> self self m [m, ...acc]))
+def fan k = ask [3, holder, k] (fn started -> fan (k + 1))
+fan 0

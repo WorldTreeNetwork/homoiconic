@@ -58,6 +58,64 @@ def runSpaceLeft (sp : Space) : (fuel credit : Nat) → State → Ended × Nat
 termination_by fuel => fuel
 decreasing_by all_goals omega
 
+/-- `runSpaceLeft` as it runs: the charge is asked with the fuel as its cap
+    (`stepCostWithin`), as `runSpaceWithin` asks it, so a step the fuel cannot
+    pay for is found out in no more time than the fuel pays for
+    (`homoiconic-q59.73`, `homoiconic-q59.81`). Proved equal
+    (`runSpaceLeft_eq_within`). -/
+def runSpaceLeftWithin (sp : Space) : (fuel credit : Nat) → State → Ended × Nat
+  | 0, credit, s => (.reached s, credit)
+  | _ + 1, credit, .halted o => (.reached (.halted o), credit)
+  | _ + 1, credit, .fault => (.reached .fault, credit)
+  | fuel + 1, credit, .running c e stk frs =>
+      if stepCostWithin (.running c e stk frs) (fuel + 1) - 1 ≤ fuel then
+        if atPrim (.running c e stk frs) then
+          if answered (step (.running c e stk frs)) ≤ credit then
+            runSpaceLeftWithin sp (fuel - (stepCostWithin (.running c e stk frs) (fuel + 1) - 1))
+              (credit - answered (step (.running c e stk frs)))
+              (step (.running c e stk frs))
+          else if sp.count (.running c e stk frs) ≤ sp.bar ∧
+              answered (step (.running c e stk frs)) ≤
+                sp.cells - sp.count (.running c e stk frs) then
+            runSpaceLeftWithin sp (fuel - (stepCostWithin (.running c e stk frs) (fuel + 1) - 1))
+              (sp.cells - sp.count (.running c e stk frs) -
+                answered (step (.running c e stk frs)))
+              (step (.running c e stk frs))
+          else (.full (.running c e stk frs), credit)
+        else
+          if owed (.running c e stk frs) ≤ credit then
+            runSpaceLeftWithin sp (fuel - (stepCostWithin (.running c e stk frs) (fuel + 1) - 1))
+              (credit - owed (.running c e stk frs))
+              (step (.running c e stk frs))
+          else if sp.count (.running c e stk frs) ≤ sp.bar ∧
+              owed (.running c e stk frs) ≤ sp.cells - sp.count (.running c e stk frs) then
+            runSpaceLeftWithin sp (fuel - (stepCostWithin (.running c e stk frs) (fuel + 1) - 1))
+              (sp.cells - sp.count (.running c e stk frs) - owed (.running c e stk frs))
+              (step (.running c e stk frs))
+          else (.full (.running c e stk frs), credit)
+      else (.reached (.running c e stk frs), credit)
+termination_by fuel => fuel
+decreasing_by all_goals omega
+
+omit [Ops] in
+@[csimp] theorem runSpaceLeft_eq_within : @runSpaceLeft = @runSpaceLeftWithin := by
+  funext inst sp fuel credit s
+  induction fuel using Nat.strongRecOn generalizing credit s with
+  | _ fuel ih =>
+    cases fuel with
+    | zero => rw [runSpaceLeft, runSpaceLeftWithin]
+    | succ fuel =>
+      cases s with
+      | halted o => rw [runSpaceLeft, runSpaceLeftWithin]
+      | fault => rw [runSpaceLeft, runSpaceLeftWithin]
+      | running c e stk frs =>
+        rw [runSpaceLeft, runSpaceLeftWithin, stepCostWithin_eq]
+        simp (disch := omega) only [ih]
+        by_cases h : stepCost (.running c e stk frs) ≤ fuel + 1
+        · rw [Nat.min_eq_left (by omega)]
+        · rw [Nat.min_eq_right (by omega)]
+          split <;> split <;> first | rfl | omega
+
 /-- `runTurnIn`, and the cells the turn made: its turn space less the credit
     it had left. With no count (`Space.ledger`) the credit is never given
     back, so this is every cell the run was charged. -/

@@ -115,3 +115,8 @@ example : ∀ {hold first : Nat} {es : List Charged} {r : Option (Nat × Nat)},
 #print axioms Reflect.hold_count
 #print axioms Reflect.hold_full
 #print axioms Reflect.hold_entries
+
+-- The measured run runs as `runSpaceLeftWithin`, which caps the charge of a
+-- step by the fuel (homoiconic-q59.81), proved the same function.
+example : @runSpaceLeft = @runSpaceLeftWithin := Reflect.runSpaceLeft_eq_within
+#print axioms Reflect.runSpaceLeft_eq_within

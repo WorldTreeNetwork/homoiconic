@@ -1,0 +1,8 @@
+; one process that keeps a thousand more numbers on every turn, without end:
+; only a bound on what its guest holds stops it.
+def make n acc =
+  case n
+    0 -> acc
+    m + 1 -> make m [m, ...acc]
+def grow acc = ask [0] (fn c -> grow (make 1000 acc))
+grow []

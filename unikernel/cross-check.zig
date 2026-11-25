@@ -34,9 +34,9 @@ extern fn reflect_cross_reseal(record: [*]const u8, length: usize, out: [*]u8, c
 export fn initialize_libuv() void {}
 
 var program: [1 << 20]u8 = undefined;
-var rec_a: [1 << 20]u8 = undefined;
-var rec_b: [1 << 20]u8 = undefined;
-var out: [1 << 21]u8 = undefined;
+var rec_a: [1 << 24]u8 = undefined;
+var rec_b: [1 << 24]u8 = undefined;
+var out: [1 << 26]u8 = undefined;
 
 pub fn main(init: std.process.Init.Minimal) u8 {
     if (kernel_finish_initialization(initialize_circularKernel_Surface_Host(0)) == 0) return 2;
@@ -113,13 +113,15 @@ fn signed(who: []const u8, record: []const u8) ?[]const u8 {
     const body = record[nl + 1 ..];
     const key = Ed.PublicKey.fromBytes(public) catch return refuse(who, "the signature is not valid");
     Ed.Signature.fromBytes(sig_bytes).verify(body, key) catch return refuse(who, "the signature is not valid");
-    // The key that signed is the entity the record says it is.
+    // The key that signed is the entity the record says it is: its `me`
+    // line, after the `form` line of a record of form 2.
     const name = entity.text(&entity.nameOf(&public));
     var want: [3 + entity.text_max + 1]u8 = undefined;
     @memcpy(want[0..3], "me ");
     @memcpy(want[3..][0..name.len], name.slice());
     want[3 + name.len] = '\n';
-    if (!std.mem.startsWith(u8, body, want[0 .. 4 + name.len])) return refuse(who, "it is not signed by the entity it names");
+    const rest = if (std.mem.startsWith(u8, body, "form 2\n")) body["form 2\n".len..] else body;
+    if (!std.mem.startsWith(u8, rest, want[0 .. 4 + name.len])) return refuse(who, "it is not signed by the entity it names");
     return body;
 }
 

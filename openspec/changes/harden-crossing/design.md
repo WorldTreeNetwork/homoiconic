@@ -60,7 +60,7 @@ The entries are `[5, m]` and `[6, m]`; they emit no event and `combine` places t
 
 A *turn* is two runs, the resume and the settle (`turnIn`), so a turn may make `2 × cells`. Side `a` begins the program before it records anything; that is charged to its credit first: the start and settle, `procCells` and `codeCells` of the program. If it passes the credit the first entry is a count.
 
-"The cells a run made" is the ledger of `runSpace`: the turn space less the credit left when the run ended. `runSpace` gives no credit back, so `Reflect/Hold.lean` adds `runSpaceLeft` (the same recursion, giving the credit too) and *measured* variants of the channel runs: `runTurnMade`, `settleMade`, `turnMade`, `beginMade`, and `stepMade cells budget cfg ev`, which gives the cells made by process `i`'s side of the event and by the other's apart. Each gives, as its first part, exactly what `runTurnIn`, `settleIn`, `turnIn`, `beginIn` and `stepIn` give (proved). The cells of a data value are `cellsOf`, as `Data.cells` counts them, as a walk with a list of work. `codeCells` takes the term and the code made from a quoted program as at most twice the cells of its data form, by reading `unreify` and `compile` (`Machine.lean`: one term node for each array of the form, which has at least five cells, and at most a few instructions for each term node); this is part of the charge table that is read, not proved, as in `add-space-budget`.
+"The cells a run made" is the ledger of `runSpace`: the turn space less the credit left when the run ended. `runSpace` gives no credit back, so `Reflect/Hold.lean` adds `runSpaceLeft` (the same recursion, giving the credit too; it runs as `runSpaceLeftWithin`, which asks the charge of a step capped by the fuel as `runSpaceWithin` does, proved equal by `@[csimp]`, so that an operation whose charge is enormous, `equal` of data doubled forty times, is refused in the time the fuel pays for: `homoiconic-q59.81`, found by the session working on operation costs) and *measured* variants of the channel runs: `runTurnMade`, `settleMade`, `turnMade`, `beginMade`, and `stepMade cells budget cfg ev`, which gives the cells made by process `i`'s side of the event and by the other's apart. Each gives, as its first part, exactly what `runTurnIn`, `settleIn`, `turnIn`, `beginIn` and `stepIn` give (proved). The cells of a data value are `cellsOf`, as `Data.cells` counts them, as a walk with a list of work. `codeCells` takes the term and the code made from a quoted program as at most twice the cells of its data form, by reading `unreify` and `compile` (`Machine.lean`: one term node for each array of the form, which has at least five cells, and at most a few instructions for each term node); this is part of the charge table that is read, not proved, as in `add-space-budget`.
 
 ### The replay is the ledger's replay
 
@@ -166,7 +166,7 @@ proc <status>; holds <names>; root <hex> | data <hex> | root none
 ...
 ```
 
-`form 2` marks the form: the old form had no such line and is refused (`record a: not of form 2`). Every header line is required. `cross-check.zig` finds the `me` line after `form` when it checks that the key that signed is the entity named. The batch's byte form changes as D-1 says; packets do not.
+`form 2` marks the form: the old form had no such line and is refused (`record a: not of form 2`). Every header line is required, and a number in it is at most 20 digits, so that reading a record takes no time to speak of whatever it holds (`homoiconic-q59.82`). `cross-check.zig` finds the `me` line after `form` when it checks that the key that signed is the entity named. The batch's byte form changes as D-1 says; packets do not.
 
 ## D-5. The exports and the image
 
@@ -185,7 +185,7 @@ Proved, stated in `kernel/CrossingContract.lean` with `#print axioms`, no `sorry
 - `traceRun_sched`: when the check's replay runs every event, its configuration and events are `schedIn`'s on the schedule `combine` gives.
 - `runSpaceLeft_fst`, `runTurnMade_fst`, `settleMade_fst`, `turnMade_fst`, `beginMade_fst`, `stepMade_fst`: the measured runs are the runs.
 - The channel soundness theorems (`settleRun_sound` to `replay_true`) for every turn space; the old statements follow.
-- Of `Hold.walk`, when it accepts a side: every stretch from the start or a count up to the next count charged, without its last entry, at most the credit it began with (`hold_stretch`); a `held m` is at most the bar and the next stretch begins with `H - m` (`hold_count`); after a `full` come only acknowledgements, at most `outLimit` (`hold_full`); the side has at most `entryLimit + outLimit + 1` entries (`hold_entries`).
+- Of `Hold.walk`, when it accepts a side: every stretch from the start or a count up to the next count charged, without its last entry, at most the credit it began with (`hold_stretch`); a `held m` is at most the bar and the next stretch begins with `H - m` (`hold_count`); after a `full` come only acknowledgements, at most `outLimit` (`hold_full`); the side has at most `entryLimit + outLimit + 2` entries (`hold_entries`: a count before the cap can leave one more plain entry at the cap).
 
 Tested, not proved: the guest's step (budgets, the ledger, the caps and limits, the lines); that the replay's charges are the guest's; reading a record; the image.
 

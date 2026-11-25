@@ -18,7 +18,7 @@ extern fn reflect_boot_take(out: [*]u8, capacity: usize) usize;
 // between calls; every call that takes it uses it up, so a call that only
 // reads it is given a second hold first (`kernel_retain`).
 const Guest = *anyopaque;
-extern fn reflect_cross_start(flags: u8) Guest;
+extern fn reflect_cross_start(flags: u8, limit: u64, turn: u64, hold: u64) Guest;
 extern fn reflect_cross_give(g: Guest, program: [*]const u8, length: usize, budget: u64) Guest;
 extern fn reflect_cross_work(g: Guest) Guest;
 extern fn reflect_cross_take(g: Guest, batch: [*]const u8, length: usize) Guest;
@@ -45,6 +45,12 @@ const Endpoint = struct {
     /// default. The guest's owner chooses it, not whoever sends a program:
     /// the frame carries a step budget and no space.
     space: ?u64,
+    /// An end of a crossing's own step limit, turn space and hold
+    /// (`reflect.budget=`, `reflect.turn=`, `reflect.hold=`); 0 is Lean's
+    /// default. The peer can lower the first two and not raise them.
+    cross_budget: u64,
+    cross_turn: u64,
+    cross_hold: u64,
 
     fn cells(ep: Endpoint) u64 {
         return ep.space orelse reflect_default_space(0);
@@ -123,7 +129,7 @@ export fn net_serve() noreturn {
         var flags: u8 = if (ep.wire_port != 0) 1 else 8;
         if (ep.spawn_far) flags |= 2;
         if (ep.take_new) flags |= 4;
-        cross = reflect_cross_start(flags);
+        cross = reflect_cross_start(flags, ep.cross_budget, ep.cross_turn, ep.cross_hold);
         q_wire = true;
     }
     while (true) {
@@ -170,6 +176,9 @@ fn parse(s: []const u8) ?Endpoint {
     var take_new = false;
     var saw_take = false;
     var space: ?u64 = null;
+    var cross_budget: ?u64 = null;
+    var cross_turn: ?u64 = null;
+    var cross_hold: ?u64 = null;
     var i: usize = 0;
     while (i < s.len) {
         while (i < s.len and s[i] == ' ') i += 1;
@@ -186,6 +195,17 @@ fn parse(s: []const u8) ?Endpoint {
         } else if (starts(word, "reflect.space=")) {
             if (space != null) return null;
             space = parseCells(word["reflect.space=".len..]) orelse return null;
+        } else if (starts(word, "reflect.budget=")) {
+            if (cross_budget != null) return null;
+            cross_budget = parseCells(word["reflect.budget=".len..]) orelse return null;
+            if (cross_budget.? == 0) return null;
+        } else if (starts(word, "reflect.turn=")) {
+            if (cross_turn != null) return null;
+            cross_turn = parseCells(word["reflect.turn=".len..]) orelse return null;
+            if (cross_turn.? == 0) return null;
+        } else if (starts(word, "reflect.hold=")) {
+            if (cross_hold != null) return null;
+            cross_hold = parseCells(word["reflect.hold=".len..]) orelse return null;
         } else if (eql(word, "reflect.hook=alloc")) {
             if (hook) return null;
             hook = true;
@@ -227,7 +247,8 @@ fn parse(s: []const u8) ?Endpoint {
     const guarded = saw_quic or saw_wire or has_peer;
     if (guarded != has_allow) return null;
     // The crossing words mean something only on an end of the crossing.
-    if ((saw_spawn or saw_take) and !(saw_wire or has_peer)) return null;
+    if ((saw_spawn or saw_take or cross_budget != null or cross_turn != null or cross_hold != null) and
+        !(saw_wire or has_peer)) return null;
     return .{
         .ip = ip orelse return null,
         .port = port orelse return null,
@@ -241,6 +262,9 @@ fn parse(s: []const u8) ?Endpoint {
         .spawn_far = spawn_far,
         .take_new = take_new,
         .space = space,
+        .cross_budget = cross_budget orelse 0,
+        .cross_turn = cross_turn orelse 0,
+        .cross_hold = cross_hold orelse 0,
     };
 }
 
@@ -715,7 +739,7 @@ fn wireTick(nic: Nic, ep: Endpoint) void {
 // and the record; this file opens connections, moves the bytes and prints.
 var cross: Guest = undefined;
 var cross_buf: [8192]u8 = undefined;
-var record_buf: [1 << 18]u8 = undefined;
+var record_buf: [1 << 24]u8 = undefined;
 var cross_printed = false;
 var cross_closed_at: u64 = 0;
 var cross_peer: entity.Name = .{0} ** 32; // the entity the batches come from
