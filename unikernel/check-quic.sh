@@ -584,7 +584,9 @@ for k in 1 2 3 4; do
     sleep 0.05
 done
 sleep 0.3
-( ms "$OUT/quic-client-e9a4c86" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NG" > "$OUT/quic-capped.frame" ) > "$OUT/capped.ms" &
+( s0=$(date +%s%N)
+  "$OUT/quic-client-e9a4c86" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NG" > "$OUT/quic-capped.frame"
+  echo $(( ($(date +%s%N) - s0) / 1000000 )) > "$OUT/capped.ms" ) &
 opid=$!
 took=$(ms factorial retried | tail -n 1)
 if [ "$took" -ge 1000 ]; then
