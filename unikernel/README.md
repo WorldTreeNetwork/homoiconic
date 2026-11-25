@@ -597,3 +597,29 @@ the read of the landed code (`761ef8a` with these checks, `~/hom-pre-9582bbf`)
 passed `check.sh` and `check-net.sh`; its first try failed only at the
 control's own assertion, which expected no `reflect: exit` line after the
 panic, and the image prints `reflect: exit 1`.
+
+**2026-11-25 (UTC), nesting deeper than the native stack (`homoiconic-q59.72`).**
+On morphie, Cloud Hypervisor 54.0, tree `6662086` exported with `git archive`
+to `~/hom-6662086`: `build.sh examples/factorial.hom`, `build-net.sh`,
+`check.sh`, `check-net.sh`, `check-quic.sh` and `check-wire.sh` each exited 0.
+Logs are `evidence/q59.72-6662086-*.log` (`check.sh` has 84 lines of `ok`,
+`check-net.sh` 19, `check-quic.sh` 29, `check-wire.sh` 30), exit codes and
+hashes `evidence/run-6662086.txt`. `reflect.elf` built from factorial is sha256
+`b9c0c185…1938ab28`; `reflect-net.elf` is `f8ff101f…19f2b284`, the same before
+and after the checks. `source.sha256` and `objects.sha256` are this build's
+(the Lean side changed). New in `check.sh`: the 2 MiB literal nested 2097149
+deep is printed, equal to the Linux process (it reported a full stack); data a
+million deep compared with itself gives `1`; a million nested functions give
+`<function>` through 0 and 1; the list of 419429 zeros compiled runs out of its
+1000 steps. `check-net.sh` gets `82 00 82 00 01` for the 119-byte deep
+comparison and factorial after it, status 2 for a deep answer, and status 2 for
+a chain of 300000 functions on the guest with the space limit undone.
+`check-wire.sh` runs `examples/cross-deep.hom` on two guests and the replay
+accepts `process 1: 7; holds [#48]`. `evidence/q59.72-controls.log` is the
+same checks on `~/hom-82abb4d-ctl`, tree `82abb4d` with `kernel/` from
+`d2171ce`: each new boot case, the deep comparison over UDP, the chain of
+functions and the crossing end in the report of a full stack; the deep answer
+passes there too (writing data was a loop already). The depths at which the
+old kernel filled the stack are in `evidence/q59.72-measurements.log`.
+`host/check.sh` passed on the Mac, with output identical to the old tree's
+apart from the new lines.
