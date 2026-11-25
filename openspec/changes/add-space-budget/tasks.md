@@ -1,0 +1,15 @@
+- [x] Measure the candidates on real programs before choosing: a ledger alone, the tree size every step, a ledger counted as a tree, a ledger counted by the runtime (`design.md`, the table)
+- [x] Fresh-context advise read of this directory and the code paths (Fable), 2026-11-24: send-back with fourteen findings, the choice of measure found right; all fourteen answered in `design.md` (the answer's own bound, the default at 4000000, the table sized once, `trail`, `turnSpace`, the walkers' work lists); the read is `reviews/2026-11-24-advise.md`
+- [ ] `kernel/Reflect/Space.lean`: `natCells`, `Data.cells`, `Data.written`, `Data.writes`, `charge`, `madeIn`, `Space`, `Space.ledger`, `Ran`, `runSpace`, `runIn`, `trail`, `defaultSpace`, `turnSpace`, `runTurn`
+- [ ] `kernel/Reflect/SpaceProof.lean`: `runSpace_run`, `runSpace_priced`, `runSpace_full`, `runSpace_within`, `trail_last`, `trail_held`, `runSpace_ledger`, `runIn_ledger`, `machine_never_faults_space`, `machine_exact_space`, `runTurn_reach`; restated in `kernel/MachineContract.lean` with `#print axioms`; no `sorry`, no new axiom
+- [ ] Every driver's machine run is `runTurn` (requests, channels, log, node, crossing guest and check, the answers, schedule and log programs); their contract files pass unchanged
+- [ ] `Wire.RunReply.space`, data `[7]`, bytes `81 07`, read back; `Wire.fitsValue`; `kernel/WireReplyCheck.lean` holds the two mjolnir fixture replies and the new one
+- [ ] `Surface`: `runText`, `runBytes`, `renderInterpreted`, `interpText`, `interpBytes`, `replyBytes` take a `Space`; the line `no result within <n> cells`; an answer that does not fit is the space outcome
+- [ ] `kernel/ffi.c`: `reflect_live_cells`; `kernel/Surface/Host.lean`: `space` on `reflect_run`, `reflect_run_bytes`, `reflect_interp`, `reflect_reply_bytes`; `reflect_default_space`
+- [ ] `host/run.zig`: `[step-budget [space]]`; `host/check.zig` and `host/check.sh`: `deep`, `build`, doubling, a function from thirty definitions, an answer of 2 million numbers; forever and factorial as before; each new case shown failing with the limit undone
+- [ ] `unikernel/main.zig`: the third word; `unikernel/net.zig`: `reflect.space=`; `unikernel/reply.zig`: the optional space
+- [ ] `unikernel/check.sh`, `unikernel/check-net.sh`: `deep` and `build` at 100000000 steps at levels 0, 1 and 2 at boot, and over UDP with factorial answered afterwards; forever still the budget reply; controls with the limit undone in `unikernel/evidence/`
+- [ ] The default from morphie's measurements, in `design.md` and `unikernel/README.md`; steps a second before and after on factorial and the interpreter levels
+- [ ] morphie: `build.sh`, `build-net.sh`, `check.sh`, `check-net.sh`, `check-quic.sh`, `check-wire.sh` from a `git archive` export; logs `unikernel/evidence/q59.67-<sha>-*.log`; `source.sha256`, `objects.sha256`
+- [ ] A bead in mjolnir's tracker for reply `81 07`
+- [ ] Fold: specs, `ARCHITECTURE.md`, `docs/PROOFS.md`, `docs/DECISIONS.md` P3, `docs/VISION.md`, `docs/LEARNINGS.md`, `kernel/README.md`, `unikernel/README.md`
