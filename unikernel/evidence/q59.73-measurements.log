@@ -1,0 +1,148 @@
+# homoiconic-q59.73 and q59.64: measurements, 2026-11-25
+# kernel/CostBench.lean: lake exe reflectCostBench <case> <size> <budget>; number <kind> <bytes>.
+# before = tree 2f1f07a with CostBench.lean added; after = tree 742d062 (the kernel of 73fefe9 but for Tk.show and the crossing's files).
+# Each loop runs until its budget ends, so ns/unit is wall time per unit of charge. morphie had other work beside it (load 1 to 6).
+
+## morphie, before
+loop size=0 budget=100000000 ended=budget ms=2929 ns/unit=29.293000
+equal-once size=20 budget=10000 ended=halted ms=87 ns/unit=8718.198000
+equal-once size=22 budget=10000 ended=halted ms=334 ns/unit=33474.315000
+equal-once size=24 budget=10000 ended=halted ms=1352 ns/unit=135280.289000
+equal-doubled size=20 budget=100000 ended=TIMEOUT(>120s)
+equal-light size=30 budget=10000000 ended=budget ms=325 ns/unit=32.579000
+equal-text size=1000000 budget=10000 ended=budget ms=422 ns/unit=42282.380000
+equal-big size=1000000 budget=1000000 ended=budget ms=1532 ns/unit=1532.859000
+cons-text size=1000000 budget=1000 ended=budget ms=956 ns/unit=956137.210000
+succ-big size=1000000 budget=10000 ended=budget ms=187 ns/unit=18782.692000
+case-big size=1000000 budget=10000 ended=budget ms=65 ns/unit=6549.533000
+access-deep size=100000 budget=10000000 ended=TIMEOUT(>120s)
+add-big size=1000000 budget=1000000000 ended=budget ms=24 ns/unit=0.024000
+sub-big size=1000000 budget=1000000000 ended=budget ms=41 ns/unit=0.041000
+less-big size=1000000 budget=1000000000 ended=budget ms=4 ns/unit=0.004000
+mul-big size=10000 budget=10000000000 ended=budget ms=0 ns/unit=0.000000
+div-big size=1000000 budget=100000000000 ended=budget ms=4411 ns/unit=0.044000
+mod-big size=1000000 budget=100000000000 ended=budget ms=2953 ns/unit=0.029000
+codes-text size=1000000 budget=100000000 ended=budget ms=2676 ns/unit=26.761000
+text-arr size=1000000 budget=100000000 ended=budget ms=2403 ns/unit=24.031000
+equal-once size=40 budget=100000000 ended=TIMEOUT(>120s)
+equal-doubled size=40 budget=100000000 ended=TIMEOUT(>120s)
+Build completed successfully (28 jobs).
+number print bytes=16384 out=39457 ms=434
+number print bytes=32768 out=78914 ms=1525
+number print bytes=65536 out=157827 ms=6719
+number write bytes=16384 out=16388 ms=30
+number write bytes=32768 out=32772 ms=110
+number write bytes=65536 out=65542 ms=398
+number read bytes=16384 out=131071 ms=89
+number read bytes=32768 out=262143 ms=398
+number read bytes=65536 out=524287 ms=1142
+number source bytes=16384 out=131071 ms=99
+number source bytes=32768 out=262143 ms=365
+number source bytes=65536 out=524287 ms=1128
+reflectCostBench <case> <size> <budget>
+reflectCostBench <case> <size> <budget>
+reflectCostBench <case> <size> <budget>
+loop size=0 budget=100000000 ended=budget ms=3475 ns/unit=34.756000
+access-deep size=100000 budget=1000000 ended=budget ms=20928 ns/unit=20928.937000
+equal-doubled size=16 budget=100000 ended=budget ms=17091 ns/unit=170911.475000
+equal-once size=24 budget=10000 ended=halted ms=1777 ns/unit=177771.361000
+
+## morphie, after
+Build completed successfully (28 jobs).
+loop size=0 budget=100000000 ended=budget ms=3958 ns/unit=39.586000
+equal-once size=40 budget=100000000 ended=budget ms=7385 ns/unit=73.854000
+equal-doubled size=20 budget=100000000 ended=budget ms=15457 ns/unit=154.577000
+equal-light size=30 budget=100000000 ended=budget ms=4962 ns/unit=49.625000
+equal-text size=1000000 budget=1000000000 ended=budget ms=12504 ns/unit=12.504000
+equal-big size=1000000 budget=1000000000 ended=budget ms=569 ns/unit=0.569000
+cons-text size=1000000 budget=1000000000 ended=budget ms=28664 ns/unit=28.664000
+succ-big size=1000000 budget=1000000000 ended=budget ms=2064 ns/unit=2.064000
+case-big size=1000000 budget=1000000000 ended=budget ms=1047 ns/unit=1.047000
+access-deep size=100000 budget=100000000 ended=budget ms=14693 ns/unit=146.933000
+add-big size=1000000 budget=1000000000 ended=budget ms=29 ns/unit=0.029000
+sub-big size=1000000 budget=1000000000 ended=budget ms=47 ns/unit=0.047000
+less-big size=1000000 budget=1000000000 ended=budget ms=6 ns/unit=0.006000
+mul-big size=10000 budget=10000000000 ended=budget ms=0 ns/unit=0.000000
+div-big size=1000000 budget=100000000000 ended=budget ms=4641 ns/unit=0.046000
+mod-big size=1000000 budget=100000000000 ended=budget ms=3206 ns/unit=0.032000
+codes-text size=1000000 budget=100000000 ended=budget ms=2830 ns/unit=28.309000
+text-arr size=1000000 budget=100000000 ended=budget ms=2602 ns/unit=26.022000
+number print bytes=2097146 out=5050431 ms=1254
+number write bytes=2097146 out=2097152 ms=223
+number read bytes=2097146 out=16777167 ms=484
+number source bytes=2097146 out=16777167 ms=1693
+
+## Mac (Apple M1 Max), before
+loop size=0 budget=100000000 ended=budget ms=2272 ns/unit=22.720000
+equal-once size=20 budget=10000 ended=halted ms=69 ns/unit=6922.587000
+equal-once size=22 budget=10000 ended=halted ms=269 ns/unit=26923.758000
+equal-once size=24 budget=10000 ended=halted ms=1079 ns/unit=107924.200000
+equal-doubled size=20 budget=100000 ended=TIMEOUT(>120s)
+equal-light size=30 budget=10000000 ended=budget ms=248 ns/unit=24.896000
+equal-text size=1000000 budget=10000 ended=budget ms=352 ns/unit=35260.966000
+equal-big size=1000000 budget=1000000 ended=budget ms=1446 ns/unit=1446.699000
+cons-text size=1000000 budget=1000 ended=budget ms=721 ns/unit=721388.792000
+succ-big size=1000000 budget=10000 ended=budget ms=93 ns/unit=9304.104000
+case-big size=1000000 budget=10000 ended=budget ms=28 ns/unit=2871.295000
+access-deep size=100000 budget=10000000 ended=TIMEOUT(>120s)
+add-big size=1000000 budget=1000000000 ended=budget ms=10 ns/unit=0.010000
+sub-big size=1000000 budget=1000000000 ended=budget ms=16 ns/unit=0.016000
+less-big size=1000000 budget=1000000000 ended=budget ms=3 ns/unit=0.003000
+mul-big size=10000 budget=10000000000 ended=budget ms=0 ns/unit=0.000000
+div-big size=1000000 budget=100000000000 ended=budget ms=3467 ns/unit=0.034000
+mod-big size=1000000 budget=100000000000 ended=budget ms=2762 ns/unit=0.027000
+codes-text size=1000000 budget=100000000 ended=budget ms=1946 ns/unit=19.465000
+text-arr size=1000000 budget=100000000 ended=budget ms=1770 ns/unit=17.704000
+
+## Mac, after
+loop size=0 budget=100000000 ended=budget ms=2687 ns/unit=26.877000
+equal-once size=40 budget=100000000 ended=budget ms=9350 ns/unit=93.507000
+equal-doubled size=20 budget=100000000 ended=budget ms=15686 ns/unit=156.860000
+equal-light size=30 budget=100000000 ended=budget ms=3181 ns/unit=31.819000
+equal-text size=1000000 budget=1000000000 ended=budget ms=8506 ns/unit=8.506000
+equal-big size=1000000 budget=1000000000 ended=budget ms=479 ns/unit=0.479000
+cons-text size=1000000 budget=1000000000 ended=budget ms=19587 ns/unit=19.587000
+succ-big size=1000000 budget=1000000000 ended=budget ms=838 ns/unit=0.838000
+case-big size=1000000 budget=1000000000 ended=budget ms=507 ns/unit=0.507000
+access-deep size=100000 budget=100000000 ended=budget ms=12734 ns/unit=127.348000
+
+## Charges summed to the end of each example, levels 0 to 2 (count mode): diff before -> after
+10,12c10,12
+< examples/calc.hom levels=0 steps=6900 charge=7567 ended=halted
+< examples/calc.hom levels=1 steps=371192 charge=371859 ended=halted
+< examples/calc.hom levels=2 steps=26877875 charge=26878542 ended=halted
+---
+> examples/calc.hom levels=0 steps=6900 charge=7597 ended=halted
+> examples/calc.hom levels=1 steps=371192 charge=371889 ended=halted
+> examples/calc.hom levels=2 steps=26877875 charge=26878572 ended=halted
+67,69c67,69
+< examples/words.hom levels=0 steps=40434 charge=41185 ended=halted
+< examples/words.hom levels=1 steps=2354139 charge=2354890 ended=halted
+< examples/words.hom levels=2 steps=165106771 charge=165107522 ended=halted
+---
+> examples/words.hom levels=0 steps=40434 charge=41188 ended=halted
+> examples/words.hom levels=1 steps=2354139 charge=2354893 ended=halted
+> examples/words.hom levels=2 steps=165106771 charge=165107525 ended=halted
+
+## Same, with reach at i / 8 + 1 instead of i / 32 + 1 (not adopted)
+2,3c2,3
+< examples/append.hom levels=1 steps=4759 charge=4759 ended=halted
+< examples/append.hom levels=2 steps=343441 charge=343441 ended=halted
+---
+> examples/append.hom levels=1 steps=4759 charge=5003 ended=halted
+> examples/append.hom levels=2 steps=343441 charge=359139 ended=halted
+5,15c5,15
+< examples/ask.hom levels=1 steps=489 charge=489 ended=halted
+< examples/ask.hom levels=2 steps=36445 charge=36445 ended=halted
+< examples/brainfuck.hom levels=0 steps=57890 charge=58149 ended=halted
+< examples/brainfuck.hom levels=1 steps=4961697 charge=4961956 ended=halted
+< examples/brainfuck.hom levels=2 steps=200000000 charge=200000080 ended=budget
+< examples/calc.hom levels=0 steps=6900 charge=7597 ended=halted
+< examples/calc.hom levels=1 steps=371192 charge=371889 ended=halted
+< examples/calc.hom levels=2 steps=26877875 charge=26878572 ended=halted
+< examples/code.hom levels=0 steps=126 charge=126 ended=halted
+< examples/code.hom levels=1 steps=7279 charge=7279 ended=halted
+< examples/code.hom levels=2 steps=547431 charge=547431 ended=halted
+---
+> examples/ask.hom levels=1 steps=489 charge=517 ended=halted
+...

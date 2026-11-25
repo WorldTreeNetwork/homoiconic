@@ -1,0 +1,12 @@
+2026-11-25T19:41:59Z
+tree 73fefe9, morphie, cloud-hypervisor v54.0
+build exit 0 (163 s)
+cc5c845b9665c1533f3ebb7fe60b76a655c436bc14e84c0708cbc4d7038f4204  unikernel/out/reflect.elf
+build-net exit 0 (161 s)
+check exit 0 (1057 s)
+check-net exit 0 (212 s)
+check-quic exit 0 (164 s)
+check-wire exit 0 (474 s)
+37e6d628299e742f618ac7ee0f2a8c3c6374316da365d9de463a255db1e9e9d5  unikernel/out/reflect.elf
+ALLDONE
+f009f8744b5c4c9db0a47397f6155611f0558c82e5e7f5302181f5094fd8ef5f  unikernel/out-net/reflect-net.elf

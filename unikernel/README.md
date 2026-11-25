@@ -693,3 +693,24 @@ folded on the deep-nesting change, the code of `fd3ff39`) exported to
 `evidence/run-695ce77.txt`; `source.sha256` and `objects.sha256` came out the
 same as the two runs above. `reflect-net.elf` is sha256 `1f12c42c…260b64e8`,
 the same before and after the checks.
+
+2026-11-25 (UTC) on morphie, Cloud Hypervisor 54.0, tree `73fefe9` exported
+with `git archive` to `~/hom-73fefe9-q59.73` (`homoiconic-q59.73`, `q59.64`):
+`build.sh examples/factorial.hom`, `build-net.sh`, `check.sh`, `check-net.sh`,
+`check-quic.sh` and `check-wire.sh` each exited 0 (`check.sh` 88 lines of
+`ok`, `check-wire.sh` 46). Logs `evidence/q59.73-73fefe9-*.log`, exit codes,
+times and image hashes in `evidence/q59.73-73fefe9-run.txt`; `reflect.elf`
+after the checks is sha256 `37e6d628…e9d5`, `reflect-net.elf` `f009f874…ef5f`;
+`source.sha256` and `objects.sha256` are the ones that build wrote, unchanged
+from the harden-crossing run of the same tree. New cases: `equal` of data
+doubled forty times at the budget 100000000 is the budget line at boot in 11 s
+(level 0) and 12 s (level 1) and the reply `81 01` over UDP in 11.5 s; the
+largest number 2 MiB holds is `error: unbound` and 5050431 digits at boot in
+92 s. The controls, the image with the kernel of `2f1f07a`
+(`evidence/q59.73-controls.log`): no power off in 120 s for either `equal`
+case, none in 600 s for the number, and `check-net.sh` failing with no reply to
+the `equal` request. The time per unit of charge, before and after, is
+`evidence/q59.73-measurements.log` and the table in
+`openspec/specs/bytecode-machine/spec.md` ("A charge bounds a step's time").
+The first attempt, tree `8c31d00`, failed only at `check-wire.sh`'s `worst`
+case of the crossing, which `0a5acac` fixed.

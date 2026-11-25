@@ -168,7 +168,7 @@ So a run of the default budget, 100000000, takes at most about 16 s of wall time
 
 - GIVEN `equal (dbl [0] 40) (dbl [0] 40)` at the budget 100000000
 - WHEN the image is given its byte form at levels 0 and 1 on morphie
-- THEN each ends in `no result within 100000000 steps` in 12 s and 11 s
+- THEN each ends in `no result within 100000000 steps`, in 11 s and 12 s, and over UDP the reply `81 01` in 11.5 s (tree `73fefe9`, `unikernel/evidence/q59.73-73fefe9-check.log`, `-check-net.log`); the kernel before gave no answer in 120 s at either level and no reply over UDP (`unikernel/evidence/q59.73-controls.log`)
 
 ### Requirement: One budget means the same on every budgeted path
 

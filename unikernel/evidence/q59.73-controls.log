@@ -1,0 +1,26 @@
+# host controls, Mac, 2026-11-25T18:10:35Z: the new host/check.sh cases, on tree 2f1f07a (old) and on the fixed tree (new); timeout 120 s
+old run equal40.hom 100000000: status 124 after 120 s:  (0 bytes)
+old run --interp=1 equal40.hom 100000000: status 124 after 120 s:  (0 bytes)
+old run --bytes largest.bytes 100000000: status 124 after 120 s:  (0 bytes)
+old run digits.hom 100000000: status 134 after 0 s: Segmentation fault at address 0x16b3f7fe0
+???:?:?: (2160342 bytes)
+new run equal40.hom 100000000: status 0 after 13 s: no result within 100000000 steps (32 bytes)
+new run --interp=1 equal40.hom 100000000: status 0 after 12 s: no result within 100000000 steps (32 bytes)
+new run --bytes largest.bytes 100000000: status 0 after 3 s: error: unbound 64609128662942012791346660370627952 (5050446 bytes)
+new run digits.hom 100000000: status 0 after 0 s: 99999999999999999999999999999999999999999999999999 (1000000 bytes)
+
+# image controls, morphie, 2026-11-25T19:06:52Z: tree 742d062 with kernel/ from 2f1f07a (the kernel before q59.73 and q59.64)
+build exit 0
+given equal40.bytes 100000000 0: status 124 after 120 s (124 is the time limit, 120 s); serial: 
+given equal40.bytes 100000000 1: status 124 after 120 s (124 is the time limit, 120 s); serial: 
+given largest.bytes 100000000 1: status 124 after 600 s (124 is the time limit, 600 s); serial: 
+build-net exit 0
+check-net exit 1: 
+CTLDONE
+## the end of ctl-check-net.log
+space reply ok: a recursion that waits
+space reply ok: a loop that builds
+space reply ok: an answer built by doubling
+space reply ok: a function from thirty definitions
+deep ok: data a million deep compared with itself
+no reply ident=40

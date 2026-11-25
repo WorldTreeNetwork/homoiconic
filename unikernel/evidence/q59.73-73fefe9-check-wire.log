@@ -1,0 +1,77 @@
+1/3 pvclock.test.time runs forward far past 2^32 shifted ticks...OK
+2/3 pvclock.test.a 3 GHz counter gives a second per 3e9 ticks, for a day...OK
+3/3 pvclock.test.a shift out of range gives zero, not a trap...OK
+All 3 tests passed.
+  admission: no flood 1 ms, flood round 0 2 ms
+  admission: no flood 1 ms, flood round 1 2 ms
+  admission: no flood 1 ms, flood round 2 2 ms
+  admission: no flood 1 ms, flood round 3 2 ms
+  admission: no flood 1 ms, flood round 4 2 ms
+  admission: on-path replay delayed the next connection to 2522 ms
+a connection is 70360 bytes; the table of 12 is 844736 bytes
+quic self ok
+built /home/dorje/hom-73fefe9-q59.73/unikernel/out-net/reflect-net.elf
+'Reflect.accepted_network' depends on axioms: [propext, Quot.sound]
+'Reflect.combine_merged' depends on axioms: [propext]
+'Reflect.merged_exact' depends on axioms: [propext]
+'Reflect.merged_once' depends on axioms: [propext]
+'Reflect.Walk.once' depends on axioms: [propext]
+'Reflect.combineTrace_walk' depends on axioms: [propext]
+'Reflect.traceRun_sched' depends on axioms: [propext, Quot.sound]
+'Reflect.runTurnMade_fst' depends on axioms: [propext, Quot.sound]
+'Reflect.turnMade_fst' depends on axioms: [propext, Quot.sound]
+'Reflect.beginMade_fst' depends on axioms: [propext, Quot.sound]
+'Reflect.stepMade_fst' depends on axioms: [propext, Quot.sound]
+'Reflect.hold_stretch' depends on axioms: [propext, Quot.sound]
+'Reflect.hold_count' depends on axioms: [propext, Quot.sound]
+'Reflect.hold_full' depends on axioms: [propext, Quot.sound]
+'Reflect.hold_entries' depends on axioms: [propext, Quot.sound]
+'Reflect.runSpaceLeft_eq_within' depends on axioms: [propext, Classical.choice, Quot.sound]
+ok   two guests in one process: 85 checks
+ok   a guest that expects another name refuses its peer
+ok   a guest its peer does not allow gets no answer
+ok   each record names its guest and its peer by entity name
+ok   reply: accepted; process 0: [20, 22]; holds [#0] process 1: 7; holds [#0] process 2: 9; holds [#0] places a: [0] places b: [1, 2]
+flood: 80001 datagrams in 40 s, heard 602 Retries and 12 others
+ok   flooded: accepted; process 0: [20, 22]; holds [#0] process 1: 7; holds [#0] process 2: 9; holds [#0] places a: [0] places b: [1, 2]
+ok   name: accepted; process 0: 5; holds [#2, #0] process 1: []; holds [#2, #0]
+ok   old: accepted; schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 1, 0], [2, 2, 0]] process 0: [1, 2]; holds [#0]
+ok   new: accepted; schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 2, 0], [2, 1, 0]] process 0: [2, 1]; holds [#0]
+ok   one program, two delivery orders, two records, and each replays to its own result
+ok   deep: accepted; process 1: 7; holds [#48]
+ok   a guest starts a program nested 288000 deep on data nested 960000 deep and compares the data
+ok   an entry moved, by another hand: refused: record a: the signature is not valid
+ok   an entry dropped, by another hand: refused: record b: the signature is not valid
+ok   an entry repeated, by another hand: refused: record a: the signature is not valid
+ok   the last entry dropped, by another hand: refused: record a: the signature is not valid
+ok   a record with no signature: refused: record a: it is not signed
+ok   a record signed by another entity: refused: record a: it is not signed by the entity it names
+ok   an entry moved: refused: log a: entry 5 does not name the entry before it
+ok   an entry dropped: refused: log b: entry 2 does not name the entry before it
+ok   an entry repeated: refused: log a: entry 6 does not name the entry before it
+ok   the last entry dropped: refused: log a: the head is not its last entry
+ok   a taking repeated, chain made again: refused: the logs do not combine
+ok   a taking dropped, chain made again: refused: the logs do not combine
+ok   an acknowledgement dropped, chain made again: refused: the logs do not combine
+ok   a local event repeated, chain made again: refused: [0, 0, 0] cannot happen
+ok   the takings in the other order, chain made again: refused: the acknowledgements of b are not the order a took them in
+ok   a record made again unchanged and signed is accepted
+ok   another program: refused: [1, 0] cannot happen
+ok   a record of another run: refused: the logs do not combine
+ok   records of two delivery orders: refused: the acknowledgements of b are not the order a took them in
+ok   a budget above its own limits: refused: record b: its budget is above its own limits
+ok   huge: accepted; process 0: [20, 22]; holds [#0] budget 100000 steps, 500000 cells
+ok   lower: accepted; process 0: [20, 22]; holds [#0] budget 50000 steps, 300000 cells
+ok   grow: accepted; places b: []
+ok   grow: a is full, and no guest stopped
+ok   fan: accepted; places a: [0]
+ok   fan: b is full, and no guest stopped
+ok   worst: accepted; places a: [0, 1]
+ok   worst: the largest local start, on top of 1476097 cells counted, and no guest stopped
+ok   chatter: accepted; places b: []
+ok   chatter: a is full, and no guest stopped
+ok   chatter: the log stops at its cap, 60000 entries
+ok   with its hold at the largest, the growing process ends guest A in INTERNAL PANIC: out of memory
+ok   hidden: accepted; places a: [0, 1, 2]
+ok   a different run of the same program, its state as it was, re-signed: refused: process 0 (a 0): reported waiting on [2, #0]; holds [#0]; root ...
+wire guests ok
