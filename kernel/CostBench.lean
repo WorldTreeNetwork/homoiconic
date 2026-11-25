@@ -4,6 +4,7 @@ import Surface.Read
 import Reflect.Interpreter
 import Surface.Render
 import Wire.Cbor
+import Surface.Keep
 open Reflect
 
 /-! The worst program found for each operation and each step of the machine's
@@ -63,6 +64,11 @@ def caseTerm (name : String) (k : Nat) : Option Term :=
   | "mod-big" => some (.app (src (loopOn "mod x 3")) (.lit (.nat (bigNat k))))
   | "codes-text" => some (.app (src (loopOnArr "codes x")) (.lit (textOf k)))
   | "text-arr" => some (.app (src (loopOnArr "codes (text x)")) (.lit (.arr (List.replicate k (.nat 97)))))
+  -- An operation whose charge is one on data of `k` doublings: the lazy
+  -- machine converts the whole argument to data (`homoiconic-q59.80`).
+  | "add-doubled" => some (.app (src (dbl ++ loopOn "add x 1" ++ "\n")) (.app (.app (src (dbl ++ "dbl")) (.lit (.arr [.nat 0]))) (.lit (.nat k))))
+  -- A literal of `k` items, made again each time round.
+  | "literal-wide" => some (src (loopOnArr (Surface.renderData (.arr (List.replicate k (.nat 7))))) |>.app (.lit (.nat 0)))
   | _ => none
 
 def ended : State → String
@@ -106,6 +112,23 @@ def main (args : List String) : IO UInt32 := do
       let (n, c, e) := charged (load (compile (level levels.toNat! t))) 0 0 200000000
       IO.println s!"{file} levels={levels} steps={n} charge={c} ended={ended e}"
       pure 0
+  | ["lazy", name, size, budget] =>
+    -- The same case on the lazy machine of a kept session, with an empty
+    -- store (`Surface.Keep.steps`).
+    match caseTerm name size.toNat!, budget.toNat! with
+    | some t, b =>
+      let s : PState Wire.Ref := (load (compile t)).toP
+      let t0 ← IO.monoNanosNow
+      let (e, left) := Surface.Keep.steps (fun _ => none) b s
+      let r := match e with
+        | .at (.halted _) => "halted"
+        | .at _ => "budget"
+        | .paused _ _ => "paused"
+      let t1 ← IO.monoNanosNow
+      let ns := t1 - t0
+      IO.println s!"lazy {name} size={size} budget={b} ended={r} left={left} ms={ns / 1000000} ns/unit={(ns * 1000 / (max b 1)).toFloat / 1000.0}"
+      pure 0
+    | none, _ => IO.eprintln s!"no case {name}"; pure 2
   | [name, size, budget] =>
     match caseTerm name size.toNat!, budget.toNat! with
     | some t, b =>

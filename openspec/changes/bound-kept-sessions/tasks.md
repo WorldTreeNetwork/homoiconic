@@ -1,0 +1,10 @@
+- [x] Measure the faults on `3122521` (`kernel/CostBench.lean` `lazy` cases; probes of `keep`, `vm`, `node` built from that tree)
+- [ ] Fresh-context read of `design.md` (Opus), answered before any Lean
+- [ ] `Reflect/Store.lean`: `P.nodes`, `Data.nodes`, `nodesWithin` walks and laws, `convUnit`, the new `lstepCost`, `lstepCostWithin` and `lstepCostWithin_eq`
+- [ ] `Reflect/StoreSpace.lean`: `lowed`, `lanswered`, `lcharge`, `lmade`, `LSpace`, `LEnded`, `afford`, `lrunSpace`; theorems `lrunSpace_lrun`, `lrunSpace_ledger`, `lrunSpace_within`; restated in `StoreContract.lean`
+- [ ] `Surface/Keep.lean`: the session's space, `steps` as `lrunSpace`, `fullWithin`, the save guard, the space line; `KeepProof`, `KeepLogProof` follow
+- [ ] `Surface/Host.lean`: the count for a `PState`, the exports give the default space
+- [ ] Walks with `@[csimp]` (the table in `design.md`), restated in `WalkContract.lean`
+- [ ] Checks and controls (`design.md`, "Checks and controls"); `host/check.sh` output diffed against `3122521`
+- [ ] morphie: the six image scripts (the image links `Surface/Keep` and `Reflect/Store`)
+- [ ] Fold
