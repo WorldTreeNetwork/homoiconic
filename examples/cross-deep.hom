@@ -1,0 +1,19 @@
+; data nested 960000 deep and a quoted program nested 288000 deep, built over
+; 24 turns: what one turn makes is bounded, what a process holds between turns
+; is not. Then the program is started on the data, which hands over the name
+; it holds, and the data is compared with itself. Each of these once recursed
+; on the native stack once for each level (homoiconic-q59.72).
+def nest x n =
+  case n
+    0 -> x
+    m + 1 -> nest [x] m
+def lets b n =
+  case n
+    0 -> b
+    m + 1 -> lets [0, [1, b], [2, 0]] m
+def grow k d b =
+  case k
+    0 -> ask [0] (fn ch -> ask [3, b, [ch, d]] (fn started -> equal d d))
+    j + 1 -> ask [0] (fn c -> grow j (nest d 40000) (lets b 6000))
+
+grow 24 0 [1, [2, 7]]

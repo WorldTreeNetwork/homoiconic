@@ -305,6 +305,25 @@ cmp "$OUT/many.hom" "$OUT/many.txt"
 "$OUT/run" --bytes "$OUT/many.bytes" > "$OUT/many-bytes.txt"
 cmp "$OUT/many.hom" "$OUT/many-bytes.txt"
 echo "array of 66000 items reads from source and from bytes"
+# Nesting deeper than the native stack (homoiconic-q59.72). A program builds
+# data a million arrays deep in a few million steps; printing it, comparing it
+# and writing it used to recurse once for each level and end the process on a
+# full stack (the image's 16 MiB stack held about 200000 levels). So did
+# reading back and compiling a program a million functions deep, or a list of
+# 419429 items. Each is now a walk with a list of work on the heap.
+printf 'def nest x n =\n  case n\n    0 -> x\n    m + 1 -> nest [x] m\n\n' > "$OUT/nest.def"
+{ cat "$OUT/nest.def"; echo "nest 0 1000000"; } > "$OUT/nest.hom"
+"$OUT/run" "$OUT/nest.hom" > "$OUT/nest.txt"
+awk 'BEGIN { for (i = 0; i < 1000000; i++) printf "["; printf "0"; for (i = 0; i < 1000000; i++) printf "]"; print "" }' > "$OUT/nest.expected"
+cmp "$OUT/nest.expected" "$OUT/nest.txt"
+echo "run nest.hom => data a million arrays deep, printed"
+{ cat "$OUT/nest.def"; echo "(fn d -> equal d d) (nest 0 1000000)"; } > "$OUT/nest-equal.hom"
+expect "1" "$OUT/nest-equal.hom"
+python3 -c 'import sys; sys.stdout.buffer.write(b"\x82\x01" * 1000000 + b"\x00")' > "$OUT/lams.bytes"
+expect "<function>" --bytes "$OUT/lams.bytes" 1000
+expect "<function>" --bytes --interp "$OUT/lams.bytes" 1000
+python3 -c 'import sys; sys.stdout.buffer.write(b"\x83\x04\x82\x02\x00" * 419429 + b"\x82\x02\x80")' > "$OUT/zeros.bytes"
+expect "no result within 1000 steps" --bytes "$OUT/zeros.bytes" 1000
 # The identity function is three bytes, and the kernel writes those three.
 printf 'fn x -> x\n' > "$OUT/identity.hom"
 "$OUT/bytes" "$OUT/identity.hom" > "$OUT/identity.bytes"
@@ -687,6 +706,14 @@ sed -n 's/^schedule: //p' "$OUT/ping.txt" > "$OUT/ping.schedule"
 "$OUT/chan" "$EXAMPLES/ping.hom" "$OUT/ping.schedule" > "$OUT/ping-replay.txt"
 cmp "$OUT/ping.txt" "$OUT/ping-replay.txt"
 echo "chan: the recorded schedule replays to the same text"
+# A process that holds data nested 960000 deep and a quoted program nested
+# 288000 deep, built over 24 turns, starts the program on the data and compares
+# the data with itself: reading the program, compiling it and finding the
+# names the data hands over are walks (homoiconic-q59.72).
+"$OUT/chan" "$EXAMPLES/cross-deep.hom" - 10000000 > "$OUT/cross-deep.txt"
+grep -q "^process 0: 1; holds \[#24, #23, " "$OUT/cross-deep.txt" && grep -qx "process 1: 7; holds \[#24\]" "$OUT/cross-deep.txt" ||
+    { cat "$OUT/cross-deep.txt" >&2; exit 1; }
+echo "chan cross-deep.hom => the deep program ran on the deep data, which handed over #24"
 # A line of thirteen processes finds the primes to 30, and its schedule replays.
 "$OUT/chan" "$EXAMPLES/sieve.hom" - 100000000 100000 > "$OUT/sieve.txt"
 want "$(sed -n 's/^process 0: \(.*\); holds.*/\1/p' "$OUT/sieve.txt")" "[2, 3, 5, 7, 11, 13, 17, 19, 23, 29]"
