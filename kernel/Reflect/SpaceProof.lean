@@ -320,11 +320,10 @@ theorem machine_exact_space (sp : Space) (t : Term) (fuel credit : Nat) (w : MOu
   obtain ⟨n, hn⟩ := runSpace_reach h
   exact machine_exact t n w hn
 
-/-- Where a turn is left, `run` gets to. This stands where `runPriced_reach`
-    stood in the driver proofs. -/
-theorem runTurn_reach {budget : Nat} {s t : State} (h : runTurn budget s = t) :
+/-- Where a turn is left, `run` gets to, for every turn space. -/
+theorem runTurnIn_reach {cells budget : Nat} {s t : State} (h : runTurnIn cells budget s = t) :
     ∃ n, run n s = t := by
-  unfold runTurn at h
+  unfold runTurnIn at h
   split at h
   · next u hu => exact runSpace_reach (by rw [runIn] at hu; rw [hu]; exact h)
   · next d hu =>
@@ -332,5 +331,10 @@ theorem runTurn_reach {budget : Nat} {s t : State} (h : runTurn budget s = t) :
     · exact runSpace_reach (by rw [runIn] at hu; rw [hu]; exact h)
     · exact ⟨0, h⟩
   · next u _ hu => exact runSpace_reach (by rw [runIn] at hu; rw [hu]; exact h)
+
+/-- Where a turn is left, `run` gets to. This stands where `runPriced_reach`
+    stood in the driver proofs. -/
+theorem runTurn_reach {budget : Nat} {s t : State} (h : runTurn budget s = t) :
+    ∃ n, run n s = t := runTurnIn_reach h
 
 end Reflect

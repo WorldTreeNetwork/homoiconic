@@ -584,21 +584,21 @@ theorem network_reflective (p : Term) (evs : List Event) (cfg : Config Value Out
     cases Config.map_inj (fun _ _ => reifyOutcome_inj) reifyValue_inj he
     exact h₁
 
-theorem settleRun_sound {budget : Nat} {w : MOutcome} {st : Status MValue MOutcome}
-    (h : settleRun budget w = some st) : Settle machine w st := by
+theorem settleIn_sound {cells budget : Nat} {w : MOutcome} {st : Status MValue MOutcome}
+    (h : settleIn cells budget w = some st) : Settle machine w st := by
   rcases w with (⟨k, e⟩ | d) | i | _
-  · rw [settleRun] at h
+  · rw [settleIn] at h
     split at h
     · next hp =>
-      obtain ⟨_, hp⟩ := runTurn_reach hp
+      obtain ⟨_, hp⟩ := runTurnIn_reach hp
       cases h
       exact Settle.wait (S := machine) rfl ⟨_, hp⟩ rfl
     · next hp =>
-      obtain ⟨_, hp⟩ := runTurn_reach hp
+      obtain ⟨_, hp⟩ := runTurnIn_reach hp
       cases h
       exact Settle.payloadFunction (S := machine) rfl ⟨_, hp⟩ rfl
     · next w' hnd hnf hp =>
-      obtain ⟨_, hp⟩ := runTurn_reach hp
+      obtain ⟨_, hp⟩ := runTurnIn_reach hp
       cases h
       obtain ⟨h1, h2⟩ := payload_other (w' := w') (fun d h => hnd d (by rw [h]))
         (fun k e h => hnf k e (by rw [h]))
@@ -608,21 +608,21 @@ theorem settleRun_sound {budget : Nat} {w : MOutcome} {st : Status MValue MOutco
   · cases h; exact Settle.stop (S := machine) rfl
   · cases h; exact Settle.stop (S := machine) rfl
 
-theorem turnRun_sound {budget : Nat} {c : MValue} {a : Data} {st : Status MValue MOutcome}
-    (h : turnRun budget c a = some st) : Turn machine c a st := by
-  unfold turnRun at h
+theorem turnIn_sound {cells budget : Nat} {c : MValue} {a : Data} {st : Status MValue MOutcome}
+    (h : turnIn cells budget c a = some st) : Turn machine c a st := by
+  unfold turnIn at h
   split at h
   · next w hw =>
-    obtain ⟨_, hw⟩ := runTurn_reach hw
-    exact ⟨w, ⟨_, hw⟩, settleRun_sound h⟩
+    obtain ⟨_, hw⟩ := runTurnIn_reach hw
+    exact ⟨w, ⟨_, hw⟩, settleIn_sound h⟩
   · cases h
 
 /-- An event the executable scheduler lets through is a `Step`. -/
-theorem stepRun_sound {budget : Nat} {cfg cfg' : MConfig} {ev : Event}
-    (h : stepRun budget cfg ev = .ok cfg') : Step machineP cfg ev cfg' := by
+theorem stepIn_sound {cells budget : Nat} {cfg cfg' : MConfig} {ev : Event}
+    (h : stepIn cells budget cfg ev = .ok cfg') : Step machineP cfg ev cfg' := by
   cases ev with
   | fresh i n =>
-    simp only [stepRun] at h
+    simp only [stepIn] at h
     split at h
     · next c p held hi =>
       split at h
@@ -633,29 +633,29 @@ theorem stepRun_sound {budget : Nat} {cfg cfg' : MConfig} {ev : Event}
           split at h
           · next st ht =>
             cases h
-            exact .fresh hi hq (by simpa using hn) (turnRun_sound ht)
+            exact .fresh hi hq (by simpa using hn) (turnIn_sound ht)
           · cases h
       · cases h
     · cases h
   | spawn i =>
-    simp only [stepRun] at h
+    simp only [stepIn] at h
     split at h
     · next c p held hi =>
       split at h
       · next t arg hq =>
         split at h
         · next w hw =>
-          obtain ⟨_, hw⟩ := runTurn_reach hw
+          obtain ⟨_, hw⟩ := runTurnIn_reach hw
           split at h
           · next child st hc ht =>
             cases h
-            exact .spawn hi hq ⟨_, hw⟩ (settleRun_sound hc) (turnRun_sound ht)
+            exact .spawn hi hq ⟨_, hw⟩ (settleIn_sound hc) (turnIn_sound ht)
           · cases h
         · cases h
       · cases h
     · cases h
   | comm i j =>
-    simp only [stepRun] at h
+    simp only [stepIn] at h
     split at h
     · next c p held c' p' held' hi hj =>
       split at h
@@ -667,13 +667,13 @@ theorem stepRun_sound {budget : Nat} {cfg cfg' : MConfig} {ev : Event}
           split at h
           · next st st' ht ht' =>
             cases h
-            exact .comm hi hj hq hq' hh hh' (turnRun_sound ht) (turnRun_sound ht')
+            exact .comm hi hj hq hq' hh hh' (turnIn_sound ht) (turnIn_sound ht')
           · cases h
         · cases h
       · cases h
     · cases h
   | answer i a =>
-    simp only [stepRun] at h
+    simp only [stepIn] at h
     split at h
     · next c p held hi =>
       split at h
@@ -681,25 +681,38 @@ theorem stepRun_sound {budget : Nat} {cfg cfg' : MConfig} {ev : Event}
         split at h
         · next st ht =>
           cases h
-          exact .answer hi hq (turnRun_sound ht)
+          exact .answer hi hq (turnIn_sound ht)
         · cases h
       · cases h
     · cases h
 
 /-- The events the executable scheduler reports as done are a schedule, and
     lead to the configuration it reports, however it stopped. -/
-theorem schedRun_sound {budget : Nat} : ∀ (evs : List Event) (cfg : MConfig),
-    Sched machineP cfg (schedRun budget cfg evs).1 (schedRun budget cfg evs).2.1 := by
+theorem schedIn_sound {cells budget : Nat} : ∀ (evs : List Event) (cfg : MConfig),
+    Sched machineP cfg (schedIn cells budget cfg evs).1 (schedIn cells budget cfg evs).2.1 := by
   intro evs
   induction evs with
   | nil => intro cfg; exact .nil
   | cons ev evs ih =>
     intro cfg
-    rw [schedRun]
+    rw [schedIn]
     split
-    · next mid hm => exact .cons (stepRun_sound hm) (ih mid)
+    · next mid hm => exact .cons (stepIn_sound hm) (ih mid)
     · exact .nil
     · exact .nil
+
+theorem settleRun_sound {budget : Nat} {w : MOutcome} {st : Status MValue MOutcome}
+    (h : settleRun budget w = some st) : Settle machine w st := settleIn_sound h
+
+theorem turnRun_sound {budget : Nat} {c : MValue} {a : Data} {st : Status MValue MOutcome}
+    (h : turnRun budget c a = some st) : Turn machine c a st := turnIn_sound h
+
+theorem stepRun_sound {budget : Nat} {cfg cfg' : MConfig} {ev : Event}
+    (h : stepRun budget cfg ev = .ok cfg') : Step machineP cfg ev cfg' := stepIn_sound h
+
+theorem schedRun_sound {budget : Nat} (evs : List Event) (cfg : MConfig) :
+    Sched machineP cfg (schedRun budget cfg evs).1 (schedRun budget cfg evs).2.1 :=
+  schedIn_sound evs cfg
 
 theorem autoRun_sound {budget : Nat} : ∀ (limit : Nat) (cfg : MConfig),
     Sched machineP cfg (autoRun budget limit cfg).1 (autoRun budget limit cfg).2.1 := by
@@ -717,26 +730,35 @@ theorem autoRun_sound {budget : Nat} : ∀ (limit : Nat) (cfg : MConfig),
       · exact .nil
       · exact .nil
 
-theorem beginRun_sound {budget : Nat} {p : Term} {cfg : MConfig}
-    (h : beginRun budget p = some cfg) : Begin machineP p cfg := by
-  unfold beginRun at h
+theorem beginIn_sound {cells budget : Nat} {p : Term} {cfg : MConfig}
+    (h : beginIn cells budget p = some cfg) : Begin machineP p cfg := by
+  unfold beginIn at h
   split at h
   · next w hw =>
-    obtain ⟨_, hw⟩ := runTurn_reach hw
+    obtain ⟨_, hw⟩ := runTurnIn_reach hw
     split at h
-    · next st hs => cases h; exact ⟨w, st, ⟨_, hw⟩, settleRun_sound hs, rfl⟩
+    · next st hs => cases h; exact ⟨w, st, ⟨_, hw⟩, settleIn_sound hs, rfl⟩
     · cases h
   · cases h
+
+theorem beginRun_sound {budget : Nat} {p : Term} {cfg : MConfig}
+    (h : beginRun budget p = some cfg) : Begin machineP p cfg := beginIn_sound h
 
 /-- What the executable scheduler reports after a given schedule is true of
     the program: the events it reports as done are a run of the program by
     direct evaluation, and the configuration it reports is the compiled form of
     where that run leads. This holds however the run stopped. -/
+theorem replayIn_true {cells budget : Nat} {p : Term} {c₀ : MConfig} (evs : List Event)
+    (h : beginIn cells budget p = some c₀) :
+    ∃ cfg, Network sourceP p (schedIn cells budget c₀ evs).1 cfg ∧
+      (schedIn cells budget c₀ evs).2.1 = cfg.map MP.injO injV :=
+  network_machine_exact ⟨c₀, beginIn_sound h, schedIn_sound evs c₀⟩
+
 theorem replay_true {budget : Nat} {p : Term} {c₀ : MConfig} (evs : List Event)
     (h : beginRun budget p = some c₀) :
     ∃ cfg, Network sourceP p (schedRun budget c₀ evs).1 cfg ∧
       (schedRun budget c₀ evs).2.1 = cfg.map MP.injO injV :=
-  network_machine_exact ⟨c₀, beginRun_sound h, schedRun_sound evs c₀⟩
+  replayIn_true evs h
 
 /-- The same for a schedule the scheduler chose itself. -/
 theorem auto_true {budget : Nat} {p : Term} {c₀ : MConfig} (limit : Nat)

@@ -355,12 +355,17 @@ def turnSpace : Nat := 4000000
     more than four bytes written for each cell is left where it began. Every
     state a driver begins a turn from is running, so either way the driver
     sees a state that is not halted and reports the turn as not finished, in
-    the words it has for a turn out of steps (`homoiconic-q59.75`). -/
-def runTurn (budget : Nat) (s : State) : State :=
-  match runIn (.ledger turnSpace) budget s with
+    the words it has for a turn out of steps (`homoiconic-q59.75`). `cells`
+    is the turn space: `turnSpace` for every driver but a crossing. -/
+def runTurnIn (cells budget : Nat) (s : State) : State :=
+  match runIn (.ledger cells) budget s with
   | .full t => t
   | .reached (.halted (.value (.data d))) =>
-      if d.writes (4 * turnSpace) then .halted (.value (.data d)) else s
+      if d.writes (4 * cells) then .halted (.value (.data d)) else s
   | .reached t => t
+
+/-- `runTurnIn` at `turnSpace`: every driver's turn but a crossing's, whose
+    guests agree on a turn space of their own (`Surface.Cross`). -/
+def runTurn (budget : Nat) (s : State) : State := runTurnIn turnSpace budget s
 
 end Reflect

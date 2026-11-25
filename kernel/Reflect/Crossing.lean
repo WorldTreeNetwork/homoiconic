@@ -44,6 +44,10 @@ inductive Note where
   | sendIn (k j : Nat)
   /-- The peer took crossing `k`, and process `i` continued. -/
   | ack (k i : Nat)
+  /-- The guest's ledger was spent; it counted `m` cells held and went on. -/
+  | held (m : Nat)
+  /-- The guest counted `m` cells held, or reached a cap, and stopped. -/
+  | full (m : Nat)
   deriving Repr, BEq
 
 inductive Crossed where
@@ -132,31 +136,44 @@ def Mix.place (m : Mix) (s : Side) : Note → Option (Mix × List Event)
     | some ⟨g, .taken⟩, some g' =>
       if g = g' then some (m.setOuts s ((m.outs s).set k ⟨g, .acked⟩), []) else none
     | _, _ => none
+  | .held _ => some (m, [])
+  | .full _ => some (m, [])
 
 /-- Walk two logs: the head of `a` when it can be placed, otherwise the head
-    of `b`. Gives the schedule and the last state. `fuel` is a bound on the
-    entries left. -/
-def mix : Nat → Mix → List Note → List Note → Option (List Event × Mix)
+    of `b`. Gives the entries in the order placed, each with the events it
+    stands for, and the last state. `fuel` is a bound on the entries left. -/
+def mix : Nat → Mix → List Note → List Note → Option (List (Side × Note × List Event) × Mix)
   | _, m, [], [] => if m.settled then some ([], m) else none
   | 0, _, _, _ => none
   | fuel + 1, m, x :: xs, ys =>
     match m.place .a x with
-    | some (m', evs) => (mix fuel m' xs ys).map fun r => (evs ++ r.1, r.2)
+    | some (m', evs) => (mix fuel m' xs ys).map fun r => ((.a, x, evs) :: r.1, r.2)
     | none =>
       match ys with
       | y :: ys' =>
         match m.place .b y with
-        | some (m', evs) => (mix fuel m' (x :: xs) ys').map fun r => (evs ++ r.1, r.2)
+        | some (m', evs) => (mix fuel m' (x :: xs) ys').map fun r => ((.b, y, evs) :: r.1, r.2)
         | none => none
       | [] => none
   | fuel + 1, m, [], y :: ys =>
     match m.place .b y with
-    | some (m', evs) => (mix fuel m' [] ys).map fun r => (evs ++ r.1, r.2)
+    | some (m', evs) => (mix fuel m' [] ys).map fun r => ((.b, y, evs) :: r.1, r.2)
     | none => none
+
+/-- The entries of two logs in the order the walk placed them, each with its
+    events, and the last state. -/
+def combineTrace (a b : List Note) : Option (List (Side × Note × List Event) × Mix) :=
+  mix (a.length + b.length) Mix.first a b
+
+/-- The events of a trace, in order. -/
+def traceEvents (t : List (Side × Note × List Event)) : List Event := t.flatMap (·.2.2)
+
+/-- The entries of a trace, in order. -/
+def traceEntries (t : List (Side × Note × List Event)) : List (Side × Note) := t.map fun e => (e.1, e.2.1)
 
 /-- The schedule two logs make, and the places it gave. -/
 def combineMix (a b : List Note) : Option (List Event × Mix) :=
-  mix (a.length + b.length) Mix.first a b
+  (combineTrace a b).map fun r => (traceEvents r.1, r.2)
 
 /-- The schedule two logs make. -/
 def combine (a b : List Note) : Option (List Event) := (combineMix a b).map (·.1)
@@ -194,12 +211,13 @@ def takenBy (s : Side) (tr : List (Side × Note)) : List Nat :=
 
 variable [Ops]
 
-/-- The check: combine the logs, begin the program, and run the schedule. A
-    record is accepted only when every event of the schedule happened. -/
-def accept (budget : Nat) (p : Term) (a b : List Note) : Option (List Event × MConfig) :=
-  match combine a b, beginRun budget p with
+/-- The check: combine the logs, begin the program, and run the schedule,
+    every turn with `budget` steps and `cells` cells. A record is accepted
+    only when every event of the schedule happened. -/
+def accept (cells budget : Nat) (p : Term) (a b : List Note) : Option (List Event × MConfig) :=
+  match combine a b, beginIn cells budget p with
   | some evs, some c₀ =>
-    match schedRun budget c₀ evs with
+    match schedIn cells budget c₀ evs with
     | (_, cfg, .ran) => some (evs, cfg)
     | _ => none
   | _, _ => none

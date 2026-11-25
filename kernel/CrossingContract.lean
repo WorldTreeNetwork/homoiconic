@@ -9,9 +9,11 @@ open Reflect
 -- A record the check accepts is a run of the one-machine network: the
 -- schedule the two guests' logs make is one the table allows, and it leads
 -- the program, by direct evaluation, to a configuration whose compiled form
--- is the one the check reports. So every channel theorem holds of it.
-example : ∀ [Ops] {budget : Nat} {p : Term} {a b : List Note} {evs : List Event} {cfg : MConfig},
-    accept budget p a b = some (evs, cfg) →
+-- is the one the check reports. So every channel theorem holds of it. Since
+-- `harden-crossing` this is for every turn space `cells` the two guests
+-- agreed on, not only `turnSpace`.
+example : ∀ [Ops] {cells budget : Nat} {p : Term} {a b : List Note} {evs : List Event} {cfg : MConfig},
+    accept cells budget p a b = some (evs, cfg) →
     Merged a b evs ∧ ∃ c, Network sourceP p evs c ∧ cfg = c.map MP.injO MP.injV :=
   Reflect.accepted_network
 
@@ -39,8 +41,77 @@ example : ∀ {m last : Mix} {a b : List Note} {tr : List (Side × Note)} {evs :
     (takenBy s tr).Nodup ∧ ∀ k ∈ takenBy s tr, m.Fresh s.other k :=
   fun h => Reflect.Walk.once h
 
+-- `harden-crossing`: the check replays in the order the merge placed the
+-- entries; that order is a walk the table allows, and its events are the
+-- schedule `combine` gives.
+example : ∀ {a b : List Note} {t : List (Side × Note × List Event)} {last : Mix},
+    combineTrace a b = some (t, last) →
+    Walk Mix.first a b (traceEntries t) (traceEvents t) last ∧ combine a b = some (traceEvents t) :=
+  Reflect.combineTrace_walk
+
+-- The check's replay, which charges each entry as its guest did, is
+-- `schedIn` on that schedule when it runs every event: so `accepted_network`
+-- speaks of what the check ran.
+example : ∀ [Ops] (cells budget : Nat) (places : Side → List Nat) (t : List (Side × Note × List Event))
+    (cfg : MConfig) (pa pb : Nat),
+    (traceRun cells budget places cfg pa pb t).stopped = .ran →
+    schedIn cells budget cfg (traceEvents t) =
+      ((traceRun cells budget places cfg pa pb t).events,
+        (traceRun cells budget places cfg pa pb t).cfg, .ran) :=
+  Reflect.traceRun_sched
+
+-- The measured runs are the runs: what a guest and the check charge is
+-- measured on the very runs `schedIn` makes.
+example : ∀ [Ops] (cells budget : Nat) (s : State),
+    (runTurnMade cells budget s).1 = runTurnIn cells budget s := Reflect.runTurnMade_fst
+example : ∀ [Ops] (cells budget : Nat) (c : MValue) (a : Data),
+    (turnMade cells budget c a).1 = turnIn cells budget c a := Reflect.turnMade_fst
+example : ∀ [Ops] (cells budget : Nat) (p : Term),
+    (beginMade cells budget p).1 = beginIn cells budget p := Reflect.beginMade_fst
+example : ∀ [Ops] (cells budget : Nat) (cfg : MConfig) (ev : Event),
+    (stepMade cells budget cfg ev).1 = stepIn cells budget cfg ev := Reflect.stepMade_fst
+
+-- The ledger walk. Between the start, or a count, and the next count, the
+-- entries but the last charged no more than the credit the stretch began
+-- with.
+example : ∀ (hold : Nat) (seg rest : List Charged) (k credit : Nat) (r : Option (Nat × Nat)),
+    holdGo hold k credit false false (seg ++ rest) = .ok r →
+    (∀ e ∈ seg, e.note.isCount = false) →
+    ((seg.dropLast).map (·.cost)).sum ≤ credit :=
+  Reflect.hold_stretch
+
+-- A count the walk goes on from is at most the bar, and the next stretch has
+-- the hold less the count.
+example : ∀ {hold k credit : Nat} {must cap : Bool} {r : Option (Nat × Nat)}
+    {pre rest : List Charged} {m c ps : Nat},
+    holdGo hold k credit must cap (pre ++ ⟨.held m, c, ps⟩ :: rest) = .ok r →
+    m ≤ holdBar hold ∧ ∃ k' r', holdGo hold k' (hold - m) false false rest = .ok r' :=
+  Reflect.hold_count
+
+-- After `full` come only acknowledgements, at most `outLimit`.
+example : ∀ {hold k credit : Nat} {must cap : Bool} {r : Option (Nat × Nat)}
+    {pre rest : List Charged} {m c ps : Nat},
+    holdGo hold k credit must cap (pre ++ ⟨.full m, c, ps⟩ :: rest) = .ok r →
+    (∀ e ∈ rest, e.note.isAck = true) ∧ rest.length ≤ outLimit :=
+  Reflect.hold_full
+
+-- A side the walk accepts has a bounded number of entries.
+example : ∀ {hold first : Nat} {es : List Charged} {r : Option (Nat × Nat)},
+    holdWalk hold first es = .ok r → es.length ≤ entryLimit + outLimit + 2 :=
+  Reflect.hold_entries
+
 #print axioms Reflect.accepted_network
 #print axioms Reflect.combine_merged
 #print axioms Reflect.merged_exact
 #print axioms Reflect.merged_once
 #print axioms Reflect.Walk.once
+#print axioms Reflect.combineTrace_walk
+#print axioms Reflect.traceRun_sched
+#print axioms Reflect.runTurnMade_fst
+#print axioms Reflect.turnMade_fst
+#print axioms Reflect.beginMade_fst
+#print axioms Reflect.stepMade_fst
+#print axioms Reflect.hold_stretch
+#print axioms Reflect.hold_count
+#print axioms Reflect.hold_full
+#print axioms Reflect.hold_entries

@@ -219,23 +219,26 @@ def interpretedP : PSys Data Data where
   start t w := Direct [] (.app interp (.lit (reify t))) (.value (.data w))
 
 /-! The executable scheduler, on the machine. Every machine run gets `budget`
-    steps: beginning a program, reading a payload, and running the rest on an
-    answer. -/
+    steps and may make `cells` cells (`runTurnIn`): beginning a program,
+    reading a payload, and running the rest on an answer. Every driver runs
+    them at `turnSpace` (`settleRun`, `turnRun`, `stepRun`, `schedRun`,
+    `beginRun`); the two guests of a crossing agree on a turn space of their
+    own. -/
 
 /-- `none`: a machine run did not halt within the budget, or within the cells
     a turn may make (`runTurn`). -/
-def settleRun (budget : Nat) : MOutcome → Option (Status MValue MOutcome)
+def settleIn (cells budget : Nat) : MOutcome → Option (Status MValue MOutcome)
   | .value (.closure k e) =>
-    match runTurn budget (.running (compile payloadTerm) [.closure k e] [] []) with
+    match runTurnIn cells budget (.running (compile payloadTerm) [.closure k e] [] []) with
     | .halted (.value (.data p)) => some (.waiting (.closure k e) p)
     | .halted (.value (.closure _ _)) => some (.finished .wrong)
     | .halted w => some (.finished w)
     | _ => none
   | w => some (.finished w)
 
-def turnRun (budget : Nat) (c : MValue) (a : Data) : Option (Status MValue MOutcome) :=
-  match runTurn budget (.running (compile (resumeTerm a)) [c] [] []) with
-  | .halted w => settleRun budget w
+def turnIn (cells budget : Nat) (c : MValue) (a : Data) : Option (Status MValue MOutcome) :=
+  match runTurnIn cells budget (.running (compile (resumeTerm a)) [c] [] []) with
+  | .halted w => settleIn cells budget w
   | _ => none
 
 abbrev MConfig := Config MValue MOutcome
@@ -248,14 +251,14 @@ inductive Tried where
   | refused : Tried
   | unfinished : Tried
 
-def stepRun (budget : Nat) (cfg : MConfig) : Event → Tried
+def stepIn (cells budget : Nat) (cfg : MConfig) : Event → Tried
   | .fresh i n =>
     match cfg.procs[i]? with
     | some ⟨.waiting c p, held⟩ =>
       match classify p with
       | .fresh =>
         if cfg.names.contains n then .refused else
-        match turnRun budget c (.name n) with
+        match turnIn cells budget c (.name n) with
         | some st => .ok ⟨cfg.procs.set i ⟨st, n :: held⟩, n :: cfg.names⟩
         | none => .unfinished
       | _ => .refused
@@ -265,9 +268,9 @@ def stepRun (budget : Nat) (cfg : MConfig) : Event → Tried
     | some ⟨.waiting c p, held⟩ =>
       match classify p with
       | .spawn t arg =>
-        match runTurn budget (load (compile (.app t (.lit arg)))) with
+        match runTurnIn cells budget (load (compile (.app t (.lit arg)))) with
         | .halted w =>
-          match settleRun budget w, turnRun budget c (.arr []) with
+          match settleIn cells budget w, turnIn cells budget c (.arr []) with
           | some child, some st =>
             .ok ⟨cfg.procs.set i ⟨st, held⟩ ++ [⟨child, grant held arg⟩], cfg.names⟩
           | _, _ => .unfinished
@@ -280,7 +283,7 @@ def stepRun (budget : Nat) (cfg : MConfig) : Event → Tried
       match classify p, classify p' with
       | .send ch v, .receive ch' =>
         if ch == ch' && held.contains ch && held'.contains ch then
-          match turnRun budget c (.arr []), turnRun budget c' v with
+          match turnIn cells budget c (.arr []), turnIn cells budget c' v with
           | some st, some st' =>
             .ok ⟨(cfg.procs.set i ⟨st, held⟩).set j ⟨st', gain held' (grant held v)⟩, cfg.names⟩
           | _, _ => .unfinished
@@ -292,7 +295,7 @@ def stepRun (budget : Nat) (cfg : MConfig) : Event → Tried
     | some ⟨.waiting c p, held⟩ =>
       match classify p with
       | .outside =>
-        match turnRun budget c a with
+        match turnIn cells budget c a with
         | some st => .ok ⟨cfg.procs.set i ⟨st, held⟩, cfg.names⟩
         | none => .unfinished
       | _ => .refused
@@ -308,24 +311,33 @@ inductive Stopped where
 /-- Run the events in order, stopping at the first that does not go through.
     Gives the events that happened, the configuration after them, and how the
     run stopped. -/
-def schedRun (budget : Nat) : MConfig → List Event → List Event × MConfig × Stopped
+def schedIn (cells budget : Nat) : MConfig → List Event → List Event × MConfig × Stopped
   | cfg, [] => ([], cfg, .ran)
   | cfg, ev :: evs =>
-    match stepRun budget cfg ev with
+    match stepIn cells budget cfg ev with
     | .ok mid =>
-      let r := schedRun budget mid evs
+      let r := schedIn cells budget mid evs
       (ev :: r.1, r.2)
     | .refused => ([], cfg, .refused ev)
     | .unfinished => ([], cfg, .unfinished ev)
 
 /-- The first configuration, on the machine. `none`: a run did not halt. -/
-def beginRun (budget : Nat) (p : Term) : Option MConfig :=
-  match runTurn budget (load (compile p)) with
+def beginIn (cells budget : Nat) (p : Term) : Option MConfig :=
+  match runTurnIn cells budget (load (compile p)) with
   | .halted w =>
-    match settleRun budget w with
+    match settleIn cells budget w with
     | some st => some ⟨[⟨st, []⟩], []⟩
     | none => none
   | _ => none
+
+/-- The runs above at `turnSpace`, the turn space of every driver but a
+    crossing. -/
+def settleRun (budget : Nat) : MOutcome → Option (Status MValue MOutcome) := settleIn turnSpace budget
+def turnRun (budget : Nat) : MValue → Data → Option (Status MValue MOutcome) := turnIn turnSpace budget
+def stepRun (budget : Nat) : MConfig → Event → Tried := stepIn turnSpace budget
+def schedRun (budget : Nat) : MConfig → List Event → List Event × MConfig × Stopped :=
+  schedIn turnSpace budget
+def beginRun (budget : Nat) : Term → Option MConfig := beginIn turnSpace budget
 
 /-! Choosing. `pick` is one way to choose the next event: the first process, in
     order, whose request has what it needs in the configuration. It does not run

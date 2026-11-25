@@ -17,32 +17,34 @@ Nothing here is about what a guest does.
 -/
 namespace Reflect
 
-/-- The walk is one the table allows. -/
-theorem mix_walk : ∀ (fuel : Nat) (m : Mix) (a b : List Note) (evs : List Event) (last : Mix),
-    mix fuel m a b = some (evs, last) → ∃ tr, Walk m a b tr evs last := by
+/-- The walk is one the table allows, and its trace is the order it placed
+    the entries in, each with its events. -/
+theorem mix_walk : ∀ (fuel : Nat) (m : Mix) (a b : List Note) (t : List (Side × Note × List Event))
+    (last : Mix), mix fuel m a b = some (t, last) →
+    Walk m a b (traceEntries t) (traceEvents t) last := by
   intro fuel
   induction fuel with
   | zero =>
-    intro m a b evs last h
+    intro m a b t last h
     cases a with
     | nil =>
       cases b with
       | nil =>
         simp only [mix] at h
         split at h
-        · next hs => cases h; exact ⟨[], .done hs⟩
+        · next hs => cases h; exact .done hs
         · cases h
       | cons y ys => simp [mix] at h
     | cons x xs => simp [mix] at h
   | succ fuel ih =>
-    intro m a b evs last h
+    intro m a b t last h
     cases a with
     | nil =>
       cases b with
       | nil =>
         simp only [mix] at h
         split at h
-        · next hs => cases h; exact ⟨[], .done hs⟩
+        · next hs => cases h; exact .done hs
         · cases h
       | cons y ys =>
         simp only [mix] at h
@@ -51,11 +53,11 @@ theorem mix_walk : ∀ (fuel : Nat) (m : Mix) (a b : List Note) (evs : List Even
           cases hr : mix fuel m' [] ys with
           | none => simp [hr] at h
           | some r =>
-            obtain ⟨es', last'⟩ := r
+            obtain ⟨t', last'⟩ := r
             simp [hr] at h
             obtain ⟨rfl, rfl⟩ := h
-            obtain ⟨tr, hw⟩ := ih m' [] ys es' last' hr
-            exact ⟨_, .right hp hw⟩
+            have hw := ih m' [] ys t' last' hr
+            simpa [traceEntries, traceEvents] using Walk.right hp hw
         · cases h
     | cons x xs =>
       simp only [mix] at h
@@ -64,11 +66,11 @@ theorem mix_walk : ∀ (fuel : Nat) (m : Mix) (a b : List Note) (evs : List Even
         cases hr : mix fuel m' xs b with
         | none => simp [hr] at h
         | some r =>
-          obtain ⟨es', last'⟩ := r
+          obtain ⟨t', last'⟩ := r
           simp [hr] at h
           obtain ⟨rfl, rfl⟩ := h
-          obtain ⟨tr, hw⟩ := ih m' xs b es' last' hr
-          exact ⟨_, .left hp hw⟩
+          have hw := ih m' xs b t' last' hr
+          simpa [traceEntries, traceEvents] using Walk.left hp hw
       · split at h
         · next y ys' =>
           split at h
@@ -76,26 +78,34 @@ theorem mix_walk : ∀ (fuel : Nat) (m : Mix) (a b : List Note) (evs : List Even
             cases hr : mix fuel m' (x :: xs) ys' with
             | none => simp [hr] at h
             | some r =>
-              obtain ⟨es', last'⟩ := r
+              obtain ⟨t', last'⟩ := r
               simp [hr] at h
               obtain ⟨rfl, rfl⟩ := h
-              obtain ⟨tr, hw⟩ := ih m' (x :: xs) ys' es' last' hr
-              exact ⟨_, .right hp hw⟩
+              have hw := ih m' (x :: xs) ys' t' last' hr
+              simpa [traceEntries, traceEvents] using Walk.right hp hw
           · cases h
         · cases h
+
+/-- The order the check replays in is a walk the table allows, whose events
+    are the schedule `combine` gives. -/
+theorem combineTrace_walk {a b : List Note} {t : List (Side × Note × List Event)} {last : Mix}
+    (h : combineTrace a b = some (t, last)) :
+    Walk Mix.first a b (traceEntries t) (traceEvents t) last ∧
+      combine a b = some (traceEvents t) := by
+  refine ⟨mix_walk _ _ _ _ _ _ h, ?_⟩
+  simp [combine, combineMix, h]
 
 /-- What `combine` gives is a schedule the table allows. -/
 theorem combine_merged {a b : List Note} {evs : List Event} (h : combine a b = some evs) :
     Merged a b evs := by
   unfold combine combineMix at h
-  cases hr : mix (a.length + b.length) Mix.first a b with
+  cases hr : combineTrace a b with
   | none => simp [hr] at h
   | some r =>
-    obtain ⟨es, last⟩ := r
+    obtain ⟨t, last⟩ := r
     simp [hr] at h
     subst h
-    obtain ⟨tr, hw⟩ := mix_walk _ _ _ _ _ _ hr
-    exact ⟨tr, last, hw⟩
+    exact ⟨_, last, (combineTrace_walk hr).1⟩
 
 /-- A walk keeps each log whole and in its order: the entries of `a` among
     those placed are `a`, and those of `b` are `b`. -/
@@ -188,6 +198,8 @@ theorem Mix.place_moved {m m' : Mix} {t : Side} {e : Note} {evs : List Event}
       · cases h; exact Mix.setOuts_moved m t u (.on k g .acked (by decide) rfl)
       · cases h
     · cases h
+  | held _ => simp only [Mix.place] at h; cases h; exact .same rfl
+  | full _ => simp only [Mix.place] at h; cases h; exact .same rfl
 
 /-- A crossing that has moved on from `offered` stays so. -/
 theorem Moved.keeps {old new : List Crossing} (h : Moved old new) {k : Nat} {c : Crossing}
@@ -235,6 +247,8 @@ theorem Mix.place_takes {m m' : Mix} {s : Side} {e : Note} {evs : List Event} {k
   | did ev => cases he
   | out i k' => cases he
   | ack k' i => cases he
+  | held _ => cases he
+  | full _ => cases he
   | spawnIn k' =>
     cases he
     simp only [Mix.place] at h
@@ -317,14 +331,14 @@ variable [Ops]
 
 /-- When every event of a schedule happened, the events reported are the
     schedule. -/
-theorem schedRun_ran {budget : Nat} : ∀ (evs : List Event) (cfg : MConfig),
-    (schedRun budget cfg evs).2.2 = .ran → (schedRun budget cfg evs).1 = evs := by
+theorem schedIn_ran {cells budget : Nat} : ∀ (evs : List Event) (cfg : MConfig),
+    (schedIn cells budget cfg evs).2.2 = .ran → (schedIn cells budget cfg evs).1 = evs := by
   intro evs
   induction evs with
   | nil => intro cfg _; rfl
   | cons ev evs ih =>
     intro cfg h
-    rw [schedRun] at h ⊢
+    rw [schedIn] at h ⊢
     split
     · next mid hm =>
       rw [hm] at h
@@ -336,8 +350,8 @@ theorem schedRun_ran {budget : Nat} : ∀ (evs : List Event) (cfg : MConfig),
 /-- An accepted record is a run of the one-machine network: the schedule the
     two logs make leads the program, by direct evaluation, to a configuration
     whose compiled form is the one the check reports. -/
-theorem accepted_network {budget : Nat} {p : Term} {a b : List Note} {evs : List Event}
-    {cfg : MConfig} (h : accept budget p a b = some (evs, cfg)) :
+theorem accepted_network {cells budget : Nat} {p : Term} {a b : List Note} {evs : List Event}
+    {cfg : MConfig} (h : accept cells budget p a b = some (evs, cfg)) :
     Merged a b evs ∧ ∃ c, Network sourceP p evs c ∧ cfg = c.map MP.injO MP.injV := by
   unfold accept at h
   split at h
@@ -346,9 +360,9 @@ theorem accepted_network {budget : Nat} {p : Term} {a b : List Note} {evs : List
     · next done cfg' hr =>
       cases h
       refine ⟨combine_merged hc, ?_⟩
-      obtain ⟨c, hn, he⟩ := replay_true (budget := budget) evs hb
-      have hran : (schedRun budget c₀ evs).2.2 = .ran := by rw [hr]
-      rw [schedRun_ran evs c₀ hran] at hn
+      obtain ⟨c, hn, he⟩ := replayIn_true (cells := cells) (budget := budget) evs hb
+      have hran : (schedIn cells budget c₀ evs).2.2 = .ran := by rw [hr]
+      rw [schedIn_ran evs c₀ hran] at hn
       rw [hr] at he
       exact ⟨c, hn, (he : cfg = _)⟩
     · cases h

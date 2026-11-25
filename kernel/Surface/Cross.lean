@@ -28,6 +28,8 @@ def noteData : Note → Data
   | .spawnIn k => .arr [.nat 2, .nat k]
   | .sendIn k j => .arr [.nat 3, .nat k, .nat j]
   | .ack k i => .arr [.nat 4, .nat k, .nat i]
+  | .held m => .arr [.nat 5, .nat m]
+  | .full m => .arr [.nat 6, .nat m]
 
 def dataNote : Data → Option Note
   | .arr [.nat 0, d] => (dataEvent d).map .did
@@ -35,6 +37,8 @@ def dataNote : Data → Option Note
   | .arr [.nat 2, .nat k] => some (.spawnIn k)
   | .arr [.nat 3, .nat k, .nat j] => some (.sendIn k j)
   | .arr [.nat 4, .nat k, .nat i] => some (.ack k i)
+  | .arr [.nat 5, .nat m] => some (.held m)
+  | .arr [.nat 6, .nat m] => some (.full m)
   | _ => none
 
 /-- A process that asked for a crossing and is held: its place, the crossing,

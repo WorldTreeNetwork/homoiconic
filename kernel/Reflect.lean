@@ -22,3 +22,5 @@ import Reflect.Store
 import Reflect.StoreProof
 import Reflect.Crossing
 import Reflect.CrossingProof
+import Reflect.Hold
+import Reflect.HoldProof
