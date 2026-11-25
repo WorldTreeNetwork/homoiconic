@@ -1,0 +1,52 @@
+with cloud-hypervisor v54.0
+ok   factorial
+ok   forever
+ok   not-syntax
+ok   text
+ok   a zero byte in the source
+ok   an answer of 128911 bytes
+ok   the clock stopped
+ok   the event loop's start is the empty one
+ok   the program calls reflect_run and reflect_interp and nothing else that evaluates or reads
+ok   the Lean objects are the ones Lake's C compiled to
+ok   bytes at boot: text, through one interpreter
+ok   bytes at boot: factorial, through one interpreter
+ok   bytes at boot: factorial, through none
+ok   bytes at boot: factorial, through two interpreters
+ok   bytes at boot: the quine
+ok   bytes at boot: a budget of 5000 steps
+ok   bytes at boot: forever at the default budget through 0
+ok   bytes at boot: forever at the default budget through 1
+ok   bytes at boot: forever at the default budget through 2
+ok   bytes at boot: a recursion that waits ends out of space through 0
+ok   bytes at boot: a recursion that waits ends out of space through 1
+ok   bytes at boot: a loop that builds ends out of space
+ok   bytes at boot: a recursion that waits, through 2, ends in its budget
+ok   bytes at boot: a recursion that waits, through 2, in 100000 cells
+ok   bytes at boot: a loop that builds, through 1, ends in its budget
+ok   bytes at boot: a loop that builds, through 2, ends in its budget
+ok   bytes at boot: a loop that builds, through 1, in 100000 cells
+ok   bytes at boot: with the limit undone the recursion that waits ends in out of memory
+ok   bytes at boot: an answer built by doubling, through 0
+ok   bytes at boot: an answer built by doubling, through 1
+ok   bytes at boot: 800000 numbers of 19 digits are too much to write
+ok   bytes at boot: an array held 3990 times is too much to write
+ok   bytes at boot: a text taken apart twice and kept
+ok   bytes at boot: 10000 steps are enough through none
+ok   bytes at boot: 10000 steps are not enough through one
+ok   bytes at boot: 100000 steps are enough through one
+ok   bytes at boot: 100000 steps are not enough through two
+ok   bytes at boot: eight interpreters
+ok   bytes at boot: the largest budget
+ok   bytes at boot: a megabyte that is no program
+ok   bytes at boot: one byte past a program
+ok   bytes at boot: exactly 2 MiB
+ok   bytes at boot: 2 MiB of arrays never closed
+ok   bytes at boot: one array of 2097147 zeros
+ok   bytes at boot: 2097151 arrays of one nested around 0
+ok   bytes at boot: a literal array of 2097145 empty texts
+ok   bytes at boot: a literal text of 2097145 line ends
+ok   bytes at boot: a recursion that waits behind a literal of 2 MiB
+ok   bytes at boot: a list of 419429 zeros, 1000 steps, one interpreter
+FAIL given /home/dorje/hom-5107fa8/unikernel/out/deep.bytes: no power off within 60 seconds
+  serial: [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[ [q59.63: 3322148 bytes of one line cut here; the full log is ~/hom-5107fa8/logs/check.log on morphie] ]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]

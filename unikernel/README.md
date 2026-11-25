@@ -597,3 +597,26 @@ the read of the landed code (`761ef8a` with these checks, `~/hom-pre-9582bbf`)
 passed `check.sh` and `check-net.sh`; its first try failed only at the
 control's own assertion, which expected no `reflect: exit` line after the
 panic, and the image prints `reflect: exit 1`.
+
+2026-11-25 UTC, on morphie, Cloud Hypervisor 54.0, tree `5107fa8` (add-quic-admission,
+homoiconic-q59.63) exported with `git archive` to `~/hom-5107fa8` and built from
+nothing: `build.sh examples/factorial.hom`, `build-net.sh`, `check-net.sh` (19
+`ok`), `check-quic.sh` (29 `ok`, `quic guest ok`) and `check-wire.sh` (28 `ok`,
+`wire guests ok`) each exited 0. Logs are `evidence/q59.63-5107fa8-*.log`, exit
+codes and hashes `evidence/run-5107fa8.txt`; `source.sha256` and
+`objects.sha256` are this build's, `versions.txt` came out the same.
+`reflect-net.elf` is sha256 `72e641e6…b656fe4a`, the same before and after the
+checks. In `check-quic.sh` five allowed clients were served in 7 to 10 ms each
+while a second address flooded the guest at 4000 datagrams a second, an
+allowed client was served in 15 ms behind four stalled clients on no list and
+the client of `e9a4c86` (Mjolnir's) in about 2.5 s, after their cap; in
+`check-wire.sh` a crossing closed while the host flooded the serving guest.
+`check.sh` exited 1 at one step, `given deep.bytes: no power off within 60
+seconds`, after 49 `ok`: the 2 MiB nested byte form that used to fill the
+guest's stack (`the stack is full`) is now read and its answer printed, which
+the step does not expect. That is the deep-walk change of the kernel
+(`3e0635d`), not this one: nothing `check.sh` builds or boots was changed here.
+Its serial output, one line of 3.3 MB, is cut in the kept log.
+`evidence/q59.63-controls.log` is each fix of this change undone in turn on
+tree `ca88f86`: 18 cases of `quic-self` and 3 runs of `check-quic.sh` and
+`check-wire.sh`, each failing at its own step.
