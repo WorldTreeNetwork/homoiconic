@@ -351,13 +351,33 @@ printf '\202\002\200' >> "$OUT/cons.bytes"
 [ "$(wc -c < "$OUT/cons.bytes")" -gt $((limit - 5)) ] || fail "the list program is not near 2 MiB"
 given "$OUT/cons.bytes" "1000 1"; same_given "bytes at boot: a list of 419429 zeros, 1000 steps, one interpreter"
 says "a list of 419429 zeros" "no result within 1000 steps"
-# A literal nested deeper than the stack holds ends in the report of a full
-# stack, as a source nested too deep does: the stack, not the memory, bounds it.
+# Nesting deeper than the native stack (homoiconic-q59.72). Each of these
+# ended the image in the report of a full stack: the printer, the comparison,
+# reading a program back and compiling it recursed once for each level, and the
+# 16 MiB stack held about 200000 levels. Each is now a walk with its work in a
+# list on the heap, and the image says what the Linux process says.
+# A literal of 2 MiB that is arrays of one nested around 0, printed (4 MB).
 { printf '\202\002'; head -c $((limit - 3)) /dev/zero | tr '\0' '\201'; printf '\0'; } > "$OUT/deep.bytes"
-given "$OUT/deep.bytes" ""
-grep -q "^reflect: processor fault 14 .* (on the fault stack): the stack is full" "$OUT/serial.log" || fail "deep bytes: no report of a full stack"
-if grep -q "reflect: exit\|out of memory" "$OUT/serial.log"; then fail "deep bytes: not a full stack"; fi
-echo "ok   bytes at boot: a literal nested 2097149 deep ends in a report of a full stack"
+GIVEN_LIMIT=600
+given "$OUT/deep.bytes" ""; same_given "bytes at boot: a literal nested 2097149 deep is printed"
+unset GIVEN_LIMIT
+head -c 2097149 /dev/zero | tr '\0' '[' | cmp -n 2097149 - "$OUT/serial.log" > /dev/null || fail "deep bytes: the answer does not open 2097149 arrays"
+# Data a million arrays deep, built by the program, compared with itself.
+printf 'def nest x n =\n  case n\n    0 -> x\n    m + 1 -> nest [x] m\n\n(fn d -> equal d d) (nest 0 1000000)\n' > "$OUT/nest-equal.hom"
+bytes "$OUT/nest-equal.hom" "$OUT/nest-equal.bytes" nest-equal
+given "$OUT/nest-equal.bytes" "100000000 0"; same_given "bytes at boot: data a million deep compared with itself"
+says "data a million deep compared with itself" "1"
+# A program of 2 MiB that is a million functions each inside the last: read
+# back, compiled, and through one interpreter quoted again.
+python3 -c 'import sys; sys.stdout.buffer.write(b"\x82\x01" * 1000000 + b"\x00")' > "$OUT/lams.bytes"
+for levels in 0 1; do
+    given "$OUT/lams.bytes" "1000 $levels"; same_given "bytes at boot: a million functions deep, through $levels"
+    says "a million functions deep, through $levels" "<function>"
+done
+# The list of 419429 zeros compiled, not interpreted: `comp` of a list was one
+# call for each item.
+given "$OUT/cons.bytes" "1000 0"; same_given "bytes at boot: a list of 419429 zeros, compiled"
+says "a list of 419429 zeros, compiled" "no result within 1000 steps"
 # Words that are not numbers, or numbers past the limits, are refused by the
 # program as the Linux process refuses them, each with its own line.
 given "$OUT/factorial.bytes" "many"; refused_given "bytes at boot: a budget that is not a number" "reflect: the step budget must be a whole number"

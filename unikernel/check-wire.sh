@@ -220,6 +220,21 @@ grep -qxF "proc [1, 2]; holds [#0]" "$W/old.a" || fail "guest A did not report [
 grep -qxF "proc [2, 1]; holds [#0]" "$W/new.a" || fail "guest A did not report [2, 1]"
 echo "ok   one program, two delivery orders, two records, and each replays to its own result"
 
+# Nesting deeper than the native stack (homoiconic-q59.72). The program builds
+# data nested 960000 deep and a quoted program nested 288000 deep over 24
+# turns, starts the program on the data on its own guest, and compares the
+# data with itself. Reading the program back, compiling it, finding the names
+# the data hands over and comparing recursed once for each level and ended the
+# guest in the report of a full stack. Each is a walk now, on the guest and in
+# the replay of the check.
+BUDGET=10000000
+run deep "$EX/cross-deep.hom" "" ""
+BUDGET=100000
+if grep -q "processor fault\|INTERNAL PANIC" "$W/deep-a.log" "$W/deep-b.log"; then fail "deep: a guest stopped"; fi
+accepted deep "process 1: 7; holds [#48]"
+grep -q "^process 0: 1; holds \[#48, #46, " "$W/deep.check" || { cat "$W/deep.check" >&2; fail "deep: process 0 did not compare the data with itself"; }
+echo "ok   a guest starts a program nested 288000 deep on data nested 960000 deep and compares the data"
+
 # Tampered records, from the real guests' records of the run `old`.
 P="$W/old.bytes"
 A="$W/old.a"

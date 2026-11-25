@@ -1,0 +1,48 @@
+# homoiconic-q59.72 controls, on morphie, Cloud Hypervisor 54.0.
+# The control tree is ~/hom-82abb4d-ctl: tree 82abb4d (the new checks) with kernel/ from d2171ce (before the walks).
+
+## controls.sh: the old image booted on each new case of check.sh
+full stack: a literal nested 2097149 deep, through 1
+reflect: processor fault 14 code 0x0000000000000002 at 0x0000000001171266 address 0x000000001efffff8 stack 0x000000001f000000 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+full stack: data a million deep compared with itself
+reflect: processor fault 14 code 0x0000000000000002 at 0x0000000001189043 address 0x000000001efffff8 stack 0x000000001f000000 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+full stack: a million functions deep, through 0
+reflect: processor fault 14 code 0x0000000000000002 at 0x0000000001188381 address 0x000000001efffff8 stack 0x000000001f000000 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+full stack: a million functions deep, through 1
+reflect: processor fault 14 code 0x0000000000000002 at 0x0000000001188381 address 0x000000001efffff8 stack 0x000000001f000000 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+full stack: a list of 419429 zeros, compiled
+reflect: processor fault 14 code 0x0000000000000002 at 0x000000000117e1ab address 0x000000001efffff8 stack 0x000000001f000000 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+
+## check-net.sh on the control tree
+ok   bytes that are not a program are refused
+ok   a function value round-trips
+ok   a trailing byte is refused
+space reply ok: a recursion that waits
+space reply ok: a loop that builds
+space reply ok: an answer built by doubling
+space reply ok: a function from thirty definitions
+no reply ident=38
+exit 1
+(guest serial:)
+reflect: processor fault 14 code 0x0000000000000002 at 0x0000000001115583 address 0x000000001efffff8 stack 0x000000001f000000 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+
+## check-net.sh on the control tree with the deep comparison removed (check-net-ctl2.sh)
+# the deep data answer passes on the old tree too: writing data was a loop already
+deep ok: data a million deep as the answer is too large for a datagram
+guest cases ok 20
+abort named
+unikernel/check-net-ctl2.sh: line 351: wait: pid 3734142 is not a child of this shell
+a chain of 300000 functions: no too-large reply
+reflect: ready 192.168.249.2:4444
+
+reflect: processor fault 14 code 0x0000000000000002 at 0x0000000001100fbf address 0x000000001effffe8 stack 0x000000001efffff0 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+
+exit 1
+
+## check-wire.sh on the control tree
+reflect: processor fault 14 code 0x0000000000000002 at 0x00000000011148c9 address 0x000000001efffff8 stack 0x000000001f000000 (on the fault stack): the stack is full; below the guard: 0x0000000000000000
+reflect: entity 2siKPmbu4uCqvSHurYcKLctjnZ2sdHdLdDqAt2YLg2dR
+reflect: ready 192.168.249.3:4444
+reflect: peer 192.168.249.2:4446
+FAIL deep: guest A did not close
+exit 1

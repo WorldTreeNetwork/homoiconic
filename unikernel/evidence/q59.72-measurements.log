@@ -1,0 +1,37 @@
+# homoiconic-q59.72: the depth at which the old kernel filled a 16 MiB stack.
+# morphie, Cloud Hypervisor 54.0, 2026-11-25 (UTC). Control tree ~/hom-82abb4d-ctl
+# (tree 82abb4d with kernel/ from d2171ce). Bisected to about 1%.
+
+## On the image (probe.py: given.sh, level 0; "ok" is reflect: exit 0)
+# print: a literal [2, d], d arrays of one nested n deep around 0, budget 1000
+print 50000: ok (3s)          print 1000000: FULL
+print 168750: ok              print 176171: FULL
+print 172460: ok              print 174315: ok
+RESULT print: passes at 174315, full stack at 176171
+# equal: (fn d -> equal d d) (nest 0 n), budget 100000000, space 100000000
+equal 261523: ok              equal 265234: FULL
+RESULT equal: passes at 261523, full stack at 265234
+# lam: n functions each inside the last, as bytes (82 01)^n 00, budget 1000
+lam 209570: ok                lam 213281: FULL
+RESULT lam: passes at 209570, full stack at 213281
+# cons: a list of n zeros, compiled (level 0), budget 1000
+cons 209570: ok               cons 213281: FULL
+RESULT cons: passes at 209570, full stack at 213281
+
+## As Linux processes of the same objects, ulimit -s 16384 (probe2.py)
+# chain: unikernel/out-net/reply run 100000000 <chain n> 1000000000
+#   (a chain of n functions, each holding the last; valueData)
+chain 87031: exit 0           chain 88163: SIGABRT on a full stack
+RESULT chain: passes at 87031, fails at 88163
+# At the default space, 4000000 cells, fitsValue refuses the chain from about
+# 47000 functions, so this was reachable only with reflect.space raised.
+# mentions: host/out/chan, a process holding data nested n deep (built 50000
+#   levels a turn) starts a process on [ch, d]; gdb: lp_circularKernel_Reflect_mentionsAny
+mentions 250000: exit 0       mentions 300000: SIGSEGV
+RESULT mentions: passes at 250000, fails at 300000
+
+## Not measured
+# Surface.Cross.chain recursed once for each entry of a crossing guest's log
+# (about 64 bytes a frame, so near 260000 entries). Reaching that needs about
+# 260000 events on one guest, each fresh name O(n) in the list of names; no run
+# reached it. It is a loop now (chain_eq_walk).

@@ -220,6 +220,28 @@ for what, text in hostile:
         sys.exit(f"factorial after {what} differs")
     print("space reply ok:", what)
     ident += 2
+# Nesting deeper than the native stack (homoiconic-q59.72). Comparing data a
+# million arrays deep recursed once for each level and ended the guest in the
+# report of a full stack: one message of 119 bytes of program. Writing such data as the
+# answer is a walk too; the answer is too large for one datagram.
+nest = "def nest x n =\n  case n\n    0 -> x\n    m + 1 -> nest [x] m\n\n"
+blob = source("deep", nest + "(fn d -> equal d d) (nest 0 1000000)\n")
+got = must(exchange(0, 0, ident, 100000000, blob, wait=300), 1, 0, ident, 100000000)
+if got != linux_run(100000000, blob) or got != bytes.fromhex("8200820001"):
+    sys.exit(f"data a million deep compared with itself: the guest gave {got.hex()}")
+after = must(exchange(0, 0, ident + 1, 100000000, fact_bytes, wait=30), 1, 0, ident + 1, 100000000)
+if after != body:
+    sys.exit("factorial after the deep comparison differs")
+print("deep ok: data a million deep compared with itself")
+ident += 2
+blob = source("deep", nest + "nest 0 1000000\n")
+if must(exchange(0, 0, ident, 100000000, blob, wait=300), 1, 2, ident, 100000000) != b"":
+    sys.exit("data a million deep as the answer: the too-large reply carried a payload")
+after = must(exchange(0, 0, ident + 1, 100000000, fact_bytes, wait=30), 1, 0, ident + 1, 100000000)
+if after != body:
+    sys.exit("factorial after the deep answer differs")
+print("deep ok: data a million deep as the answer is too large for a datagram")
+ident += 2
 # The Linux export with the limit undone goes on to its budget on a shorter
 # run: the space, not the budget, is what gave `81 07` above.
 deep_blob = source("space", hostile[0][1])
@@ -368,6 +390,38 @@ def csum(data):
     t = sum(struct.unpack("!%dH"%(len(data)//2), data))
     while t>>16: t=(t&0xffff)+(t>>16)
     return (~t)&0xffff
+def send(ident, budget, blob):
+    app = b"RFL1" + bytes([0,0,0,0]) + ident.to_bytes(8,"big") + budget.to_bytes(8,"big") + blob
+    ulen=8+len(app); ip=bytearray(20); ip[0]=0x45; ip[2:4]=struct.pack("!H", 20+ulen); ip[8]=64; ip[9]=17
+    ip[12:16]=host_ip; ip[16:20]=guest_ip; ip[10:12]=struct.pack("!H", csum(ip))
+    u=bytearray(ulen); u[0:2]=struct.pack("!H", 1); u[2:4]=struct.pack("!H", 4444); u[4:6]=struct.pack("!H", ulen); u[8:]=app
+    pseudo=host_ip+guest_ip+b"\x00\x11"+struct.pack("!H", ulen)
+    u[6:8]=struct.pack("!H", csum(pseudo+u) or 0xffff)
+    s.send(bytes.fromhex("020000000002")+host_mac+b"\x08\x00"+bytes(ip)+bytes(u))
+def reply_to(ident, wait):
+    end = time.time() + wait
+    while time.time() < end:
+        try:
+            pkt = s.recv(65535)
+        except socket.timeout:
+            continue
+        if len(pkt) < 42 or pkt[12:14] != b"\x08\x00" or pkt[23] != 17 or pkt[26:30] != guest_ip:
+            continue
+        app = pkt[42:]
+        if app[:4] == b"RFL1" and int.from_bytes(app[8:16], "big") == ident:
+            return app
+    return None
+# Nesting deeper than the native stack (homoiconic-q59.72): with no space
+# limit a chain of 300000 functions, each holding the last, passes the size
+# check, and writing its byte form recursed once for each function and ended
+# the guest in a full stack. It is a walk now; the form is too large for one
+# datagram, and the guest answers so.
+open("/tmp/uk-chain.hom", "w").write("let wrap = fn f -> fn y -> f\ndef chain f n =\n  case n\n    0 -> f\n    m + 1 -> chain (wrap f) m\n\nchain (fn z -> z) 300000\n")
+send(39, 100000000, subprocess.check_output([reply, "source", "/tmp/uk-chain.hom"]))
+app = reply_to(39, 300)
+if app is None or app[4] != 1 or app[5] != 2 or len(app) != 24:
+    sys.exit("a chain of 300000 functions: no too-large reply\n" + open(serial_path).read()[-2000:])
+print("limit undone: a chain of 300000 functions is too large for a datagram")
 open("/tmp/uk-undone.hom", "w").write("def deep x = [x, ...deep x]\ndeep 0\n")
 blob = subprocess.check_output([reply, "source", "/tmp/uk-undone.hom"])
 app = b"RFL1" + bytes([0,0,0,0]) + (40).to_bytes(8,"big") + (100000000).to_bytes(8,"big") + blob
