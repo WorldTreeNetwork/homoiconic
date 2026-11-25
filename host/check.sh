@@ -193,6 +193,34 @@ expect "no result within 2000000 steps" "$OUT/build.hom" 2000000 $UNDONE
 printf 'def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\ndbl [0] 40\n' > "$OUT/double.hom"
 spaced "$SPACE" 65536 "$OUT/double.hom"
 spaced "$SPACE" 65536 --interp "$OUT/double.hom"
+# A number is read and printed in time that grows a little faster than its
+# length, not with its square (homoiconic-q59.64). The largest number the 2 MiB
+# boot limit holds, tag 2 over 2097146 bytes of ff, is a program that is a
+# variable: it is read, run and printed as `error: unbound` and its 5050431
+# digits. Before, a number of 128 KiB took 393 s and this one did not finish.
+python3 -c 'import sys; L = 2097146; sys.stdout.buffer.write(b"\xc2\x5a" + L.to_bytes(4, "big") + b"\xff" * L)' > "$OUT/largest.bytes"
+[ "$(wc -c < "$OUT/largest.bytes" | tr -d ' ')" = 2097152 ] || { echo "largest.bytes is not 2 MiB" >&2; exit 1; }
+tail_digits="$(python3 -c 'print(pow(2, 8 * 2097146, 10 ** 12) - 1)')"
+start="$(date +%s)"
+timeout 120 "$OUT/run" --bytes "$OUT/largest.bytes" 100000000 > "$OUT/largest.txt" || { echo "run --bytes largest.bytes: no answer in 120 s" >&2; exit 1; }
+took=$(( $(date +%s) - start ))
+got_len="$(wc -c < "$OUT/largest.txt" | tr -d ' ')"
+if [ "$(head -c 15 "$OUT/largest.txt")" != "error: unbound " ] || [ "$got_len" != $((15 + 5050431 + 1)) ] ||
+    [ "$(tail -c 13 "$OUT/largest.txt" | head -c 12)" != "$tail_digits" ]; then
+    echo "run --bytes largest.bytes: expected error: unbound and 5050431 digits ending $tail_digits, got $got_len bytes" >&2; exit 1
+fi
+echo "run --bytes largest.bytes (2 MiB) => error: unbound and 5050431 digits (${took} s)"
+# A literal of a million digits reads, writes as bytes, reads back and prints
+# as the same digits.
+python3 -c 'import sys; sys.stdout.write("9" * 999999 + "7\n")' > "$OUT/digits.hom"
+start="$(date +%s)"
+timeout 120 "$OUT/run" "$OUT/digits.hom" 100000000 > "$OUT/digits.txt" || { echo "run digits.hom: no answer in 120 s" >&2; exit 1; }
+"$OUT/bytes" "$OUT/digits.hom" > "$OUT/digits.bytes"
+timeout 120 "$OUT/run" --bytes "$OUT/digits.bytes" 100000000 > "$OUT/digits-bytes.txt" || { echo "run --bytes digits.bytes: no answer in 120 s" >&2; exit 1; }
+took=$(( $(date +%s) - start ))
+cmp -s "$OUT/digits.hom" "$OUT/digits.txt" && cmp -s "$OUT/digits.hom" "$OUT/digits-bytes.txt" ||
+    { echo "run digits.hom: a million digits did not come back the same" >&2; exit 1; }
+echo "run digits.hom, bytes, run --bytes: a million digits back the same (${took} s)"
 # Comparing data built by doubling forty times is charged what it weighs, 2^40
 # and more, found within the budget (homoiconic-q59.73): at the default budget
 # it is the budget line, in about 10 s on a Mac at levels 0 and 1. It was

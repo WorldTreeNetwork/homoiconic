@@ -234,6 +234,21 @@ if after != body:
     sys.exit("factorial after the deep comparison differs")
 print("deep ok: data a million deep compared with itself")
 ident += 2
+# Comparing data built by doubling forty times is charged what it weighs, more
+# than 2^40, found within the budget (homoiconic-q59.73): the budget reply in
+# seconds, and the guest answers the next request. It was charged one, and one
+# such comparison ran for hours.
+blob = source("equal40", "def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\nequal (dbl [0] 40) (dbl [0] 40)\n")
+t0 = time.time()
+got = must(exchange(0, 0, ident, 100000000, blob, wait=120), 1, 0, ident, 100000000)
+took = time.time() - t0
+if got != bytes.fromhex("8101") or got != linux_run(100000000, blob):
+    sys.exit(f"equal of data doubled forty times: the guest gave {got.hex()}, not the budget reply")
+after = must(exchange(0, 0, ident + 1, 100000000, fact_bytes, wait=30), 1, 0, ident + 1, 100000000)
+if after != body:
+    sys.exit("factorial after the doubled comparison differs")
+print(f"charge ok: equal of data doubled forty times is the budget reply in {took:.1f} s")
+ident += 2
 blob = source("deep", nest + "nest 0 1000000\n")
 if must(exchange(0, 0, ident, 100000000, blob, wait=300), 1, 2, ident, 100000000) != b"":
     sys.exit("data a million deep as the answer: the too-large reply carried a payload")

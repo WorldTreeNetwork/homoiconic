@@ -266,6 +266,32 @@ for levels in 0 1; do
     given "$OUT/double.bytes" "100000000 $levels"; same_given "bytes at boot: an answer built by doubling, through $levels"
     says "an answer built by doubling through $levels" "no result within 4000000 cells"
 done
+# Comparing those forty cells with themselves is charged what they weigh as a
+# tree, more than 2^40, found within the budget (homoiconic-q59.73): the
+# budget line in seconds, inside LIMIT. It was charged one and ran for hours.
+printf 'def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\nequal (dbl [0] 40) (dbl [0] 40)\n' > "$OUT/equal40.hom"
+bytes "$OUT/equal40.hom" "$OUT/equal40.bytes" equal40
+for levels in 0 1; do
+    started="$(date +%s)"
+    given "$OUT/equal40.bytes" "100000000 $levels"
+    took=$(( $(date +%s) - started ))
+    same_given "bytes at boot: equal of data doubled forty times, through $levels (${took} s)"
+    says "equal of data doubled forty times through $levels" "no result within 100000000 steps"
+done
+# The largest number 2 MiB holds, tag 2 over 2097146 bytes of ff, is read and
+# printed in seconds (homoiconic-q59.64): a program that is a variable, so the
+# answer is `error: unbound` and its 5050431 digits, which leave through the
+# serial port in most of the time. Before, the image gave no answer in 300 s.
+python3 -c 'import sys; L = 2097146; sys.stdout.buffer.write(b"\xc2\x5a" + L.to_bytes(4, "big") + b"\xff" * L)' > "$OUT/largest.bytes"
+GIVEN_LIMIT=600
+started="$(date +%s)"
+given "$OUT/largest.bytes" "100000000 1"
+took=$(( $(date +%s) - started ))
+same_given "bytes at boot: the largest number 2 MiB holds (${took} s)"
+unset GIVEN_LIMIT
+[ "$(head -c 15 "$OUT/serial.log")" = "error: unbound " ] && [ "$(wc -c < "$OUT/serial.log" | tr -d ' ')" = $((15 + 5050431 + 1 + 16)) ] ||
+    fail "the largest number: expected error: unbound and 5050431 digits"
+echo "ok   the largest number: error: unbound and 5050431 digits"
 printf 'def b m acc =\n  case m\n    0 -> acc\n    k + 1 -> b k [9000000000000000000, ...acc]\n\nb 800000 []\n' > "$OUT/numbers.hom"
 bytes "$OUT/numbers.hom" "$OUT/numbers.bytes" numbers
 given "$OUT/numbers.bytes" "100000000 0"; same_given "bytes at boot: 800000 numbers of 19 digits are too much to write"

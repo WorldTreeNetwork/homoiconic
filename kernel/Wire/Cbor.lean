@@ -94,6 +94,54 @@ def pushBE : Nat → Nat → ByteArray → ByteArray
   | 0, _, out => out
   | k + 1, n, out => pushBE k n (out.push (n >>> (8 * k)).toUInt8)
 
+theorem pushBE_congr : ∀ b n m out, (∀ j, j < b → (n >>> (8 * j)).toUInt8 = (m >>> (8 * j)).toUInt8) →
+    pushBE b n out = pushBE b m out := by
+  intro b
+  induction b with
+  | zero => intro n m out _; rfl
+  | succ b ih =>
+    intro n m out h
+    rw [pushBE, pushBE, h b (by omega)]
+    exact ih n m _ (fun j hj => h j (by omega))
+
+theorem pushBE_add (a : Nat) : ∀ b n out, pushBE (a + b) n out = pushBE b n (pushBE a (n >>> (8 * b)) out) := by
+  induction a with
+  | zero => intro b n out; simp [pushBE]
+  | succ a ih =>
+    intro b n out
+    rw [Nat.add_right_comm, pushBE, ih, pushBE, ← Nat.shiftRight_add, Nat.mul_add, Nat.add_comm (8 * b)]
+
+theorem toUInt8_mod (n b j : Nat) (hj : j < b) :
+    ((n % 2 ^ (8 * b)) >>> (8 * j)).toUInt8 = (n >>> (8 * j)).toUInt8 := by
+  apply UInt8.toNat_inj.1
+  simp only [Nat.toUInt8, Nat.shiftRight_eq_div_pow]
+  have e : 2 ^ (8 * b) = 2 ^ (8 * j) * 2 ^ (8 * (b - j)) := by
+    rw [← Nat.pow_add]; congr 1; omega
+  rw [e, Nat.mod_mul_right_div_self]
+  have d : 2 ^ 8 ∣ 2 ^ (8 * (b - j)) := Nat.pow_dvd_pow 2 (by omega)
+  exact Nat.mod_mod_of_dvd _ d
+
+/-- `pushBE`, split in halves: the high bytes from `n` shifted, the low from
+    `n` reduced below their power of two, so no byte costs a shift of the
+    whole number. -/
+def pushBig (k n : Nat) (out : ByteArray) : ByteArray :=
+  if k ≤ 32 then pushBE k n out
+  else pushBig (k / 2) (n % 2 ^ (8 * (k / 2))) (pushBig (k - k / 2) (n >>> (8 * (k / 2))) out)
+termination_by k
+decreasing_by all_goals omega
+
+theorem pushBig_eq : ∀ k n out, pushBig k n out = pushBE k n out := by
+  intro k
+  induction k using Nat.strongRecOn with
+  | _ k ih =>
+    intro n out
+    rw [pushBig]
+    split
+    · rfl
+    · rw [ih _ (by omega), ih _ (by omega),
+        pushBE_congr (k / 2) (n % 2 ^ (8 * (k / 2))) n _ (fun j hj => toUInt8_mod n _ j hj),
+        ← pushBE_add, Nat.sub_add_cancel (by omega)]
+
 /-- How many bytes `n` needs with no leading zero; zero needs none. -/
 def byteLength (n : Nat) : Nat := (Nat.log2 n + 8) / 8 * (if n == 0 then 0 else 1)
 
@@ -113,7 +161,7 @@ def writeNat (n : Nat) (out : ByteArray) : ByteArray :=
   if n < limit then pushHead 0 n out
   else
     let k := byteLength n
-    pushBE k n (pushHead 2 k (out.push 0xc2))
+    pushBig k n (pushHead 2 k (out.push 0xc2))
 
 /-- Write the items of each list in `stack`, the first list first. A nested
     array is another list on the stack, not another call: a `cons` chain of
@@ -150,6 +198,49 @@ def takeBE (b : ByteArray) (pos : Nat) : Nat → Nat → Nat
   | 0, acc => acc
   | k + 1, acc => takeBE b (pos + 1) k (acc * 256 + (b.get! pos).toNat)
 
+theorem takeBE_acc (b : ByteArray) : ∀ k pos acc, takeBE b pos k acc = acc * 256 ^ k + takeBE b pos k 0 := by
+  intro k
+  induction k with
+  | zero => intro pos acc; simp [takeBE]
+  | succ k ih =>
+    intro pos acc
+    rw [takeBE, takeBE, ih, ih (acc := 0 * 256 + _)]
+    simp only [Nat.zero_mul, Nat.zero_add, Nat.pow_succ, Nat.add_mul, Nat.mul_assoc, Nat.add_assoc]
+    rw [Nat.mul_comm 256 (256 ^ k)]
+
+theorem takeBE_add (b : ByteArray) : ∀ h j pos,
+    takeBE b pos (h + j) 0 = takeBE b pos h 0 * 256 ^ j + takeBE b (pos + h) j 0 := by
+  intro h
+  induction h with
+  | zero => intro j pos; simp [takeBE]
+  | succ h ih =>
+    intro j pos
+    have e1 : takeBE b pos (h + 1 + j) 0 = takeBE b (pos + 1) (h + j) (b.get! pos).toNat := by
+      rw [Nat.add_right_comm, takeBE]; simp
+    have e2 : takeBE b pos (h + 1) 0 = takeBE b (pos + 1) h (b.get! pos).toNat := by
+      rw [takeBE]; simp
+    rw [e1, e2, takeBE_acc b (h + j), takeBE_acc b h, ih, show pos + 1 + h = pos + (h + 1) by omega]
+    simp only [Nat.add_mul, Nat.pow_add, Nat.mul_assoc, Nat.add_assoc]
+
+/-- `takeBE`, split in halves: `k` bytes at `pos` as a number, in the time of
+    a few shifts of the whole number for each halving. -/
+def bigBE (b : ByteArray) (pos k : Nat) : Nat :=
+  if k ≤ 32 then takeBE b pos k 0
+  else (bigBE b pos (k / 2) <<< (8 * (k - k / 2))) + bigBE b (pos + k / 2) (k - k / 2)
+termination_by k
+decreasing_by all_goals omega
+
+theorem bigBE_eq (b : ByteArray) : ∀ k pos, bigBE b pos k = takeBE b pos k 0 := by
+  intro k
+  induction k using Nat.strongRecOn with
+  | _ k ih =>
+    intro pos
+    rw [bigBE]
+    split
+    · rfl
+    · rw [ih _ (by omega), ih _ (by omega), Nat.shiftLeft_eq, Nat.pow_mul,
+        show (2 : Nat) ^ 8 = 256 from rfl, ← takeBE_add, Nat.add_sub_cancel' (by omega)]
+
 /-- Read a head at `pos`: major type, argument, and the position after it.
     A longer form than the argument needs is refused. -/
 def readHead (b : ByteArray) (pos : Nat) : Except String (UInt8 × Nat × Nat) :=
@@ -185,18 +276,26 @@ def deliver (d : Item) : List Frame → Option Item × List Frame
       if f.left ≤ 1 then deliver (.arr (d :: f.items).reverse) rest
       else (none, { left := f.left - 1, items := d :: f.items } :: rest)
 
-/-- The byte string of a bignum, after its tag 2: the number and the position
-    after it. A leading zero, and a number that fits an unsigned integer, are
-    refused. -/
-def readBig (b : ByteArray) (pos : Nat) : Except String (Nat × Nat) := do
+/-- The head of a bignum's byte string, after its tag 2: how many bytes the
+    number has and where they begin. A leading zero, and a number that fits an
+    unsigned integer, are refused: with no leading zero, `k` bytes are a
+    number below 2^64 exactly when `k` is at most 8, so the number need not
+    be made to be refused. -/
+def bigHead (b : ByteArray) (pos : Nat) : Except String (Nat × Nat) := do
   let (major, k, pos) ← readHead b pos
   if major != 2 then .error "a bignum that is not a byte string"
   else if pos + k > b.size then .error "the bytes end inside a value"
   else if k == 0 || b.get! pos == 0 then .error "a bignum with a leading zero"
-  else
-    let v := takeBE b pos k 0
-    if v < limit then .error "a bignum that fits an unsigned integer"
-    else .ok (v, pos + k)
+  else if k ≤ 8 then .error "a bignum that fits an unsigned integer"
+  else .ok (k, pos)
+
+/-- The byte string of a bignum, after its tag 2: the number and the position
+    after it, refused as `bigHead` refuses. The number is read by halves
+    (`bigBE`, proved to be `takeBE`), so a number of 2 MiB is read in the
+    time of a few shifts of it, not one for each byte (`homoiconic-q59.64`). -/
+def readBig (b : ByteArray) (pos : Nat) : Except String (Nat × Nat) := do
+  let (k, pos) ← bigHead b pos
+  .ok (bigBE b pos k, pos + k)
 
 def notData : String := "a kind of value that is not a number, an array, a text or a name"
 
@@ -270,14 +369,14 @@ def scanGo (b : ByteArray) : Nat → Nat → Nat → Except String Unit
           | none => .error "a text that is not UTF-8"
       else if major == 6 then
         if n == 2 then do
-          let (_, pos) ← readBig b pos
-          next pos
+          let (k, pos) ← bigHead b pos
+          next (pos + k)
         else if n == 39 then do
           let (major, k, pos) ← readHead b pos
           if major == 0 then next pos
           else if major == 6 && k == 2 then do
-            let (_, pos) ← readBig b pos
-            next pos
+            let (k, pos) ← bigHead b pos
+            next (pos + k)
           else .error "a name that is not over a number"
         else .error "a tag other than a positive bignum or a name"
       else .error notData

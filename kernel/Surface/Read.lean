@@ -69,6 +69,46 @@ def Tok.fail (t : Tok) (msg : String) : String := msgAt t.line t.col msg
 
 /-! ### Lexer -/
 
+/-- The number decimal digits spell, one digit after another. -/
+def digitsValue (ds : List UInt8) : Nat := ds.foldl (fun a d => a * 10 + (d.toNat - 48)) 0
+
+theorem foldl_digits (ds : List UInt8) : ∀ a,
+    ds.foldl (fun a d => a * 10 + (d.toNat - 48)) a = a * 10 ^ ds.length + digitsValue ds := by
+  induction ds with
+  | nil => intro a; simp [digitsValue]
+  | cons d ds ih =>
+    intro a
+    simp only [List.foldl, digitsValue, List.length_cons]
+    rw [ih, ih (0 * 10 + _)]
+    simp only [Nat.zero_mul, Nat.zero_add, Nat.add_mul, Nat.pow_succ, Nat.mul_assoc, Nat.add_assoc]
+    rw [Nat.mul_comm 10 (10 ^ ds.length)]
+
+theorem digitsValue_append (xs ys : List UInt8) :
+    digitsValue (xs ++ ys) = digitsValue xs * 10 ^ ys.length + digitsValue ys := by
+  rw [digitsValue, List.foldl_append, foldl_digits]; rfl
+
+/-- `digitsValue`, split in halves: the high digits times a power of ten and
+    the low digits, so a number of `n` digits is read in the time of a few
+    multiplications of `n` digits, where reading one digit after another
+    multiplies the whole number by ten for each. -/
+def digitsSplit (ds : List UInt8) : Nat :=
+  if ds.length ≤ 19 then digitsValue ds
+  else digitsSplit (ds.take (ds.length / 2)) * 10 ^ (ds.length - ds.length / 2) +
+    digitsSplit (ds.drop (ds.length / 2))
+termination_by ds.length
+decreasing_by all_goals simp; omega
+
+theorem digitsSplit_eq (ds : List UInt8) : digitsSplit ds = digitsValue ds := by
+  induction ds using digitsSplit.induct with
+  | case1 ds h => rw [digitsSplit, ite_eq_left h]
+  | case2 ds h ih1 ih2 =>
+    rw [digitsSplit, ite_eq_right h, ih1, ih2]
+    conv => rhs; rw [← List.take_append_drop (ds.length / 2) ds]
+    rw [digitsValue_append, List.length_drop]
+
+@[csimp] theorem digitsValue_eq_split : @digitsValue = @digitsSplit := by
+  funext ds; rw [digitsSplit_eq]
+
 def isDigit (c : UInt8) : Bool := 48 ≤ c && c ≤ 57
 def isIdStart (c : UInt8) : Bool :=
   (65 ≤ c && c ≤ 90) || (97 ≤ c && c ≤ 122) || c == 95
@@ -81,6 +121,28 @@ def takeWhileB (p : UInt8 → Bool) : List UInt8 → List UInt8 × List UInt8
       let r := takeWhileB p cs
       (c :: r.1, r.2)
     else ([], c :: cs)
+
+/-- `takeWhileB` with what is taken so far, last first, in an accumulator:
+    it calls itself only in tail position, so a token of millions of bytes is
+    read in constant native stack (`homoiconic-q59.64`). -/
+def takeWhileGo (p : UInt8 → Bool) : List UInt8 → List UInt8 → List UInt8 × List UInt8
+  | acc, [] => (acc.reverse, [])
+  | acc, c :: cs => if p c then takeWhileGo p (c :: acc) cs else (acc.reverse, c :: cs)
+
+theorem takeWhileGo_eq (p : UInt8 → Bool) : ∀ (cs acc : List UInt8),
+    takeWhileGo p acc cs = (acc.reverse ++ (takeWhileB p cs).1, (takeWhileB p cs).2)
+  | [], acc => by simp [takeWhileGo, takeWhileB]
+  | c :: cs, acc => by
+    unfold takeWhileGo takeWhileB
+    split
+    · rw [takeWhileGo_eq p cs]; simp
+    · simp
+
+def takeWhileWalk (p : UInt8 → Bool) (cs : List UInt8) : List UInt8 × List UInt8 :=
+  takeWhileGo p [] cs
+
+@[csimp] theorem takeWhileB_eq_walk : @takeWhileB = @takeWhileWalk := by
+  funext p cs; simp [takeWhileWalk, takeWhileGo_eq]
 
 /-- Drop a comment up to, not including, the end of the line. -/
 def dropLine : List UInt8 → List UInt8
@@ -135,8 +197,8 @@ def lexGo : Nat → List UInt8 → Nat → Nat → Bool → Array Tok →
         match r.2 with
         | d :: _ =>
           if isIdChar d then .error (msgAt line col "a number runs into letters")
-          else push (.num (r.1.foldl (fun a d => a * 10 + (d.toNat - 48)) 0)) r.1.length r.2
-        | [] => push (.num (r.1.foldl (fun a d => a * 10 + (d.toNat - 48)) 0)) r.1.length r.2
+          else push (.num (digitsValue r.1)) r.1.length r.2
+        | [] => push (.num (digitsValue r.1)) r.1.length r.2
       else if isIdStart c then
         let r := takeWhileB isIdChar (c :: cs)
         push (.name (String.ofList (r.1.map fun b => Char.ofNat b.toNat))) r.1.length r.2

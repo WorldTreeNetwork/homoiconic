@@ -3,10 +3,112 @@ import Reflect.Machine
 /-!
 The renderer: outcomes and machine states as plain text. Data renders in the
 form the reader accepts, so printed data can be pasted back as a literal.
-Tested against examples; not proved.
+Tested against examples; not proved, but for numbers: a number is written by
+`decimalGo`, proved to write what `Nat.repr` writes (`decimal_eq_go`).
 -/
 namespace Surface
 open Reflect
+
+/-- The last `m` decimal digits of `r`, with leading zeros. -/
+def padDigits : Nat → Nat → List Char
+  | 0, _ => []
+  | m + 1, r => padDigits m (r / 10) ++ [Nat.digitChar (r % 10)]
+
+theorem toDigits_split (m : Nat) : ∀ q r, 0 < q → r < 10 ^ m →
+    Nat.toDigits 10 (q * 10 ^ m + r) = Nat.toDigits 10 q ++ padDigits m r := by
+  induction m with
+  | zero => intro q r _ hr; simp at hr; subst hr; simp [padDigits]
+  | succ m ih =>
+    intro q r hq hr
+    have hp : 10 ^ (m + 1) = 10 ^ m * 10 := by rw [Nat.pow_succ]
+    have h10 : 10 ≤ q * 10 ^ (m + 1) + r := by
+      have : 1 ≤ 10 ^ m := Nat.pow_pos (by omega)
+      rw [hp, ← Nat.mul_assoc]
+      have := Nat.mul_le_mul hq this
+      omega
+    rw [Nat.toDigits_of_base_le (by omega) h10]
+    have e1 : (q * 10 ^ (m + 1) + r) / 10 = q * 10 ^ m + r / 10 := by
+      rw [hp, ← Nat.mul_assoc]; omega
+    have e2 : (q * 10 ^ (m + 1) + r) % 10 = r % 10 := by
+      rw [hp, ← Nat.mul_assoc]; omega
+    have hr' : r / 10 < 10 ^ m := by rw [hp] at hr; omega
+    rw [e1, e2, ih q (r / 10) hq hr', padDigits, List.append_assoc]
+
+theorem padDigits_split (a : Nat) : ∀ b n,
+    padDigits (a + b) n = padDigits a (n / 10 ^ b) ++ padDigits b (n % 10 ^ b) := by
+  intro b
+  induction b with
+  | zero => intro n; simp [padDigits]
+  | succ b ih =>
+    intro n
+    rw [← Nat.add_assoc, padDigits, ih, padDigits, List.append_assoc]
+    have e1 : n / 10 / 10 ^ b = n / 10 ^ (b + 1) := by
+      rw [Nat.div_div_eq_div_mul, Nat.pow_succ, Nat.mul_comm]
+    have e2 : n / 10 % 10 ^ b = n % 10 ^ (b + 1) / 10 := by
+      rw [Nat.pow_succ, Nat.mul_comm, Nat.mod_mul_right_div_self]
+    have e3 : n % 10 = n % 10 ^ (b + 1) % 10 := by
+      rw [Nat.pow_succ, Nat.mod_mul_left_mod]
+    rw [e1, e2, ← e3]
+
+/-- `acc` and then the last `w` digits of `r`, with leading zeros. The digits
+    are split in halves by a power of ten, so the work is that of a few
+    multiplications of the whole number, not one division for each digit. -/
+def padInto (acc : String) (w r : Nat) : String :=
+  if w ≤ 19 then acc ++ String.ofList (padDigits w r)
+  else
+    let p := 10 ^ (w / 2)
+    padInto (padInto acc (w - w / 2) (r / p)) (w / 2) (r % p)
+termination_by w
+decreasing_by all_goals omega
+
+theorem padInto_eq (w : Nat) : ∀ acc r, padInto acc w r = acc ++ String.ofList (padDigits w r) := by
+  induction w using Nat.strongRecOn with
+  | _ w ih =>
+    intro acc r
+    rw [padInto]
+    split
+    · rfl
+    · rw [ih _ (by omega), ih _ (by omega), String.append_assoc, ← String.ofList_append,
+        ← padDigits_split, Nat.sub_add_cancel (by omega)]
+
+/-- A number in decimal, as `Nat.repr` writes it (`decimalGo_eq`). Below
+    10^19 it is `Nat.repr`; above, the number is split by a power of ten into
+    its high digits and about half of its low ones, so a number of `n` digits
+    is written in the time of a few multiplications of `n` digits, where
+    `Nat.repr` divides by ten once for each digit (`homoiconic-q59.64`). -/
+def decimalGo (n : Nat) : String :=
+  if n < 10 ^ 19 then n.repr
+  else
+    let m := max 1 (Nat.log2 n * 3 / 20)
+    let p := 10 ^ m
+    if n / p = 0 then n.repr
+    else padInto (decimalGo (n / p)) m (n % p)
+termination_by n
+decreasing_by
+  exact Nat.div_lt_self (by omega) (Nat.one_lt_pow (by omega) (by omega))
+
+theorem decimalGo_eq (n : Nat) : decimalGo n = n.repr := by
+  induction n using Nat.strongRecOn with
+  | _ n ih =>
+    rw [decimalGo]
+    split
+    · rfl
+    · simp only
+      split
+      · rfl
+      · rename_i h1 h2
+        have hm : 0 < 10 ^ max 1 (Nat.log2 n * 3 / 20) := Nat.pow_pos (by omega)
+        have hq : 0 < n / 10 ^ max 1 (Nat.log2 n * 3 / 20) := Nat.pos_of_ne_zero h2
+        rw [padInto_eq, ih _ (Nat.div_lt_self (by omega) (Nat.one_lt_pow (by omega) (by omega))),
+          Nat.repr_eq_ofList_toDigits, Nat.repr_eq_ofList_toDigits, ← String.ofList_append,
+          ← toDigits_split _ _ _ hq (Nat.mod_lt _ hm), Nat.mul_comm, Nat.div_add_mod]
+
+/-- A number in decimal: `Nat.repr`, which is what runs nowhere; the compiler
+    runs `decimalGo` (`decimal_eq_go`). -/
+def decimal (n : Nat) : String := n.repr
+
+@[csimp] theorem decimal_eq_go : @decimal = @decimalGo := by
+  funext n; rw [decimal, decimalGo_eq]
 
 /-- A text between double quotes, as the reader takes a string literal: a line
     feed, a tab, a backslash and a double quote are written `\n`, `\t`, `\\`
@@ -24,8 +126,8 @@ mutual
       space; a text in quotes with the reader's escapes; a name as `#` and its
       number, which the reader does not read. -/
   def renderData : Data → String
-    | .nat n => toString n
-    | .name n => "#" ++ toString n
+    | .nat n => decimal n
+    | .name n => "#" ++ decimal n
     | .text t => renderText t
     | .arr xs => "[" ++ ", ".intercalate (renderItems xs) ++ "]"
 
@@ -75,8 +177,8 @@ def renderGo (acc : String) : List PAct → String
   | .close :: as => renderGo (acc ++ "]") as
   | .items [] :: as => renderGo acc as
   | .items (y :: ys) :: as => renderGo (acc ++ ", ") (.data y :: .items ys :: as)
-  | .data (.nat n) :: as => renderGo (acc ++ toString n) as
-  | .data (.name n) :: as => renderGo (acc ++ ("#" ++ toString n)) as
+  | .data (.nat n) :: as => renderGo (acc ++ decimal n) as
+  | .data (.name n) :: as => renderGo (acc ++ ("#" ++ decimal n)) as
   | .data (.text t) :: as => renderGo (acc ++ renderText t) as
   | .data (.arr []) :: as => renderGo (acc ++ "[]") as
   | .data (.arr (x :: xs)) :: as => renderGo (acc ++ "[") (.data x :: .items xs :: .close :: as)
@@ -131,14 +233,14 @@ def renderWalk (d : Data) : String := renderGo "" [.data d]
 def render : Outcome → String
   | .value (.data d) => renderData d
   | .value (.closure _ _) => "<function>"
-  | .unbound i => s!"error: unbound {i}"
+  | .unbound i => "error: unbound " ++ decimal i
   | .wrong => "error: wrong"
 
 /-- A machine outcome as text; the same text as `render` of the same outcome. -/
 def renderMOutcome : MOutcome → String
   | .value (.data d) => renderData d
   | .value (.closure _ _) => "<function>"
-  | .unbound i => s!"error: unbound {i}"
+  | .unbound i => "error: unbound " ++ decimal i
   | .wrong => "error: wrong"
 
 /-- The machine's state after running with `budget` steps. A state that is still

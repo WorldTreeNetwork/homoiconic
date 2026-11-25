@@ -2,6 +2,8 @@ import Reflect.Arith
 import Reflect.RunUntil
 import Surface.Read
 import Reflect.Interpreter
+import Surface.Render
+import Wire.Cbor
 open Reflect
 
 /-! The worst program found for each operation and each step of the machine's
@@ -75,8 +77,27 @@ partial def charged (s : State) (steps total most : Nat) : Nat × Nat × State :
   | .running .. => if steps ≥ most then (steps, total, s) else charged (step s) (steps + 1) (total + stepCost s) most
   | _ => (steps, total, s)
 
+/-- Time one number path on a number of `k` bytes, every bit set
+    (`homoiconic-q59.64`): `print` writes it in decimal, `write` makes its byte
+    form, `read` reads the byte form back, `source` reads its decimal digits as
+    a program. Prints the size of what came out, so nothing is left unrun. -/
+def numberPath (kind : String) (k : Nat) : IO Unit := do
+  let n := bigNat k
+  let bytes := Wire.write (.nat n)
+  let digits := (Surface.renderData (.nat n))
+  let t0 ← IO.monoNanosNow
+  let size ← match kind with
+    | "print" => pure (Surface.renderData (.nat (n - 1))).length
+    | "write" => pure (Wire.write (.nat (n - 1))).size
+    | "read" => pure (match Wire.read bytes with | .ok (.nat v) => Nat.log2 v | _ => 0)
+    | "source" => pure (match Surface.read digits.toUTF8 with | .ok (.lit (.nat v)) => Nat.log2 v | _ => 0)
+    | _ => pure 0
+  let t1 ← IO.monoNanosNow
+  IO.println s!"number {kind} bytes={k} out={size} ms={(t1 - t0) / 1000000}"
+
 def main (args : List String) : IO UInt32 := do
   match args with
+  | ["number", kind, size] => numberPath kind size.toNat!; pure 0
   | ["count", file, levels] =>
     let bytes ← IO.FS.readBinFile file
     match Surface.read bytes with
