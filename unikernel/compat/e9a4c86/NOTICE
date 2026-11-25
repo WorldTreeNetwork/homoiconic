@@ -1,0 +1,8 @@
+quic.zig, entity.zig and quic-client.zig as they were at commit
+e9a4c86a80c80c6c2672f1d65d4478c3bc85ea02, copied unmodified. Mjolnir vendors
+quic.zig and entity.zig of that commit (native/reflect_quic/), and its
+host.zig follows quic-client.zig. build-net.sh builds out-net/quic-client-e9a4c86
+from these files, and check-quic.sh uses it to check that a client that
+ignores Retry packets is still served by a guest with a free first-flight slot
+(add-quic-admission). Do not edit them: they stand for a client already
+deployed.

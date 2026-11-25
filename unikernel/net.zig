@@ -54,20 +54,21 @@ const std = @import("std");
 const quic_mod = @import("quic.zig");
 const pvclock = @import("pvclock.zig");
 const entity = @import("entity.zig");
+const admit = @import("admit.zig");
 /// This guest's entity: its key and its name (`me.name`). On a connection
-/// whose handshake was accepted, `qconn.peer_name` is the other end's name.
+/// whose handshake was accepted, `Conn.peer_name` is the other end's name.
 var me: entity.Identity = undefined;
 /// The names this guest finishes a handshake with (`reflect.allow`).
 var allow: entity.Allow = .{};
+/// A serving guest's connections (`reflect.quic_port` or
+/// `reflect.wire_port`): the table, and for each slot the Ethernet and IP
+/// header of its first Initial, which its packets are sent back along.
+var table: admit.Table = .{};
+var q_frames: [admit.slots][42]u8 = undefined;
+/// A calling guest's one connection (`reflect.peer`).
 var qconn: quic_mod.Conn = undefined;
 var q_ready = false;
 var q_wire = false;
-var q_peer = false;
-var q_answered = false;
-var q_frame: [64]u8 = undefined;
-var q_next: quic_mod.Conn = undefined;
-var q_seen: u64 = 0;
-const q_idle: u64 = 2_000_000_000;
 
 export fn net_serve() noreturn {
     const ep = parse(line()) orelse halt("the network address is not valid");
@@ -96,7 +97,7 @@ export fn net_serve() noreturn {
     say("\n");
     if (ep.quic_port != 0) {
         if (!startClock()) halt("no monotonic clock");
-        qconn = quic_mod.Conn.openServer(rdrand64, &me, &allow);
+        table.init(rdrand64, &me, &allow);
         q_ready = true;
         say("reflect: quic ");
         putDec(ep.quic_port);
@@ -105,7 +106,7 @@ export fn net_serve() noreturn {
     if (ep.wire_port != 0 or ep.has_peer) {
         if (!startClock()) halt("no monotonic clock");
         if (ep.wire_port != 0) {
-            qconn = quic_mod.Conn.openServer(rdrand64, &me, &allow);
+            table.init(rdrand64, &me, &allow);
             say("reflect: wire ");
             putDec(ep.wire_port);
             say("\n");
@@ -618,35 +619,24 @@ fn quicDatagram(frame: []const u8, nic: Nic, ep: Endpoint) void {
     if (ulen < 8 or 42 + (ulen - 8) > frame.len) return;
     const payload = frame[42..][0 .. ulen - 8];
     const now = mono();
-    // A server connection takes datagrams only from the address it answers,
-    // so the bytes it counts as received (quic.zig `rx_bytes`) came from
-    // there. Another address can start a connection below, nothing else.
-    const here = !qconn.server or !q_peer or
-        (eql(frame[26..30], q_frame[26..30]) and eql(frame[34..36], q_frame[34..36]));
-    // Nothing a datagram says is used until one of its packets opens (AEAD).
-    if (here and qconn.recv(payload, now)) {
-        // The reply address is the one the connection's first Initial came
-        // from. It is not moved afterwards, by any packet.
-        if (!q_peer) {
-            @memcpy(q_frame[0..42], frame[0..42]);
-            q_peer = true;
-        }
-        q_seen = now;
-    } else if (qconn.server and q_peer and (q_answered or qconn.refused or now -| q_seen >= q_idle) and
-        quic_mod.newInitial(payload, &qconn.orig_dcid))
-    {
-        // A server connection gives way only when it has answered, has
-        // refused its client, or has
-        // opened nothing for q_idle, and only to a datagram that opens as a
-        // new Initial. The candidate is built aside; if it does not open,
-        // the connection in place is untouched.
-        q_next = quic_mod.Conn.openServer(rdrand64, &me, &allow);
-        if (q_next.recv(payload, now)) {
-            qconn = q_next;
-            @memcpy(q_frame[0..42], frame[0..42]);
-            q_answered = false;
-            q_seen = now;
-        }
+    if (ep.has_peer) {
+        // The calling guest's one connection. Nothing a datagram says is
+        // used until one of its packets opens (AEAD); a Retry is taken once.
+        _ = qconn.recv(payload, now);
+        wirePump(nic, ep);
+        return;
+    }
+    // A serving guest: the table routes the datagram to its connection,
+    // starts one in a free slot, answers with a Retry, or drops it
+    // (`admit.zig`). The reply address of a connection is the one its
+    // first Initial came from, and it is not moved afterwards.
+    const from = admit.Addr{ .ip = frame[26..30].*, .port = be16(frame[34..36]) };
+    switch (table.take(from, payload, now)) {
+        .none => {},
+        .slot => |got| {
+            if (got.fresh) @memcpy(&q_frames[got.i], frame[0..42]);
+        },
+        .retry => |n| sendUdp(frame[0..42], nic, ep, table.retry[0..n], if (q_wire) ep.wire_port else ep.quic_port),
     }
     if (q_wire) wirePump(nic, ep) else quicPump(nic, ep);
 }
@@ -800,34 +790,41 @@ fn wirePump(nic: Nic, ep: Endpoint) void {
         halt("the crossing failed");
     }
     if (ep.wire_port != 0) {
-        if (!q_answered and qconn.peer_fin) {
-            const got = qconn.readApp();
+        var read = false;
+        for (&table.slot) |*sl| {
+            if (!sl.used or sl.answered or !sl.conn.peer_fin) continue;
+            const c = &sl.conn;
+            const got = c.readApp();
+            const t0 = mono();
             if (got.len >= 4 and eql(got[0..4], "RFL1")) {
                 // The program, from a client: one run frame. Lean reads the
                 // bytes; this checks the frame as the UDP service does.
                 const reply = giveProgram(got);
-                if (reply.len != 0) _ = qconn.writeApp(reply);
-            } else if (q_peer) {
+                if (reply.len != 0) _ = c.writeApp(reply);
+            } else {
                 // A batch. Batches are taken from one entity only: the
                 // first on the list that sent one.
                 if (!cross_peer_known) {
-                    cross_peer = qconn.peer_name;
+                    cross_peer = c.peer_name;
                     cross_peer_known = true;
                 }
-                if (eql(&cross_peer, &qconn.peer_name)) {
+                if (eql(&cross_peer, &c.peer_name)) {
                     cross = reflect_cross_take(cross, got.ptr, got.len);
                     crossSettle();
-                    _ = qconn.writeApp(crossBatch());
+                    _ = c.writeApp(crossBatch());
                     if (crossState() == 2 and cross_closed_at == 0) cross_closed_at = mono();
                 }
             }
-            q_answered = true;
-        } else if (state == 0) {
-            cross = reflect_cross_work(cross);
+            table.pause(mono() -| t0);
+            sl.answered = true;
+            read = true;
         }
-        var out: [1500]u8 = undefined;
-        const n = qconn.send(&out, mono());
-        if (n > 0 and q_peer) sendUdp(q_frame[0..42], nic, ep, out[0..n], ep.wire_port);
+        if (!read and state == 0) {
+            const t0 = mono();
+            cross = reflect_cross_work(cross);
+            table.pause(mono() -| t0);
+        }
+        sendAll(nic, ep, ep.wire_port);
         // The record is printed once the closing answer has had time to leave.
         if (!cross_printed and cross_closed_at != 0 and mono() -| cross_closed_at > 300_000_000) crossPrint();
         return;
@@ -917,14 +914,30 @@ fn giveProgram(payload: []const u8) []const u8 {
 }
 
 fn quicPump(nic: Nic, ep: Endpoint) void {
-    if (!q_answered and qconn.peer_fin) {
-        const reply = answerBytes(qconn.readApp(), ep);
-        if (reply.len != 0) _ = qconn.writeApp(reply);
-        q_answered = true;
+    for (&table.slot) |*sl| {
+        if (!sl.used or sl.answered or !sl.conn.peer_fin) continue;
+        // One run at a time. The guest's time in it is not charged to the
+        // handshakes waiting behind it.
+        const t0 = mono();
+        const reply = answerBytes(sl.conn.readApp(), ep);
+        table.pause(mono() -| t0);
+        if (reply.len != 0) _ = sl.conn.writeApp(reply);
+        sl.answered = true;
     }
-    var out: [1500]u8 = undefined;
-    const n = qconn.send(&out, mono());
-    if (n > 0 and q_peer) sendUdp(q_frame[0..42], nic, ep, out[0..n], ep.quic_port);
+    sendAll(nic, ep, ep.quic_port);
+}
+
+/// Send what each connection of the table has to send, to the address its
+/// first Initial came from, and free the slots that are done.
+fn sendAll(nic: Nic, ep: Endpoint, port: u16) void {
+    const now = mono();
+    for (&table.slot, 0..) |*sl, i| {
+        if (!sl.used) continue;
+        var out: [1500]u8 = undefined;
+        const n = sl.conn.send(&out, now);
+        if (n > 0) sendUdp(q_frames[i][0..42], nic, ep, out[0..n], port);
+    }
+    table.sweep(now);
 }
 
 var answer_buf: [1200]u8 = undefined;

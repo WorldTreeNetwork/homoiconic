@@ -16,6 +16,16 @@
 //! until the guest has resent the reply. The exchange must still finish, and
 //! the second address must hear nothing from the guest (exit 5 otherwise).
 //! `initial` writes the first datagram of a handshake to stdout and sends nothing.
+//! A Retry from the guest is answered once, in every mode (quic.zig `onRetry`).
+//! `stall` has a key the guest does not allow: it shows its address, then
+//! sends no Certificate and keeps sending Handshake packets that open, every
+//! 100 ms for 6 seconds, and exits 0.
+//! `keep <file>` writes every datagram it sends to <file>, each after its
+//! length in two bytes.
+//! `flood <local-ip> <seconds> <rate> <file>` sends from <local-ip>, in turn,
+//! a new first flight of its own (256 made with distinct IDs), one first
+//! flight again, and each datagram of <file>, at <rate> a second (0: as fast
+//! as it can), and prints what it sent and heard to stderr.
 
 const std = @import("std");
 const quic = @import("quic.zig");
@@ -71,11 +81,19 @@ var hold: [1500]u8 = undefined;
 var hold_n: usize = 0;
 var sent: usize = 0;
 
+var keep_fd: c_int = -1;
+
 fn pump(c: *quic.Conn, fd: c_int, dst: *const Sock, loss: bool) void {
     var buf: [1500]u8 = undefined;
     const n = c.send(&buf, now());
     if (n == 0) return;
     sent += 1;
+    if (keep_fd >= 0) {
+        var len: [2]u8 = undefined;
+        std.mem.writeInt(u16, &len, @intCast(n), .big);
+        _ = write(keep_fd, &len, 2);
+        _ = write(keep_fd, &buf, n);
+    }
     if (loss and sent % 5 == 0) return;
     if (loss and hold_n == 0) {
         @memcpy(hold[0..n], buf[0..n]);
@@ -140,11 +158,83 @@ fn garbage(fd: c_int, dst: *const Sock) void {
     put(fd, dst, buf[0..400]);
 }
 
+/// Whether the second address heard anything but long-header packets
+/// for its own other handshake: the guest may answer that handshake, in a
+/// slot of its own, and nothing else.
+var other_on = false;
 fn heard(fd: c_int) bool {
-    var pkt: [1500]u8 = undefined;
-    var from: Sock = undefined;
-    var ln: u32 = @sizeOf(Sock);
-    return recvfrom(fd, &pkt, pkt.len, 0x40, &from, &ln) > 0;
+    while (true) {
+        var pkt: [1500]u8 = undefined;
+        var from: Sock = undefined;
+        var ln: u32 = @sizeOf(Sock);
+        const r = recvfrom(fd, &pkt, pkt.len, 0x40, &from, &ln);
+        if (r <= 0) return false;
+        const d = pkt[0..@intCast(r)];
+        if (!other_on or d.len < 15 or d[0] & 0x80 == 0 or d[5] != 8 or !std.mem.eql(u8, d[6..14], &other.local_cid)) return true;
+    }
+}
+
+fn dropMessages(_: *const quic.Conn, kind: u8, _: []u8, len: usize) ?usize {
+    if (kind == 11 or kind == 15 or kind == 20 or kind == quic.tamper_trailer) return null;
+    return len;
+}
+
+var pool: [256][1200]u8 = undefined;
+var kept: [1 << 16]u8 = undefined;
+
+/// From `local`: new first flights, one first flight again, and the
+/// datagrams of `file`, for `secs` seconds at `rate` a second.
+fn flood(fd: c_int, dst: *const Sock, secs: u64, rate: u64, file: []const u8) u8 {
+    var i: usize = 0;
+    while (i < pool.len) : (i += 1) {
+        other = quic.Conn.openClient(rnd, &me, &allow);
+        var first: [1500]u8 = undefined;
+        if (other.send(&first, now()) != 1200) return 2;
+        @memcpy(&pool[i], first[0..1200]);
+    }
+    other = quic.Conn.openClient(rnd, &me, &allow);
+    var fixed: [1500]u8 = undefined;
+    if (other.send(&fixed, now()) != 1200) return 2;
+    const kn = readFile(file, &kept) orelse return 2;
+    var ends: [512]usize = undefined;
+    var starts: [512]usize = undefined;
+    var nk: usize = 0;
+    var o: usize = 0;
+    while (o + 2 <= kn and nk < ends.len) {
+        const l = std.mem.readInt(u16, kept[o..][0..2], .big);
+        if (o + 2 + l > kn) return 2;
+        starts[nk] = o + 2;
+        ends[nk] = o + 2 + l;
+        nk += 1;
+        o += 2 + l;
+    }
+    var n: u64 = 0;
+    var retries: u64 = 0;
+    var others: u64 = 0;
+    const start = now();
+    while (now() - start < secs * 1_000_000_000) {
+        var pkt: [1500]u8 = undefined;
+        var from: Sock = undefined;
+        var ln: u32 = @sizeOf(Sock);
+        while (true) {
+            const r = recvfrom(fd, &pkt, pkt.len, 0x40, &from, &ln);
+            if (r <= 0) break;
+            if (pkt[0] & 0xf0 == 0xf0) retries += 1 else others += 1;
+        }
+        if (rate != 0 and n * 1_000_000_000 >= rate * (now() - start)) continue;
+        const k = n % 3;
+        if (k == 0) {
+            put(fd, dst, &pool[(n / 3) % pool.len]);
+        } else if (k == 1) {
+            put(fd, dst, fixed[0..1200]);
+        } else if (nk != 0) {
+            const j = (n / 3) % nk;
+            put(fd, dst, kept[starts[j]..ends[j]]);
+        }
+        n += 1;
+    }
+    std.debug.print("flood: {d} datagrams in {d} s, heard {d} Retries and {d} others\n", .{ n, secs, retries, others });
+    return 0;
 }
 
 /// Send nothing for `ns`. Datagrams for the exchange are still taken.
@@ -177,8 +267,13 @@ pub fn main(init: std.process.Init.Minimal) u8 {
     const silent = std.mem.eql(u8, mode, "silent");
     const denied = std.mem.eql(u8, mode, "denied");
     const early = std.mem.eql(u8, mode, "early");
-    if (mode.len != 0 and !loss and !wrong and !spoof and !only_initial and !silent and !denied and !early) return 2;
-    if (spoof and v.len < 9) return 2;
+    const stall = std.mem.eql(u8, mode, "stall");
+    const keep = std.mem.eql(u8, mode, "keep");
+    const flooding = std.mem.eql(u8, mode, "flood");
+    if (mode.len != 0 and !loss and !wrong and !spoof and !only_initial and !silent and !denied and !early and
+        !stall and !keep and !flooding) return 2;
+    if ((spoof or keep) and v.len < 9) return 2;
+    if (flooding and v.len < 12) return 2;
     // This end's key, and the one name it accepts.
     var seed: [33]u8 = undefined;
     if ((readFile(std.mem.span(v[5]), &seed) orelse return 2) != 32) return 2;
@@ -199,6 +294,7 @@ pub fn main(init: std.process.Init.Minimal) u8 {
     @memcpy(frame[24..][0..n], file[0..n]);
 
     var c = quic.Conn.openClient(rnd, &me, &allow);
+    if (stall) c.tamper = &dropMessages;
     if (early and !c.earlyStream(0, frame[0 .. 24 + n])) return 2;
     if (only_initial) {
         var first: [1500]u8 = undefined;
@@ -211,6 +307,25 @@ pub fn main(init: std.process.Init.Minimal) u8 {
     var local = Sock{ .family = 2, .port = 0, .addr = 0, .zero = .{0} ** 8 };
     if (bind(fd, &local, @sizeOf(Sock)) != 0) return 2;
     var dst = Sock{ .family = 2, .port = @byteSwap(port), .addr = @byteSwap(ip), .zero = .{0} ** 8 };
+    if (flooding) {
+        const fip = ip4(std.mem.span(v[8])) orelse return 2;
+        const secs = std.fmt.parseInt(u64, std.mem.span(v[9]), 10) catch return 2;
+        const rate = std.fmt.parseInt(u64, std.mem.span(v[10]), 10) catch return 2;
+        const ffd = socket(2, 2, 17);
+        if (ffd < 0) return 2;
+        var at = Sock{ .family = 2, .port = 0, .addr = @byteSwap(fip), .zero = .{0} ** 8 };
+        if (bind(ffd, &at, @sizeOf(Sock)) != 0) return 2;
+        return flood(ffd, &dst, secs, rate, std.mem.span(v[11]));
+    }
+    if (keep) {
+        var z: [4096:0]u8 = undefined;
+        const kp = std.mem.span(v[8]);
+        if (kp.len >= z.len) return 2;
+        @memcpy(z[0..kp.len], kp);
+        z[kp.len] = 0;
+        keep_fd = creat(z[0..kp.len :0], 0o600);
+        if (keep_fd < 0) return 2;
+    }
     var sfd: c_int = -1;
     if (spoof) {
         const sip = ip4(std.mem.span(v[8])) orelse return 2;
@@ -229,6 +344,7 @@ pub fn main(init: std.process.Init.Minimal) u8 {
     }
     var stage: u8 = 0;
     const start = now();
+    var poked: u64 = 0;
     while (now() - start < 60_000_000_000) {
         // Once the reply is in, what there is to send is its acknowledgement.
         if (!(silent and c.peer_fin)) pump(&c, fd, &dst, loss);
@@ -238,6 +354,7 @@ pub fn main(init: std.process.Init.Minimal) u8 {
             // well-formed first flight of another handshake.
             garbage(sfd, &dst);
             other = quic.Conn.openClient(rnd, &me, &allow);
+            other_on = true;
             var first: [1500]u8 = undefined;
             const fnn = other.send(&first, now());
             if (fnn < quic.min_initial) return 2;
@@ -246,7 +363,11 @@ pub fn main(init: std.process.Init.Minimal) u8 {
             if (!quiet(&c, fd, sfd, 500_000_000)) return 5;
             stage = 1;
         }
-        if (c.accepted and !c.app_tx_on) {
+        if (stall) {
+            // Keep the handshake looking alive, and never finish it.
+            if (c.accepted and now() - start > 6_000_000_000) return 0;
+            if (c.accepted and now() - poked > 100_000_000 and c.poke(1)) poked = now();
+        } else if (c.accepted and !c.app_tx_on) {
             if (!c.writeApp(frame[0 .. 24 + n])) return 2;
         }
         if (c.refused) return if (wrong) 0 else 3;
@@ -318,6 +439,7 @@ fn readFile(path: []const u8, buf: []u8) ?usize {
 extern fn open(path: [*:0]const u8, flags: c_int) c_int;
 extern fn read(fd: c_int, buf: [*]u8, n: usize) isize;
 extern fn close(fd: c_int) c_int;
+extern fn creat(path: [*:0]const u8, mode: c_uint) c_int;
 
 fn openRead(path: [*:0]const u8) c_int {
     return open(path, 0);

@@ -80,6 +80,7 @@ stop() {
     pb=
 }
 cleanup() {
+    [ -z "${fp:-}" ] || kill "$fp" 2>/dev/null || true
     stop
     sudo ip link del "$TA" 2>/dev/null || true
     sudo ip link del "$TB" 2>/dev/null || true
@@ -117,11 +118,30 @@ run() {
     pa=$!
     await "$W/$name-a.log" "reflect: wire 4446" 60 || fail "$name: guest A did not come up"
     "$OUT/quic-client" "$CHA" 4446 "$BUDGET" "$W/$name.bytes" "$KH" "$NA" > "$W/$name.given" || fail "$name: the program was not taken"
+    fp=
+    if [ -n "${FLOOD:-}" ]; then
+        # The host fills guest A's first-flight pool with first flights of
+        # its own for as long as the run lasts, so every exchange guest B
+        # opens finds it full and goes through a Retry (add-quic-admission).
+        : > "$W/none.kept"
+        "$OUT/quic-client" "$CHA" 4446 1 "$W/$name.bytes" "$W/key-other" "$NA" flood "$HOSTIP" 40 2000 "$W/none.kept" \
+            2> "$W/$name.flood" &
+        fp=$!
+        sleep 0.5
+    fi
     boot "$TB" 02:00:00:00:00:03 "reflect.ip=$CHB reflect.port=4444 reflect.peer=$CHA:4446 reflect.allow=$NA $4" "$W/$name-b.log" "$KB"
     pb=$!
-    await "$W/$name-a.log" "reflect: cross done" 90 || { cat "$W/$name-a.log" "$W/$name-b.log" >&2; fail "$name: guest A did not close"; }
+    # Under the flood the run must close while the flood still runs.
+    await "$W/$name-a.log" "reflect: cross done" "$([ -n "$fp" ] && echo 30 || echo 90)" || { cat "$W/$name-a.log" "$W/$name-b.log" >&2; fail "$name: guest A did not close"; }
     await "$W/$name-b.log" "reflect: cross done" 30 || { cat "$W/$name-a.log" "$W/$name-b.log" >&2; fail "$name: guest B did not close"; }
     stop
+    if [ -n "$fp" ]; then
+        # It heard Retries of its own: the first-flight pool was full.
+        wait "$fp" || fail "$name: the flood did not run"
+        fp=
+        cat "$W/$name.flood"
+        grep -q "heard [1-9][0-9]* Retries" "$W/$name.flood" || fail "$name: the first-flight pool was never full"
+    fi
     grep -qx "reflect: entity $NA" "$W/$name-a.log" || fail "$name: guest A is not the entity of its key"
     grep -qx "reflect: entity $NB" "$W/$name-b.log" || fail "$name: guest B is not the entity of its key"
     sed -n 's/^reflect: cross \(\(sig\|me\|peer\|budget\|entry\|head\|proc\|error\) .*\)$/\1/p' "$W/$name-a.log" > "$W/$name.a"
@@ -180,6 +200,11 @@ echo "ok   each record names its guest and its peer by entity name"
 accepted reply "process 0: [20, 22]; holds [#0]" "process 1: 7; holds [#0]" "process 2: 9; holds [#0]" "places a: [0]" "places b: [1, 2]"
 
 # A name crosses in a message, and the answer comes back on it.
+# The same run while the host floods guest A: guest B's exchanges each
+# answer a Retry, and the records are the same.
+FLOOD=1 run flooded "$EX/cross-reply.hom" "reflect.spawn=far" ""
+accepted flooded "process 0: [20, 22]; holds [#0]" "process 1: 7; holds [#0]" "process 2: 9; holds [#0]" "places a: [0]" "places b: [1, 2]"
+
 run name "$EX/cross-name.hom" "reflect.spawn=far" ""
 accepted name "process 0: 5; holds [#2, #0]" "process 1: []; holds [#2, #0]"
 

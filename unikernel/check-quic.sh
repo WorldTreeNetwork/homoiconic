@@ -17,6 +17,14 @@
 # expects another name refuses the guest; a client the guest does not allow
 # is refused, and the guest serves the next one at once; stream data in an
 # Initial packet is not acted on; and plain UDP beside QUIC is not answered.
+#
+# Admission (add-quic-admission), on a fresh boot of the same key: the
+# client Mjolnir vendors (e9a4c86, which ignores a Retry) is served while a
+# first-flight slot is free; while a second address floods the guest with new
+# first flights, one first flight again and again and the datagrams of a
+# finished exchange, five allowed clients are each served within a second;
+# and four stalled clients with a key on no list hold the first-flight pool
+# no longer than the cap.
 set -eu
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$HERE/.." && pwd)"
@@ -212,8 +220,9 @@ echo "ok   factorial again on a new handshake"
 "$OUT/quic-client" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NO" wrong
 echo "ok   a client that expects another name refuses the guest"
 
-# The refused handshake was left unfinished. The guest keeps it for two idle
-# seconds and then takes this one, which also loses and reorders datagrams.
+# The refused handshake was left unfinished. It holds a first-flight slot
+# until the cap; this one takes another at once, and loses and reorders
+# datagrams.
 factorial loss loss
 echo "ok   factorial after an abandoned handshake, with loss and reordering"
 
@@ -256,7 +265,7 @@ echo "ok   a ping to the plain UDP port of a QUIC guest is not answered"
 
 # A second host at another address, during and after an exchange.
 factorial spoof spoof "$OTHERIP"
-echo "ok   factorial with a second address sending garbage and a new Initial; that address heard nothing"
+echo "ok   factorial with a second address sending garbage and a new Initial; that address heard only its own handshake"
 
 factorial fact3
 echo "ok   factorial again after the garbage"
@@ -454,7 +463,8 @@ elif mode == "forged":
     # same bytes again from another address, which must add nothing.
     send(forged_ip, 9300)
     again = lambda: send(host_ip, 9301)
-    seen = watch(8.0, [(0.5, again), (1.0, again), (1.5, again), (3.0, again)])
+    # Within the cap: after it the same bytes are a first flight like any.
+    seen = watch(8.0, [(0.5, again), (1.0, again), (1.5, again)])
     there = [e for e in seen if e[1] == forged_ip and e[2] == 9300]
     if len(there) < 2:
         sys.exit("the guest did not answer the first flight and resend the answer")
@@ -516,6 +526,85 @@ boot "$CMD" "$KG"
 serving
 grep -qx "reflect: entity $NG" "$OUT/serial.log"
 factorial again
-stop
 echo "ok   the same key started again is the same name, and the same client is served"
+
+# The client Mjolnir vendors (quic.zig of e9a4c86, unmodified), which drops
+# a Retry, is served as before while a first-flight slot is free.
+"$OUT/quic-client-e9a4c86" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NG" > "$OUT/quic-old.frame"
+body "$OUT/quic-old.frame" "$OUT/quic-old.body"
+cmp -s "$OUT/quic-old.body" "$OUT/factorial.reply"
+kind "$OUT/quic-old.frame"
+echo "ok   the client of e9a4c86, which Mjolnir vendors, is served while a first-flight slot is free"
+
+# ms <command...>: run it, and print how many milliseconds it took.
+ms() {
+    s0=$(date +%s%N)
+    "$@"
+    echo $(( ($(date +%s%N) - s0) / 1000000 ))
+}
+
+# A flood from the second address, with a key on no list: new first flights,
+# one first flight again and again, and every datagram of a finished
+# exchange of the allowed client's. Five allowed clients in turn, each
+# served within a second. FLOOD_RATE is datagrams a second, 0 as fast as
+# the flooder can.
+factorial kept keep "$OUT/kept.bin"
+"$OUT/quic-client" "$IP" "$QPORT" 1 "$fact" "$KO" "$NG" flood "$OTHERIP" 12 "${FLOOD_RATE:-0}" "$OUT/kept.bin" \
+    2> "$OUT/flood.txt" &
+fpid=$!
+sleep 1.5
+i=1
+while [ "$i" -le 5 ]; do
+    took=$(ms factorial "flood$i" | tail -n 1)
+    echo "     allowed client $i served in $took ms under the flood"
+    if [ "$took" -ge 1000 ]; then
+        echo "an allowed client waited $took ms under the flood" >&2
+        exit 1
+    fi
+    i=$((i + 1))
+done
+wait "$fpid"
+sed 's/^/     /' "$OUT/flood.txt"
+grep -q "heard [1-9][0-9]* Retries" "$OUT/flood.txt"
+echo "ok   while a second address floods the guest, five allowed clients are each served within a second"
+
+# Let the flood's connections reach the cap. Then four clients with a key on
+# no list take the first-flight pool, show their address and keep sending
+# Handshake packets that open, never a Certificate, for 6 seconds. An
+# allowed client that answers a Retry is served at once; the client of
+# e9a4c86, which does not, only once the cap has freed a slot, while the
+# stalled clients still send.
+sleep 3
+spids=
+for k in 1 2 3 4; do
+    "$OUT/quic-client" "$IP" "$QPORT" 1 "$fact" "$KO" "$NG" stall &
+    spids="$spids $!"
+    sleep 0.05
+done
+sleep 0.3
+( ms "$OUT/quic-client-e9a4c86" "$IP" "$QPORT" 100000000 "$fact" "$KC" "$NG" > "$OUT/quic-capped.frame" ) > "$OUT/capped.ms" &
+opid=$!
+took=$(ms factorial retried | tail -n 1)
+if [ "$took" -ge 1000 ]; then
+    echo "the allowed client waited $took ms behind stalled clients" >&2
+    exit 1
+fi
+wait "$opid" || { echo "the client that ignores a Retry was not served" >&2; exit 1; }
+old=$(tail -n 1 "$OUT/capped.ms")
+body "$OUT/quic-capped.frame" "$OUT/quic-capped.body"
+cmp -s "$OUT/quic-capped.body" "$OUT/factorial.reply"
+if [ "$old" -lt 1500 ] || [ "$old" -gt 6000 ]; then
+    echo "the client that ignores a Retry was served in $old ms, not between 1.5 and 6 s" >&2
+    exit 1
+fi
+for p in $spids; do wait "$p"; done
+echo "     an allowed client in $took ms; the client of e9a4c86 in $old ms"
+echo "ok   stalled clients on no list hold the first-flight pool no longer than the cap"
+
+if grep -v -e "^reflect: entity $NG\$" -e "^reflect: ready $IP:$PORT\$" -e "^reflect: quic $QPORT\$" "$OUT/serial.log" | grep -q .; then
+    echo "the guest said something unexpected:" >&2
+    cat "$OUT/serial.log" >&2
+    exit 1
+fi
+stop
 echo "quic guest ok"

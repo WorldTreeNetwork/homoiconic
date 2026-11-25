@@ -103,6 +103,10 @@ zig build-exe -target x86_64-linux-musl -static -fno-PIE -femit-bin="$OUT/cross-
 zig build-exe -O ReleaseSafe -femit-bin="$OUT/quic-self" "$HERE/quic-self.zig" $Z
 # shellcheck disable=SC2086
 zig build-exe -O ReleaseSafe -lc -femit-bin="$OUT/quic-client" "$HERE/quic-client.zig" $Z
+# The client of e9a4c86, which Mjolnir vendors and which ignores a Retry:
+# check-quic.sh checks the guest still serves it (add-quic-admission).
+# shellcheck disable=SC2086
+zig build-exe -O ReleaseSafe -lc -femit-bin="$OUT/quic-client-e9a4c86" "$HERE/compat/e9a4c86/quic-client.zig" $Z
 # shellcheck disable=SC2086
 zig build-exe -O ReleaseSafe -lc -femit-bin="$OUT/entity" "$HERE/entity-tool.zig" $Z
 # The clock conversion, on this host: time runs forward far past 2^32 ticks.
