@@ -153,6 +153,9 @@ def guest_controls():
     print("== real guests, each fix undone ==")
     bad = 0
     env = dict(os.environ)
+    # quic-self, run by build-net.sh, fails first for each of these; skip it
+    # so that the guest check is the one that has to catch the fix undone.
+    env["SKIP_QUIC_SELF"] = "1"
     for what, f, old, new, script, msg in GUEST:
         path = os.path.join(HERE, f)
         keep = open(path).read()

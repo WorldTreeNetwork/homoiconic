@@ -112,5 +112,8 @@ zig build-exe -O ReleaseSafe -lc -femit-bin="$OUT/entity" "$HERE/entity-tool.zig
 # The clock conversion, on this host: time runs forward far past 2^32 ticks.
 # shellcheck disable=SC2086
 zig test "$HERE/pvclock.zig" $Z
-"$OUT/quic-self"
+# quic-self catches each fix of add-quic-admission undone before a guest
+# would; quic-admission-controls.py sets SKIP_QUIC_SELF to show that the guest
+# checks catch them too. Nothing else sets it.
+[ -n "${SKIP_QUIC_SELF:-}" ] || "$OUT/quic-self"
 echo "built $OUT/reflect-net.elf"
