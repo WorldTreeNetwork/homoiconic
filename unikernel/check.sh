@@ -270,6 +270,12 @@ printf 'def b m acc =\n  case m\n    0 -> acc\n    k + 1 -> b k [900000000000000
 bytes "$OUT/numbers.hom" "$OUT/numbers.bytes" numbers
 given "$OUT/numbers.bytes" "100000000 0"; same_given "bytes at boot: 800000 numbers of 19 digits are too much to write"
 says "800000 numbers of 19 digits" "no result within 4000000 cells"
+# What is written is the tree, however little is held: an array of 1000 zeros
+# held 3990 times is 21000 cells and nearly four million items written.
+printf 'def rep n x acc =\n  case n\n    0 -> acc\n    m + 1 -> rep m x [x, ...acc]\n\nrep 3990 (rep 1000 0 []) []\n' > "$OUT/held.hom"
+bytes "$OUT/held.hom" "$OUT/held.bytes" held
+given "$OUT/held.bytes" "100000000 0"; same_given "bytes at boot: an array held 3990 times is too much to write"
+says "an array held 3990 times" "no result within 4000000 cells"
 # A text of 1200000 characters, its code points kept, and one more array made
 # of it: the array an operation makes exists before it is charged.
 printf 'def fill n acc =\n  case n\n    0 -> acc\n    m + 1 -> fill m [97, ...acc]\n\nlet t = text (fill 1200000 [])\nlet c = codes t\n[c, [0, ...t]]\n' > "$OUT/pieces.hom"

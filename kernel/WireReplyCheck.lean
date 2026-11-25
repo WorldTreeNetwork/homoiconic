@@ -79,6 +79,14 @@ def isValue (b : ByteArray) (n : Nat) : Bool :=
   let many := bytesOf (defs ++ "fn x -> f29 x\n")
   IO.println (check (isSpace (Surface.replyBytes many 1000000))
     "a function from thirty definitions is the space reply")
+  -- A function's form writes each captured value where it is held: a
+  -- thousand functions over one environment of 3000 values are 5000 cells and
+  -- three million values written. A hundred are allowed.
+  let env : List MValue := List.replicate 3000 (.data (.nat 0))
+  let over (k : Nat) : MValue :=
+    .closure (compile (.lam (.var 0))) (List.replicate k (.closure (compile (.var 0)) env))
+  IO.println (check (!fitsValue (over 1000) (4 * defaultSpace) && fitsValue (over 100) (4 * defaultSpace))
+    "functions over one environment are counted where it is held")
   let few := bytesOf "def f0 x = x\ndef f1 x = f0 x\nfn x -> f1 x\n"
   let fewOk := match readRunReply (Surface.replyBytes few 1000000) with
     | .ok (.value (.closure _ _)) => true

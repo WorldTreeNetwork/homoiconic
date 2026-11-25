@@ -27,7 +27,7 @@ fi
 
 # The reply bytes, the two mjolnir holds among them, and the space reply.
 lake env lean WireReplyCheck.lean > "$OUT/reply.txt"
-if grep -q "^FAIL" "$OUT/reply.txt" || [ "$(grep -c "^ok" "$OUT/reply.txt")" -ne 18 ] || grep -q "error" "$OUT/reply.txt"; then
+if grep -q "^FAIL" "$OUT/reply.txt" || [ "$(grep -c "^ok" "$OUT/reply.txt")" -ne 19 ] || grep -q "error" "$OUT/reply.txt"; then
     cat "$OUT/reply.txt" >&2
     exit 1
 fi
@@ -198,6 +198,16 @@ printf 'def b m acc =\n  case m\n    0 -> acc\n    k + 1 -> b k [900000000000000
 "$OUT/run" "$OUT/fewer.hom" > "$OUT/fewer.txt"
 awk 'BEGIN { printf "["; for (i = 1; i < 100000; i++) printf "9000000000000000000, "; printf "9000000000000000000]\n" }' > "$OUT/fewer.expected"
 cmp "$OUT/fewer.expected" "$OUT/fewer.txt"
+# What is written is the tree, however little is held. An array of 1000 zeros
+# held 3990 times is 21000 cells and nearly four million items written: it is
+# refused, in a few MiB. Held 2000 times it is written, 6 MB of it.
+printf 'def rep n x acc =\n  case n\n    0 -> acc\n    m + 1 -> rep m x [x, ...acc]\n\nrep 3990 (rep 1000 0 []) []\n' > "$OUT/held.hom"
+spaced "$SPACE" 65536 "$OUT/held.hom"
+printf 'def rep n x acc =\n  case n\n    0 -> acc\n    m + 1 -> rep m x [x, ...acc]\n\nrep 2000 (rep 1000 0 []) []\n' > "$OUT/held-less.hom"
+kib="$(peak_kib "$OUT/run" "$OUT/held-less.hom")"
+[ "$(wc -c < "$OUT/peak.out" | tr -d ' ')" = 6004001 ] || { echo "run held-less.hom: the answer is not 6004001 bytes" >&2; exit 1; }
+[ "$kib" -le 262144 ] || { echo "run held-less.hom: peak $kib KiB" >&2; exit 1; }
+echo "run $OUT/held-less.hom => 6004001 bytes (peak $kib KiB)"
 echo "a run that passes its space ends in the kernel's line, and an answer too large to write does"
 
 # An answer longer than the command's first buffer is printed in full: every

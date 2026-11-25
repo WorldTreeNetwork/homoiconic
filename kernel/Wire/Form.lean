@@ -57,32 +57,33 @@ mutual
 end
 
 /-- What is left of `left` after a block of code is counted as its data form
-    is built: a hundred for each instruction (its quoted program is about
-    seven cells an instruction), and a literal as it is written. `none` when
+    is built: three hundred for each instruction (the program read back from
+    it, the code compiled again to compare, and its quoted form are about that
+    many bytes an instruction), and a literal as it is written. `none` when
     it takes more. The code that follows an instruction is a tail call. -/
 def codeFits : Code → Nat → Option Nat
   | .done, left => some left
-  | .access _ k, left => if 100 ≤ left then codeFits k (left - 100) else none
+  | .access _ k, left => if 300 ≤ left then codeFits k (left - 300) else none
   | .closure b k, left =>
-      if 100 ≤ left then
-        match codeFits b (left - 100) with
+      if 300 ≤ left then
+        match codeFits b (left - 300) with
         | some l => codeFits k l
         | none => none
       else none
   | .literal d k, left =>
-      if 100 ≤ left then
-        match writesGo (left - 100) [] [d] with
+      if 300 ≤ left then
+        match writesGo (left - 300) [] [d] with
         | some l => codeFits k l
         | none => none
       else none
   | .checkFun k, left => codeFits k left
-  | .apply k, left => if 100 ≤ left then codeFits k (left - 100) else none
+  | .apply k, left => if 300 ≤ left then codeFits k (left - 300) else none
   | .checkData k, left => codeFits k left
-  | .succ k, left => if 100 ≤ left then codeFits k (left - 100) else none
-  | .cons k, left => if 100 ≤ left then codeFits k (left - 100) else none
+  | .succ k, left => if 300 ≤ left then codeFits k (left - 300) else none
+  | .cons k, left => if 300 ≤ left then codeFits k (left - 300) else none
   | .dcase z sc n c k, left =>
-      if 100 ≤ left then
-        match codeFits z (left - 100) with
+      if 300 ≤ left then
+        match codeFits z (left - 300) with
         | none => none
         | some l =>
           match codeFits sc l with
@@ -96,26 +97,28 @@ def codeFits : Code → Nat → Option Nat
               | some l => codeFits k l
       else none
   | .checkNat k, left => codeFits k left
-  | .prim k, left => if 100 ≤ left then codeFits k (left - 100) else none
+  | .prim k, left => if 300 ≤ left then codeFits k (left - 300) else none
 
 /-- What is left of `left` after the values of `cur` and then of each list of
     `work` are counted as their data forms are written: data as `writesGo`
-    counts it, a function two, its code as `codeFits` counts it, and the
-    values it captured where they are held. Captured values wait in `work`,
-    so nothing here recurses on how deep functions are nested. -/
+    counts it, a function its code as `codeFits` counts it and the values it
+    captured where they are held, and forty for each value, which is about
+    what its data form takes to build beyond what it writes. Captured values
+    wait in `work`, so nothing here recurses on how deep functions are
+    nested. -/
 def valuesFit : (left : Nat) → (work : List (List MValue)) → (cur : List MValue) → Option Nat
   | left, [], [] => some left
   | left, w :: work, [] => valuesFit left work w
   | left, work, .data d :: vs =>
-      if _h : 2 ≤ left then
-        match writesGo (left - 2) [] [d] with
-        | some l => valuesFit (min l (left - 2)) work vs
+      if _h : 40 ≤ left then
+        match writesGo (left - 40) [] [d] with
+        | some l => valuesFit (min l (left - 40)) work vs
         | none => none
       else none
   | left, work, .closure c env :: vs =>
-      if _h : 2 ≤ left then
-        match codeFits c (left - 2) with
-        | some l => valuesFit (min l (left - 2)) (vs :: work) env
+      if _h : 40 ≤ left then
+        match codeFits c (left - 40) with
+        | some l => valuesFit (min l (left - 40)) (vs :: work) env
         | none => none
       else none
 termination_by left work => (left, work.length)

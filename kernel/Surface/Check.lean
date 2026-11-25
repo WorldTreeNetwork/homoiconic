@@ -232,15 +232,24 @@ def main : IO UInt32 := do
     if got != out then
       IO.println s!"FAIL space, {what}: printed `{show1 got}`, expected `{out}`"
       fails := fails + 1
-  -- `writes` is `written`, and two for the value as an item, on each shape.
+  -- `writes` is `written`, and five for the value as an item, on each shape.
   let shapes : List Data := [.nat 0, .nat 9, .nat 1000000, .nat (2 ^ 200), .name 7, .text [],
     .text "héllo".toList, .arr [], .arr [.nat 0, .nat 0], .arr [.arr [], .text "a".toList, .arr [.arr [.nat 5]]]]
   for d in shapes do
     total := total + 1
-    let w := d.written + 2
+    let w := d.written + 5
     if !(d.writes w) || d.writes (w - 1) || (renderData d).utf8ByteSize > d.written then
       IO.println s!"FAIL written: {renderData d} is counted {d.written}, written in {(renderData d).utf8ByteSize} bytes"
       fails := fails + 1
+  -- What is written is the tree, however little is held: an array of 1000
+  -- zeros held 3990 times is 21000 cells and nearly four million items, more
+  -- than the default allows written; held 2000 times it is allowed.
+  total := total + 1
+  let inner := Data.arr (List.replicate 1000 (.nat 0))
+  if (Data.arr (List.replicate 3990 inner)).writes (4 * defaultSpace)
+      || !(Data.arr (List.replicate 2000 inner)).writes (4 * defaultSpace) then
+    IO.println "FAIL written: an array held many times is not counted where it is held"
+    fails := fails + 1
   -- Cells of data as a tree, and of a number past a machine word.
   total := total + 1
   if (Data.arr [.nat 0, .text "ab".toList, .arr []]).cells != 9 || natCells (2 ^ 63 - 1) != 1

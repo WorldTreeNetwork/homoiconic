@@ -52,7 +52,9 @@ static size_t reflect_slot(lean_object *o, size_t slots) {
    `cut + 1`; it answers the same when it cannot get the memory to remember
    what it has counted, so a caller that compares the answer with `cut` errs
    toward "too many". `cut` is kept below a quarter of the largest size, so
-   `cut + 1` is a size. Nothing is changed.
+   `cut + 1` is a size; a caller whose cut was above that is then answered
+   less than it asked about, which matters to nobody: a ledger of 2^62 cells
+   is never spent. Nothing is changed.
 
    The table of objects counted starts at 4096 slots of eight bytes and is
    made four times as large when it is three quarters full, up to the least
@@ -61,7 +63,9 @@ static size_t reflect_slot(lean_object *o, size_t slots) {
    the most a count takes is that last table and, for a moment, the one
    before it: ten bytes and two thirds for each cell of `cut`, rounded up to
    a power of two, and a quarter more. The stack holds what is still to look
-   at, at most one entry for each cell counted. Objects are told apart by
+   at: for each object counted, its fields but the first, so at most one
+   entry for each cell of a list or an environment and up to four for an
+   instruction of code. Objects are told apart by
    address: this is the one place the kernel package reads what the runtime
    shares, and so the one place whose answer is not a function of the value
    it is given. */

@@ -47,9 +47,12 @@ def Data.cells (d : Data) : Nat := d.cellsOnto 0
 def natWritten (n : Nat) : Nat := Nat.log2 n / 3 + 2
 
 mutual
-  /-- `acc` and an upper bound on the bytes of a data value written as text:
-      a number or a name a third of its bits and two, a text two and four for
-      each character, an array two and, for each item, two and the item. -/
+  /-- `acc` and what a data value is counted as when it is written: a number
+      or a name a third of its bits and two, a text two and four for each
+      character, an array two and, for each item, five and the item. That is
+      an upper bound on its bytes as text, with three more for each item of an
+      array than it writes: the printer holds far more than an item's bytes
+      for each item while it prints, so the count bounds the items too. -/
   def Data.writtenOnto : Data → Nat → Nat
     | .nat n, acc => acc + natWritten n
     | .name n, acc => acc + natWritten n
@@ -57,17 +60,16 @@ mutual
     | .arr xs, acc => writtenItems xs (acc + 2)
   def writtenItems : List Data → Nat → Nat
     | [], acc => acc
-    | x :: xs, acc => writtenItems xs (x.writtenOnto (acc + 2))
+    | x :: xs, acc => writtenItems xs (x.writtenOnto (acc + 5))
 end
 
-/-- An upper bound on the bytes of a data value written as text. Its CBOR form
-    is no longer, but for the headers of long texts and arrays (at most seven
-    bytes each) and the tag of a name (two). This is the definition; `writes`
-    is what runs. -/
+/-- What a data value is counted as when it is written: an upper bound on
+    its bytes as text, and three for each item of an array. Its CBOR form is
+    no longer. This is the definition; `writes` is what runs. -/
 def Data.written (d : Data) : Nat := d.writtenOnto 0
 
 /-- What is left of `left` after the items of `cur` and then of each list of
-    `work` are written, each item two and its `written`; `none` when they
+    `work` are written, each item five and its `written`; `none` when they
     take more. Lists still to walk wait in `work`, so nothing here recurses on
     how deep the data is nested, and no more is looked at than `left` pays
     for. -/
@@ -75,21 +77,21 @@ def writesGo : (left : Nat) → (work : List (List Data)) → (cur : List Data) 
   | left, [], [] => some left
   | left, w :: work, [] => writesGo left work w
   | left, work, .nat n :: xs =>
-      if _h : 2 + natWritten n ≤ left then writesGo (left - (2 + natWritten n)) work xs else none
+      if _h : 5 + natWritten n ≤ left then writesGo (left - (5 + natWritten n)) work xs else none
   | left, work, .name n :: xs =>
-      if _h : 2 + natWritten n ≤ left then writesGo (left - (2 + natWritten n)) work xs else none
+      if _h : 5 + natWritten n ≤ left then writesGo (left - (5 + natWritten n)) work xs else none
   | left, work, .text cs :: xs =>
-      if _h : 4 + 4 * cs.length ≤ left then writesGo (left - (4 + 4 * cs.length)) work xs else none
+      if _h : 7 + 4 * cs.length ≤ left then writesGo (left - (7 + 4 * cs.length)) work xs else none
   | left, work, .arr ys :: xs =>
-      if _h : 4 ≤ left then writesGo (left - 4) (xs :: work) ys else none
+      if _h : 7 ≤ left then writesGo (left - 7) (xs :: work) ys else none
 termination_by left work => (left, work.length)
 decreasing_by
   all_goals simp_wf
   · exact Prod.Lex.right _ (Nat.lt_succ_self _)
   all_goals (apply Prod.Lex.left; omega)
 
-/-- Whether `d` written takes at most `n` bytes, by `written` (and two, as an
-    item is counted). -/
+/-- Whether `d` written is counted at no more than `n`, by `written` (and
+    five, as an item is counted). -/
 def Data.writes (d : Data) (n : Nat) : Bool := (writesGo n [] [d]).isSome
 
 variable [Ops]
@@ -111,7 +113,7 @@ def owed : State → Nat
   | .running (.literal _ _) _ _ _ => 2
   | .running (.checkFun _) _ _ _ => 2
   | .running (.checkData _) _ _ _ => 2
-  | .running (.checkNat _) _ _ _ => 2
+  | .running (.checkNat _) _ _ _ => 3
   | .running (.apply _) _ _ _ => 3
   | .running (.succ _) _ (.data (.nat n) :: _) _ => 2 + natCells (n + 1)
   | .running (.succ _) _ (.data (.name n) :: _) _ => 2 + natCells (n + 1)
@@ -290,9 +292,10 @@ def turnSpace : Nat := 4000000
 /-- The run a driver makes for one turn: under `turnSpace` with no count, so
     it is the same on every machine that replays it. A turn out of space is
     left at the state it stopped in, and a turn whose data answer would take
-    more than four bytes written for each cell is left where it began; a
-    driver sees a state that is not halted either way, and reports the turn
-    as not finished. -/
+    more than four bytes written for each cell is left where it began. Every
+    state a driver begins a turn from is running, so either way the driver
+    sees a state that is not halted and reports the turn as not finished, in
+    the words it has for a turn out of steps (`homoiconic-q59.75`). -/
 def runTurn (budget : Nat) (s : State) : State :=
   match runIn (.ledger turnSpace) budget s with
   | .full t => t

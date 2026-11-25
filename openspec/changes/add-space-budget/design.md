@@ -111,7 +111,8 @@ The step budget is tested first, so a run out of both is out of steps. A run sta
 | step | cells |
 |---|---|
 | `access` | 1 |
-| `closure`, `literal`, each of the three checks | 2 |
+| `closure`, `literal`, `checkFun`, `checkData` | 2 |
+| `checkNat` (the number, its box and the list cell are built again) | 3 |
 | `apply` | 3 |
 | `succ` | 2 and `natCells` of the number made |
 | `cons` onto an array | 4 |
@@ -131,14 +132,14 @@ Only an operation's charge reads `s'`. `runSpace` is written in two shapes for t
 
 **The written answer.** A value is written as the tree it is, so an answer of forty cells built by doubling is 2^40 as text or bytes, and a function's byte form writes each environment where it is held. Cells do not bound that, and they do not bound the printer either: measured on the Mac, `Surface.renderData` holds about 75 bytes for each item of an array of empty texts and 150 for each of 19 digits while it prints, so an answer of 3.5 million numbers, 7 million cells, took 531 MiB. So an answer has its own bound, in bytes written, checked before anything is written:
 
-- `Data.written d` is an upper bound on the bytes of `d` as text and as CBOR: a number or a name a third of its bits and two, a text two and four for each character, an array two and, for each item, two and the item.
-- `Data.writes d n` answers whether `Data.written d ≤ n`, looking at no more than `n + 1` bytes' worth, with a work list and no recursion on nesting.
-- `Wire.fitsValue v n` is the same for a machine value's data form: data as above, a function as two, a hundred for each instruction of its code (its quoted body is about seven cells an instruction to build), the literals in it, and each captured value where it is held.
-- An answer may take `4 * cells` bytes: 16 MB written for the default. `renderState` and `renderInterpreted` give the space line for a data answer that does not; `replyBytes` gives `[7]` for any answer that does not. At most 2.1 million items can be held under the default, so the printer's worst is about 2.1 million short items; the largest existing answer, 2097145 empty texts given as a literal, is 8388582 bytes written.
+- `Data.written d` is what `d` is counted as written: a number or a name a third of its bits and two, a text two and four for each character, an array two and, for each item, five and the item. That is an upper bound on its bytes as text and as CBOR, with three more for each item than it writes, so that the count bounds the items too: the printer's memory goes by items.
+- `Data.writes d n` answers whether `Data.written d + 5 ≤ n`, looking at no more than `n` pays for, with a work list and no recursion on nesting.
+- `Wire.fitsValue v n` is the same for a machine value's data form: forty for each value, which is about what its form takes to build beyond what it writes, data as above, and a function three hundred for each instruction of its code (the program read back from it, the code compiled again to compare and its quoted form are about that many bytes), the literals in it, and each captured value where it is held.
+- An answer may take `4 * cells` bytes: 16 MB written for the default. `renderEnded` and `renderInterpreted` give the space line for a data answer that does not; `replyBytes` gives `[7]` for any answer that does not. With five for an item and at least two for what it is, 16 MB admit at most 2.28 million items, however they are held; the largest existing answer, 2097145 empty texts given as a literal, is counted 14680017 and is 8388582 bytes. (An item was first counted two, which let a tree of four million short items through: an array of 1000 zeros held 3990 times is 21000 cells. The code read found it.)
 
 ## Theorems (`kernel/Reflect/SpaceProof.lean`, restated in `kernel/MachineContract.lean` with `#print axioms`)
 
-To be proved for every table, every `sp : Space` (so every count), every fuel, credit and state:
+Proved for every table, every `sp : Space` (so every count), every fuel, credit and state, with no `sorry`; their axioms are `propext`, `Quot.sound` and, for `runSpace_within` and `runIn_ledger`, `Classical.choice`, as `#print axioms` in the contract shows:
 
 ```lean
 theorem runSpace_run : ∃ n, n ≤ fuel ∧ (runSpace sp fuel credit s).state = run n s
@@ -230,13 +231,42 @@ The image's memory for all of this is not 512 MiB. `unikernel/kernel.zig` gives 
 
 `Reflect.defaultSpace = 4000000`: 96 MiB of state at 24 bytes a cell, 160 MiB for a moment at worst, up to 68 MiB for the walk, and at boot up to 100 MiB of program, against 360 MiB. These are worst cases of different runs and are not all reached by one.
 
-To be confirmed on morphie and recorded here and in `unikernel/README.md`, on the 512 MiB image started by `given.sh` and with the peak of the Linux process beside each: `deep` and `build` at levels 0, 1 and 2; a 2 million character text built, its `codes` kept and one `cons` onto it; an array of 2 million numbers of 19 digits answered, and of 2 million empty texts; a number squared until the budget stops it; an answer built by doubling; a function answered from a program of thirty definitions; and each of these behind a 2 MiB literal at boot. Each has to end in the kernel's text. If one does not, the default comes down until it does.
+Measured on morphie on what landed, as the Linux process `unikernel/out/reflect-linux` with its peak from `getrusage`, and on the 512 MiB image by `unikernel/check.sh` and `check-net.sh` (the numbers are in `unikernel/README.md`, "Why 4000000 cells", and the logs in `unikernel/evidence/`):
 
-`deep` through two interpreters and `build` through one or two do not reach any such limit in 100000000 steps: they hold 270046, 101274 and 4974 cells when the budget ends them (the advise read's runs), and end in the budget reply. The checks give those a smaller space where that shows the limit working (`deep` at level 2 and `build` at level 1 with 100000), and say so.
+| run, budget 100000000 | ends in | peak, Linux process |
+|---|---|---|
+| factorial 30, through 0, 1, 2 interpreters | the answer | 13 MiB |
+| `forever.hom`, through 0, 1, 2 | the budget line | 13 MiB |
+| `deep`, through 0 | `no result within 4000000 cells` | 117 MiB |
+| `deep`, through 1 | the space line | 105 MiB |
+| `deep`, through 2 | the budget line (it holds 270046 cells when the steps end) | 23 MiB |
+| `deep`, through 2, space 100000 | `no result within 100000 cells` | 13 MiB |
+| `build`, through 0 | the space line | 115 MiB |
+| `build`, through 1 and 2 | the budget line (101274 and 4974 cells) | 13 MiB |
+| `build`, through 1, space 100000 | the space line | 13 MiB |
+| an answer built by doubling forty times | the space line, at once | 13 MiB |
+| 800000 numbers of 19 digits answered | the space line (too much to write) | 35 MiB |
+| 1400000 empty texts answered | the answer, 5600001 bytes | 123 MiB |
+| a text of 1200000 characters, its `codes` kept, one `cons` onto it | the space line | 121 MiB |
+| a number squared again and again | the budget line (the product's cost stops it) | 13 MiB |
+| a list of 30000 items written out, through 1 | the answer | 102 MiB |
+| `deep`, through 0, with the limit undone | the budget line as a process, 849 MiB; `INTERNAL PANIC: out of memory` on the image | 849 MiB |
+
+The most any of these takes is 123 MiB, a third of what the image has. The limit could be larger; it is left where the sum above, not the measurement, says it is safe, since the sum's worst case (a state that is one text, taken apart) is not one of these runs.
+
+`deep` through two interpreters and `build` through one or two do not reach the limit in 100000000 steps and end in the budget line, in a few MiB. The checks give those a smaller space where that shows the limit working, and say so.
+
+Cells made, by the charge that landed (`madeIn`, by `#eval`): factorial 30 makes 2437 cells in 1165 steps, 145813 in 55543 through one interpreter and 10094393 in 4036172 through two; `forever.hom` makes 1.76 cells a step, and 2.47 and 2.49 through one and two interpreters. So a ledger of 4000000 cells alone would stop `forever.hom` inside 2.3 million steps and factorial through two interpreters before its answer, which is result 1 above with the landed figures.
+
+What the limit costs in time, the same runs with and without it (`reflect-linux` built from this tree and from `451a5de`, the best of three, the process's start taken off): see `unikernel/README.md`.
 
 ## Taking it out
 
-The change adds; it replaces little. To take it out: the exports call `runPriced` again and lose `space` (`Host.lean`, six Zig call sites); `runTurn` is defined as `runPriced` (one line; the driver proofs then go through `runPriced_reach` under the new name); `Reflect/Space.lean`, `Reflect/SpaceProof.lean`, `reflect_live_cells` and the contract lines are deleted; reply tag 7 stays reserved. `runPriced` and every theorem about it are as they were throughout.
+The change adds; it replaces little. To take it out: the exports call `runPriced` again and lose `space` (`Host.lean`, and the callers in `host/run.zig`, `host/check.zig`, `unikernel/main.zig`, `unikernel/net.zig` and `unikernel/reply.zig`); `runTurn` is defined as `runPriced` (one line; the driver proofs then go through `runPriced_reach` under the new name); `Reflect/Space.lean`, `Reflect/SpaceProof.lean`, `reflect_live_cells` and the contract lines are deleted; reply tag 7 stays reserved. `runPriced` and every theorem about it are as they were throughout.
+
+## The code read, answered
+
+`reviews/2026-11-24-code-read.md` (Fable, fresh context, after the code landed: send-back for one round, three defects, no fault found in the C walk, the exports or the contract). An item of an array is counted five; a value in a function's form forty and an instruction three hundred; `checkNat` is charged 3; the comments it corrected are corrected. Each has a check.
 
 ## The advise read, answered
 

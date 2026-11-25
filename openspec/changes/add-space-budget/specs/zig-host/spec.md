@@ -16,6 +16,6 @@
 
 #### Scenario: The limit undone
 
-- GIVEN the same program and a space of 18446744073709551615
-- WHEN `host/out/run` runs it with the budget 100000000
-- THEN the run is not stopped for space: it ends in the budget line with peak resident memory above 256 MiB, which the check refuses
+- GIVEN the same program, the budget 10000000, and a space of 18446744073709551615
+- WHEN `host/out/run` runs it
+- THEN it prints `no result within 10000000 steps`, where with the default space the same budget ends in `no result within 4000000 cells` (`host/check.sh`): the space, not the budget, is what stops it
