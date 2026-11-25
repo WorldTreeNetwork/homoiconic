@@ -25,7 +25,7 @@ SELF = [
     ("another key for the Retry integrity tag", Q,
      "const key = [16]u8{ 0xbe, 0x0c,", "const key = [16]u8{ 0xbf, 0x0c,", [70]),
     ("the client drops Retry packets", Q,
-     "if (!c.server) c.onRetry(pkt, dcid[0..8], scid[0..8]);", "_ = scid;", [71]),
+     "if (!c.server) c.onRetry(pkt, dcid[0..8], scid[0..8]);", "if (c.server) c.onRetry(pkt, dcid[0..8], scid[0..8]);", [71]),
     ("a token's validation finishes the Initial space, as before the split", Q,
      "if (space == 1 and c.server and !c.hs_opened) {", "if (space == 1 and c.server and !c.validated) {", [71]),
     ("the client does not read the server's transport parameters", Q,
@@ -50,7 +50,7 @@ SELF = [
     ("packets that open keep a connection not accepted (the old idle rule)", A,
      "if (now -| s.born >= cap) s.used = false;", "if (now -| s.seen >= idle) s.used = false;", [76]),
     ("a token has no time window", Q,
-     "if (made > now or now - made > token_life) return null;", "", [77]),
+     "if (made > now or now - made > token_life) return null;", "_ = made;\n    _ = now;", [77]),
     ("the port is left out of a token's MAC", Q,
      "std.mem.writeInt(u16, m[4..6], port, .big);", "_ = port;\n    std.mem.writeInt(u16, m[4..6], 0, .big);", [77]),
     ("the Retry's ID is left out of a token's MAC", Q,
@@ -78,7 +78,7 @@ GUEST = [
      "if (now -| s.born >= cap) s.used = false;", "if (now -| s.seen >= idle) s.used = false;",
      "check-quic.sh", "the client that ignores a Retry"),
     ("the client drops Retry packets", Q,
-     "if (!c.server) c.onRetry(pkt, dcid[0..8], scid[0..8]);", "_ = scid;",
+     "if (!c.server) c.onRetry(pkt, dcid[0..8], scid[0..8]);", "if (c.server) c.onRetry(pkt, dcid[0..8], scid[0..8]);",
      "check-wire.sh", "flooded: guest A did not close"),
 ]
 

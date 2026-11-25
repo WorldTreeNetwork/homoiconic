@@ -546,10 +546,12 @@ ms() {
 # A flood from the second address, with a key on no list: new first flights,
 # one first flight again and again, and every datagram of a finished
 # exchange of the allowed client's. Five allowed clients in turn, each
-# served within a second. FLOOD_RATE is datagrams a second, 0 as fast as
-# the flooder can.
+# served within a second. FLOOD_RATE is datagrams a second (0: as fast as
+# the flooder can). The default, 4000, is under the 5000 this mix was seen
+# to leave the guest keeping up with on morphie (unikernel/README.md); a
+# faster flood is dropped by the host's TAP queue without regard to sender.
 factorial kept keep "$OUT/kept.bin"
-"$OUT/quic-client" "$IP" "$QPORT" 1 "$fact" "$KO" "$NG" flood "$OTHERIP" 12 "${FLOOD_RATE:-0}" "$OUT/kept.bin" \
+"$OUT/quic-client" "$IP" "$QPORT" 1 "$fact" "$KO" "$NG" flood "$OTHERIP" 12 "${FLOOD_RATE:-4000}" "$OUT/kept.bin" \
     2> "$OUT/flood.txt" &
 fpid=$!
 sleep 1.5
