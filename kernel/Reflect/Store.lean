@@ -289,8 +289,10 @@ def lstep (σ : Store R) : PState R → LStep R
 
 /-- The charge for the next lazy step, as `stepCost` charges the plain
     machine. A primitive whose argument is whole data costs what the table
-    says. A step that fetches or hydrates its argument, and every other step,
-    costs one. -/
+    says. `succ` or `case` of a number and `cons` onto a text cost what the
+    table says for that data (`Ops.work`); reaching a variable is a step for
+    each place passed, so it costs one a step. A step that fetches or hydrates
+    its argument, and every other step, costs one. -/
 def lstepCost : PState R → Nat
   | .running (.prim _) _ (x :: .nat n :: _) _ =>
       match x.toData with
@@ -300,6 +302,11 @@ def lstepCost : PState R → Nat
       match x.toData with
       | some d => Ops.cost n d
       | none => 1
+  | .running (.succ _) _ (.nat n :: _) _ => Ops.work (.nat n)
+  | .running (.succ _) _ (.name n :: _) _ => Ops.work (.name n)
+  | .running (.dcase _ _ _ _ _) _ (.nat n :: _) _ => Ops.work (.nat n)
+  | .running (.dcase _ _ _ _ _) _ (.name n :: _) _ => Ops.work (.name n)
+  | .running (.cons _) _ (.text t :: _) _ => Ops.work (.text t)
   | _ => 1
 
 /-- Where a lazy run is: at a state, or paused there needing a reference. -/

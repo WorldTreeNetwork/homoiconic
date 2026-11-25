@@ -29,6 +29,20 @@ class Ops where
   /-- Steps a budget charges for this operation on this argument, counted
       before the operation runs. One, when a table does not say. -/
   cost : Nat → Data → Nat := fun _ _ => 1
+  /-- `cost n d` when it is at most `cap`, and `cap + 1` when it is more
+      (`costWithin_eq`). A run asks this with what it has left as `cap`, so a
+      table can find a charge without looking at more of `d` than the budget
+      pays for (`homoiconic-q59.73`). Unless a table says, it is `cost`. -/
+  costWithin : Nat → Data → Nat → Nat := fun n d cap => min (cost n d) (cap + 1)
+  costWithin_eq : ∀ n d cap, costWithin n d cap = min (cost n d) (cap + 1) := by intros; rfl
+  /-- What a step of the machine's own is charged for the data it takes
+      whole: the number `succ` adds one to or `case` takes one from, and the
+      text `cons` turns into an array. A step's time grows with that data.
+      One, when a table does not say. -/
+  work : Data → Nat := fun _ => 1
+  /-- What reaching the variable `i` places deep is charged: the machine walks
+      the environment that far. One, when a table does not say. -/
+  reach : Nat → Nat := fun _ => 1
 
 variable [Ops]
 

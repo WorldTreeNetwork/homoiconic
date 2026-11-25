@@ -14,3 +14,7 @@ name = "Surface"
 [[lean_exe]]
 name = "reflectBench"
 root = "Bench"
+
+[[lean_exe]]
+name = "reflectCostBench"
+root = "CostBench"

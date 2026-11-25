@@ -56,11 +56,12 @@ theorem runPriced_reach {fuel : Nat} {s t : State} (h : runPriced fuel s = t) :
   obtain ⟨n, _, hn⟩ := runPriced_run fuel s
   exact ⟨n, hn ▸ h⟩
 
-/-- With a table that charges one for every operation, a priced run is
-    `runUntil`: the budget counts steps. -/
-theorem runPriced_unit (h : ∀ n d, Ops.cost n d = 1) : ∀ fuel s, runPriced fuel s = runUntil fuel s := by
+/-- With a table that charges one for every operation and every step of the
+    machine's own, a priced run is `runUntil`: the budget counts steps. -/
+theorem runPriced_unit (h : ∀ n d, Ops.cost n d = 1) (hw : ∀ d, Ops.work d = 1)
+    (hr : ∀ i, Ops.reach i = 1) : ∀ fuel s, runPriced fuel s = runUntil fuel s := by
   have hc : ∀ s, stepCost s = 1 := by
-    intro s; unfold stepCost; split <;> first | rfl | exact h _ _
+    intro s; unfold stepCost; split <;> first | rfl | exact h _ _ | exact hw _ | exact hr _
   intro fuel
   induction fuel with
   | zero => intro s; rw [runPriced]; rfl

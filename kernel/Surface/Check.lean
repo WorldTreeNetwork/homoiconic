@@ -256,6 +256,65 @@ def main : IO UInt32 := do
       || natCells (2 ^ 63) != 4 || natCells (2 ^ 200) != 7 then
     IO.println "FAIL cells: an array of three items, or a large number, is miscounted"
     fails := fails + 1
+  -- `equal` is charged the weight of the lighter of its two values
+  -- (`homoiconic-q59.73`); each charge is found within a cap, so data built
+  -- by doubling forty times is refused in no more time than the cap pays for.
+  let rec dbl : Nat → Data → Data
+    | 0, x => x
+    | k + 1, x => match x with
+      | .arr xs => dbl k (.arr (x :: xs))
+      | x => x
+  let d40 := dbl 40 (.arr [.nat 0])
+  let d10 := dbl 10 (.arr [.nat 0])
+  total := total + 1
+  if arithCost 5 (.arr [.nat 2, .nat 3]) != 1
+      || arithCost 5 (.arr [.text "abc".toList, .text "abd".toList]) != 4
+      || arithCostWithin 5 (.arr [.nat 0, d40]) 1000000 != 1
+      || arithCost 5 (.arr [d10, d10]) != d10.weight || d10.weight != 2048
+      || arithCostWithin 5 (.arr [d40, d40]) 1000 != 1001
+      || arithCostWithin 5 (.arr [d10, d40]) 100000 != 2048
+      || arithCostWithin 5 (.arr [.nat (2 ^ 200), d40]) 0 != 1 then
+    IO.println "FAIL equal's charge: the weight of the lighter value, within a cap"
+    fails := fails + 1
+  -- The machine's own steps on large data: `succ` and `case` of a number its
+  -- words, `cons` onto a text one more than its length, reaching a variable
+  -- one and one for each 32 places walked.
+  total := total + 1
+  if arithWork (.nat (2 ^ 64 - 1)) != 1 || arithWork (.nat (2 ^ 64)) != 2
+      || arithWork (.nat (2 ^ 8000000)) != 125001 || arithWork (.text "abc".toList) != 4
+      || arithWork (.arr []) != 1 || arithReach 31 != 1 || arithReach 32 != 2
+      || reachIn 100 [(), (), ()] 0 != 3 || reachIn 2 [(), (), ()] 0 != 2 then
+    IO.println "FAIL the charges of succ, case, cons onto a text, and reaching a variable"
+    fails := fails + 1
+  -- What a step is charged, read from the state it is taken from.
+  total := total + 1
+  let zeros (k : Nat) : List MValue := List.replicate k (.data (.nat 0))
+  if stepCost (.running (.cons .done) [] [.data (.text (List.replicate 2048 'a')), .data (.nat 0)] []) != 2049
+      || stepCost (.running (.cons .done) [] [.data (.arr []), .data (.nat 0)] []) != 1
+      || stepCost (.running (.succ .done) [] [.data (.nat (2 ^ 64))] []) != 2
+      || stepCost (.running (.dcase .done .done .done .done .done) [] [.data (.nat (2 ^ 640))] []) != 11
+      || stepCost (.running (.dcase .done .done .done .done .done) [] [.data (.text "ab".toList)] []) != 1
+      || stepCost (.running (.access 100 .done) (zeros 1000) [] []) != 4
+      || stepCost (.running (.access 100000 .done) (zeros 3) [] []) != 1 then
+    IO.println "FAIL stepCost: the machine's own steps on large data"
+    fails := fails + 1
+  let dblSrc (e : String) : String :=
+    s!"def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\n{e}\n"
+  let charged : List (String × String × Nat × Nat × String) := [
+    ("equal of data doubled forty times", dblSrc "equal (dbl [0] 40) (dbl [0] 40)", 0, 100000,
+      "no result within 100000 steps"),
+    ("equal of data doubled forty times, through one interpreter",
+      dblSrc "equal (dbl [0] 40) (dbl [0] 40)", 1, 100000, "no result within 100000 steps"),
+    ("equal of data doubled ten times, paid", dblSrc "equal (dbl [0] 10) (dbl [0] 10)", 0, 100000, "1"),
+    ("equal of a number and data doubled forty times", dblSrc "equal 0 (dbl [0] 40)", 0, 100000, "0"),
+    ("equal of data doubled forty times, at the default budget, through one interpreter",
+      dblSrc "equal (dbl [0] 40) (dbl [0] 40)", 1, 3000000, "no result within 3000000 steps")]
+  for (what, text, levels, budget, out) in charged do
+    total := total + 1
+    let got := interpText text.toUTF8 levels budget false
+    if got != out then
+      IO.println s!"FAIL charge, {what}: printed `{show1 got}`, expected `{out}`"
+      fails := fails + 1
   IO.println s!"{total - fails} of {total} checks passed"
   if fails > 0 then
     throw (IO.userError s!"{fails} check(s) failed")

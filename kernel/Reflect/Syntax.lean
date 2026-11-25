@@ -269,6 +269,20 @@ theorem length_le_sizeList (xs : List Data) : xs.length ≤ Data.sizeList xs := 
     have : 1 ≤ x.size := by cases x <;> simp [Data.size]
     simp [Data.sizeList]; omega
 
+/-- Whether two lists are as long as each other, by walking both together:
+    it stops at the end of the shorter, so it takes no longer than the shorter
+    list (`List.length` walks the longer one to its end). -/
+def lenEq {α : Type} : List α → List α → Bool
+  | [], [] => true
+  | _ :: xs, _ :: ys => lenEq xs ys
+  | _, _ => false
+
+theorem lenEq_iff {α : Type} : ∀ (xs ys : List α), lenEq xs ys = true ↔ xs.length = ys.length
+  | [], [] => by simp [lenEq]
+  | [], _ :: _ => by simp [lenEq]
+  | _ :: _, [] => by simp [lenEq]
+  | _ :: xs, _ :: ys => by simp [lenEq, lenEq_iff xs ys]
+
 /-- Equality of the pairs in `ps`, each pair's sides compared. The items of two
     arrays of one length are paired and wait in the list, so nothing here
     recurses on how deep the data is nested. -/
@@ -278,7 +292,7 @@ def sameGo : List (Data × Data) → Bool
   | (.name a, .name b) :: ps => a == b && sameGo ps
   | (.text a, .text b) :: ps => a == b && sameGo ps
   | (.arr xs, .arr ys) :: ps =>
-      if xs.length = ys.length then sameGo (xs.zip ys ++ ps) else false
+      if lenEq xs ys then sameGo (xs.zip ys ++ ps) else false
   | _ :: _ => false
 termination_by ps => pairSizes ps
 decreasing_by
@@ -310,7 +324,8 @@ theorem sameGo_iff (ps : List (Data × Data)) : sameGo ps = true ↔ ∀ p ∈ p
   | case3 a b ps ih => simp [sameGo, ih]
   | case4 a b ps ih => simp [sameGo, ih]
   | case5 xs ys ps h ih =>
-    rw [sameGo]; simp only [h, ↓reduceIte]; rw [ih]
+    rw [lenEq_iff] at h
+    rw [sameGo]; simp only [(lenEq_iff xs ys).2 h, ↓reduceIte]; rw [ih]
     simp only [List.mem_append, List.forall_mem_cons]
     constructor
     · intro hp; refine ⟨?_, fun p hp' => hp p (Or.inr hp')⟩
@@ -319,7 +334,12 @@ theorem sameGo_iff (ps : List (Data × Data)) : sameGo ps = true ↔ ∀ p ∈ p
       · simp at h1; exact (zip_all_eq xs ys h).2 h1 p hp
       · exact h2 p hp
   | case6 xs ys ps h =>
-    rw [sameGo]; simp only [h, ↓reduceIte]; simp only [List.forall_mem_cons, Bool.false_eq_true, false_iff]
+    rw [lenEq_iff] at h
+    have h' : lenEq xs ys = false := by
+      cases hl : lenEq xs ys
+      · rfl
+      · exact absurd ((lenEq_iff xs ys).1 hl) h
+    rw [sameGo]; simp only [h', Bool.false_eq_true, ↓reduceIte, List.forall_mem_cons, false_iff]
     rintro ⟨h1, -⟩; simp at h1; exact h (h1 ▸ rfl)
   | case7 p ps n1 n2 n3 n4 =>
     rw [sameGo.eq_def]

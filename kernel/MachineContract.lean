@@ -40,7 +40,8 @@ example : ∀ [Ops], ∀ fuel s, ∃ n, n ≤ fuel ∧ runPriced fuel s = run n 
 example : ∀ [Ops], ∀ {fuel : Nat} {s t : State}, runPriced fuel s = t → ∃ n, run n s = t :=
   Reflect.runPriced_reach
 
-example : ∀ [Ops], (∀ n d, Ops.cost n d = 1) → ∀ fuel s, runPriced fuel s = runUntil fuel s :=
+example : ∀ [Ops], (∀ n d, Ops.cost n d = 1) → (∀ d, Ops.work d = 1) → (∀ i, Ops.reach i = 1) →
+    ∀ fuel s, runPriced fuel s = runUntil fuel s :=
   Reflect.runPriced_unit
 
 example : ∀ [Ops], ∀ t fuel w,

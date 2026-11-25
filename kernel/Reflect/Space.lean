@@ -223,6 +223,66 @@ def runSpace (sp : Space) : (fuel credit : Nat) → State → Ended
 termination_by fuel => fuel
 decreasing_by all_goals omega
 
+/-- `runSpace` as it runs: the charge is asked with the fuel as its cap
+    (`stepCostWithin`), so a step the fuel cannot pay for is found out in no
+    more time than the fuel pays for (`homoiconic-q59.73`). Proved equal
+    (`runSpace_eq_within`). -/
+def runSpaceWithin (sp : Space) : (fuel credit : Nat) → State → Ended
+  | 0, _, s => .reached s
+  | _ + 1, _, .halted o => .reached (.halted o)
+  | _ + 1, _, .fault => .reached .fault
+  | fuel + 1, credit, .running c e stk frs =>
+      if stepCostWithin (.running c e stk frs) (fuel + 1) - 1 ≤ fuel then
+        if atPrim (.running c e stk frs) then
+          -- An operation: its cells are known once it has run.
+          if answered (step (.running c e stk frs)) ≤ credit then
+            runSpaceWithin sp (fuel - (stepCostWithin (.running c e stk frs) (fuel + 1) - 1))
+              (credit - answered (step (.running c e stk frs)))
+              (step (.running c e stk frs))
+          else if sp.count (.running c e stk frs) ≤ sp.bar ∧
+              answered (step (.running c e stk frs)) ≤
+                sp.cells - sp.count (.running c e stk frs) then
+            runSpaceWithin sp (fuel - (stepCostWithin (.running c e stk frs) (fuel + 1) - 1))
+              (sp.cells - sp.count (.running c e stk frs) -
+                answered (step (.running c e stk frs)))
+              (step (.running c e stk frs))
+          else .full (.running c e stk frs)
+        else
+          -- Any other step: its cells are known before it is taken, so the
+          -- state is not held while it is.
+          if owed (.running c e stk frs) ≤ credit then
+            runSpaceWithin sp (fuel - (stepCostWithin (.running c e stk frs) (fuel + 1) - 1))
+              (credit - owed (.running c e stk frs))
+              (step (.running c e stk frs))
+          else if sp.count (.running c e stk frs) ≤ sp.bar ∧
+              owed (.running c e stk frs) ≤ sp.cells - sp.count (.running c e stk frs) then
+            runSpaceWithin sp (fuel - (stepCostWithin (.running c e stk frs) (fuel + 1) - 1))
+              (sp.cells - sp.count (.running c e stk frs) - owed (.running c e stk frs))
+              (step (.running c e stk frs))
+          else .full (.running c e stk frs)
+      else .reached (.running c e stk frs)
+termination_by fuel => fuel
+decreasing_by all_goals omega
+
+omit [Ops] in
+@[csimp] theorem runSpace_eq_within : @runSpace = @runSpaceWithin := by
+  funext inst sp fuel credit s
+  induction fuel using Nat.strongRecOn generalizing credit s with
+  | _ fuel ih =>
+    cases fuel with
+    | zero => rw [runSpace, runSpaceWithin]
+    | succ fuel =>
+      cases s with
+      | halted o => rw [runSpace, runSpaceWithin]
+      | fault => rw [runSpace, runSpaceWithin]
+      | running c e stk frs =>
+        rw [runSpace, runSpaceWithin, stepCostWithin_eq]
+        simp (disch := omega) only [ih]
+        by_cases h : stepCost (.running c e stk frs) ≤ fuel + 1
+        · rw [Nat.min_eq_left (by omega)]
+        · rw [Nat.min_eq_right (by omega)]
+          split <;> split <;> first | rfl | omega
+
 /-- One step of a space-limited run from a running state, with the charge
     written once: the two shapes in the definition are for the compiler, which
     then need not hold the state while a step that is not an operation is

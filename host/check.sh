@@ -193,6 +193,22 @@ expect "no result within 2000000 steps" "$OUT/build.hom" 2000000 $UNDONE
 printf 'def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\ndbl [0] 40\n' > "$OUT/double.hom"
 spaced "$SPACE" 65536 "$OUT/double.hom"
 spaced "$SPACE" 65536 --interp "$OUT/double.hom"
+# Comparing data built by doubling forty times is charged what it weighs, 2^40
+# and more, found within the budget (homoiconic-q59.73): at the default budget
+# it is the budget line, in about 10 s on a Mac at levels 0 and 1. It was
+# charged one, and one such comparison ran for hours.
+printf 'def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\nequal (dbl [0] 40) (dbl [0] 40)\n' > "$OUT/equal40.hom"
+for levels in "" --interp=1; do
+    start="$(date +%s)"
+    # shellcheck disable=SC2086
+    got="$(timeout 120 "$OUT/run" $levels "$OUT/equal40.hom" 100000000 || echo "no answer in 120 s")"
+    took=$(( $(date +%s) - start ))
+    if [ "$got" != "no result within 100000000 steps" ]; then
+        echo "run $levels equal40.hom 100000000: expected the budget line within 120 s, got '$got'" >&2
+        exit 1
+    fi
+    echo "run $levels equal40.hom 100000000 => $got (${took} s)"
+done
 printf 'def b m acc =\n  case m\n    0 -> acc\n    k + 1 -> b k [9000000000000000000, ...acc]\n\nb 800000 []\n' > "$OUT/numbers.hom"
 spaced "$SPACE" 262144 "$OUT/numbers.hom"
 printf 'def b m acc =\n  case m\n    0 -> acc\n    k + 1 -> b k [9000000000000000000, ...acc]\n\nb 100000 []\n' > "$OUT/fewer.hom"
