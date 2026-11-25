@@ -100,7 +100,14 @@ example : ∀ {hold first : Nat} {es : List Charged} {r : Option (Nat × Nat)},
     holdWalk hold first es = .ok r → es.length ≤ entryLimit + outLimit + 2 :=
   Reflect.hold_entries
 
+-- The greedy walk is complete (`homoiconic-q59.68`): two logs that have any
+-- schedule the table allows combine. So `combine` refuses a pair of logs only
+-- when no order of their entries is allowed.
+example : ∀ {a b : List Note} {evs : List Event}, Merged a b evs → ∃ evs', combine a b = some evs' :=
+  Reflect.combine_complete
+
 #print axioms Reflect.accepted_network
+#print axioms Reflect.combine_complete
 #print axioms Reflect.combine_merged
 #print axioms Reflect.merged_exact
 #print axioms Reflect.merged_once
