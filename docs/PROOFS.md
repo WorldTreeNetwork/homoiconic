@@ -137,6 +137,8 @@ and nothing else.
 | `runSpace_full`, `runSpace_within` | A run is stopped for space only when the cells made would pass the credit it began with, so a run that stays inside its ledger is the priced run whatever the count |
 | `trail_held`, `trail_last`, `runSpace_ledger`, `runIn_ledger` | Every state a space-limited run is in was reached from its start by steps that made no more cells than its credit, or from a state it counted at no more than three quarters of its limit by steps that made no more than the rest; with no count, the steps made at most the limit |
 | `runTurn_reach` | Where a driver's turn is left, `run` gets to: the driver theorems hold of turns under a space limit |
+| `runPriced_eq_within`, `runSpace_eq_within`, `stepCostWithin_eq`, `arithCostWithin_eq` | What runs asks each charge within the fuel left, and is the priced run and the space-limited run; for `arith`, `equal`'s charge found within a cap is the charge, or more than the cap (`homoiconic-q59.73`) |
+| `runPriced_unit` | With a table whose every charge (`cost`, `work`, `reach`) is one, a priced run is `runUntil` |
 | `omega_cycle`, `forever_cycle`, `forever_cycle_interp`, `forever_bounded` | A tail loop keeps no frame per call: `omega` and `examples/forever.hom` repeat a state exactly, forever also through one interpreter, so a run of any budget holds one of finitely many states |
 
 ### Requests
@@ -276,6 +278,9 @@ printed, in `kernel/WalkContract.lean`.
 | `Wire.valueData_eq_walk`, `Wire.codeFits_eq_walk` | A machine value's byte form, and what it is counted at, are walks |
 | `Wire.Code.same_iff` | `Code.same a b = true ↔ a = b`, the comparison in `blockTerm` |
 | `Surface.renderData_eq_walk` | The printer is a walk |
+| `Surface.decimal_eq_go`, `decimalGo_eq` | A number is printed by halves split at a power of ten, and the digits are `Nat.repr`'s (`homoiconic-q59.64`) |
+| `Surface.Read.digitsValue_eq_split`, `takeWhileB_eq_walk` | The reader reads a number's digits by halves, and a token as a tail walk |
+| `Wire.bigBE_eq`, `Wire.pushBig_eq` | A bignum's bytes are read and written by halves, and are `takeBE`'s and `pushBE`'s |
 | `Surface.Cross.chain_eq_walk`, `numbers_eq_walk` | A crossing record's chain and a packet's names are loops |
 
 The derived `==` on data was opaque (a `partial` function), so operation 5
@@ -423,11 +428,15 @@ theorems; `advance` is tested against it.
 - **Failure inside an operation.** An operation is a total function from data
   to data. It cannot fail as `wrong`; arithmetic answers `[]` for input it does
   not expect.
-- **Cost and time.** The run command's budget charges an operation its
-  table cost before it runs (`runPriced`, `arithCost`); the interpreter, the
-  network reply and the request, channel, keep, vm and node exports still
-  count machine steps, not work inside an operation (`homoiconic-q59.52`).
-  What `arithCost` charges is a definition, not a theorem about time.
+- **Cost and time.** Every budgeted run charges an operation its table cost
+  and each step of the machine's own whose time grows with data its `work` or
+  `reach`, before the step (`runPriced`, `arithCost`, `homoiconic-q59.73`).
+  That a run asks each charge within the fuel left is proved
+  (`runPriced_eq_within`). That a unit of charge takes a bounded time is not
+  a theorem: it is measured, at most about 160 ns on morphie for the worst
+  program found for each step (`openspec/specs/bytecode-machine/spec.md`, "A
+  charge bounds a step's time"). The lazy machine of a kept session is not
+  bounded so (`homoiconic-q59.80`).
 - **The fault state outside compiled code.** `machine_never_faults` is about
   runs that start from `load (compile t)`. `step` does fault on code no term
   compiles to (`fault_reachable_from_uncompiled`), so a machine value or state

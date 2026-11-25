@@ -32,6 +32,34 @@ example : @Surface.renderData = @Surface.renderWalk := Surface.renderData_eq_wal
 example : @Surface.Cross.chain = @Surface.Cross.chainWalk := Surface.Cross.chain_eq_walk
 example : @Surface.Cross.numbers = @Surface.Cross.numbersWalk := Surface.Cross.numbers_eq_walk
 
+-- A run asks each charge within the fuel it has left (`homoiconic-q59.73`):
+-- what it runs is the priced run and the space-limited run, and an operation's
+-- charge found within a cap is the charge, or more than the cap.
+example : @runPriced = @runPricedWithin := Reflect.runPriced_eq_within
+example : @runSpace = @runSpaceWithin := Reflect.runSpace_eq_within
+example : ∀ [Ops] (s : State) (cap : Nat), stepCostWithin s cap = min (stepCost s) (cap + 1) :=
+  Reflect.stepCostWithin_eq
+example : ∀ n d cap, arithCostWithin n d cap = min (arithCost n d) (cap + 1) :=
+  Reflect.arithCostWithin_eq
+example : ∀ (k : Nat) (d : Data), weighWithin k d = min d.weight (k + 1) := Reflect.weighWithin_eq
+
+-- Numbers read and written by halves (`homoiconic-q59.64`): the printed
+-- digits, the source reader's digits, a token, and a number's byte form.
+example : @Surface.decimal = @Surface.decimalGo := Surface.decimal_eq_go
+example : ∀ n, Surface.decimalGo n = n.repr := Surface.decimalGo_eq
+example : @Surface.Read.digitsValue = @Surface.Read.digitsSplit := Surface.Read.digitsValue_eq_split
+example : @Surface.Read.takeWhileB = @Surface.Read.takeWhileWalk := Surface.Read.takeWhileB_eq_walk
+example : ∀ b pos k, Wire.bigBE b pos k = Wire.takeBE b pos k 0 := fun b pos k => Wire.bigBE_eq b k pos
+example : ∀ k n out, Wire.pushBig k n out = Wire.pushBE k n out := Wire.pushBig_eq
+
+#print axioms Reflect.runPriced_eq_within
+#print axioms Reflect.runSpace_eq_within
+#print axioms Reflect.arithCostWithin_eq
+#print axioms Surface.decimal_eq_go
+#print axioms Surface.Read.digitsValue_eq_split
+#print axioms Surface.Read.takeWhileB_eq_walk
+#print axioms Wire.bigBE_eq
+#print axioms Wire.pushBig_eq
 #print axioms Reflect.reify_eq_walk
 #print axioms Reflect.unreify_eq_walk
 #print axioms Reflect.comp_eq_walk

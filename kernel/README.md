@@ -74,9 +74,15 @@ computes is not part of the language. It comes from a table, `Ops`, holding one
 total function `op : Nat → Data → Data`, and every definition and theorem takes
 the table as a parameter. The table also gives `cost`, the steps a budget
 charges before the operation runs; a table that does not say charges one.
-`arithCost` is that charge for `arith`. Every budgeted run charges it
-(`runPriced`): the run command, `--interp`, the reply bytes, requests,
-channels, the VM, the node and a kept session's lazy machine. The interpreter is the same term for
+`arithCost` is that charge for `arith`; `equal` costs the weight of the
+lighter of its two values as a tree. The table also gives `work` and `reach`,
+what a step of the machine's own costs when its time grows with data (`succ`
+or `case` of a number, `cons` onto a text, a variable deep in the
+environment), and `costWithin`, the charge found within a cap. Every budgeted
+run charges these (`runPriced`, run as `runPricedWithin`, proved equal): the
+run command, `--interp`, the reply bytes, requests, channels, the VM, the node
+and a kept session's lazy machine. `lake exe reflectCostBench` times the worst
+program found for each (`kernel/CostBench.lean`, `homoiconic-q59.73`). The interpreter is the same term for
 every table, so adding an operation is adding a line to a table: no proof
 changes.
 

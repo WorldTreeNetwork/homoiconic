@@ -1,6 +1,6 @@
 # Charge a step by the work it does
 
-> **ACTIVE BUILD** 2026-11-25. Beads `homoiconic-q59.73` (and the audit it asked for). The cost table gains fields, so this is a change and not a dated edit of the living spec.
+> **FOLDED** 2026-11-25 into `openspec/specs/bytecode-machine/spec.md` (the base was diffed by hand; no `fold_base.py` stamp). Was ACTIVE BUILD, 2026-11-25. Bead `homoiconic-q59.73` and the audit it asked for. The cost table gains fields, so this was a change and not a dated edit of the living spec.
 
 **Rigor:** architecture (new fields on the operation table `Ops`, a new charge for steps of the machine's own, the restated `runPriced_unit`, and a capped computation of the charge proved equal to the charge).
 

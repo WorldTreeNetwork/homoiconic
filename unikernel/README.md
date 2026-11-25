@@ -81,7 +81,7 @@ program whose answer is the data, so the data is read, run and printed.
 | literal: array of empty texts, of empty arrays, a text of line ends | `INTERNAL PANIC: out of memory` | answer (243 MiB peak as a Linux process) |
 | list of zeros written out (`[0, 0, ...]`), 1000 steps, 1 to 8 levels | | `no result within 1000 steps` (at most 132 MiB as a Linux process) |
 | literal nested arrays | full stack | full stack (from 262144 deep; 131072 answers); since `homoiconic-q59.72` the answer, 2097149 deep |
-| one number of 2 MiB (tag 2) | | no answer in 300 s, 12 MiB |
+| one number of 2 MiB (tag 2) | | `error: unbound` and 5050431 digits in 92 s, most of it the serial port (since `homoiconic-q59.64`; before, no answer in 300 s, 12 MiB) |
 
 At 16 MiB one array of zeros ran out of memory as data. 2 MiB is the largest
 power of two at which every shape here gave its answer or the kernel's text.
@@ -92,9 +92,12 @@ compiling it are walks with their work on the heap, and the literal of 2 MiB
 nested 2097149 deep is printed (the image of `d2171ce` filled its stack at
 about 175000 levels, `evidence/q59.72-measurements.log`). A deep source still
 fills the stack: the reader recurses. A number of
-megabytes is read (`takeBE`) and printed in time that grows with the square of
-its length: one of 128 KiB took 393 s as a Linux process, so one near the
-limit never finishes inside any check's time (`homoiconic-q59.64`).
+megabytes was read (`takeBE`) and printed in time that grew with the square of
+its length: one of 128 KiB took 393 s as a Linux process. Since
+`homoiconic-q59.64` each path splits the number in halves at a power of the
+base, and the largest number the limit holds, tag 2 over 2097146 bytes of
+`ff`, is read, run and printed in 92 s in the image, most of it 5 MB through
+the serial port (`check.sh`).
 
 The limit bounds what the bytes cost, not what a run costs. Until
 `homoiconic-q59.65` a run's memory grew with its steps even when nothing was

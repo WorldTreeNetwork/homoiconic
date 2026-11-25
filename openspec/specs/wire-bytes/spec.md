@@ -64,6 +64,22 @@ The reader SHALL decide whether the bytes are one value, with the refusals of "A
 - WHEN each is read by the reader and by the builder alone
 - THEN both read the same value or refuse with the same words
 
+### Requirement: A large number is read and written by halves
+
+(Added 2026-11-25, `homoiconic-q59.64`, as a dated edit: the byte form does not change.) The writer SHALL write the bytes of a number of 2^64 or more by halves (`Wire.pushBig`): the high bytes from the number shifted, the low from the number reduced below their power of two, so no byte costs a shift of the whole number; `pushBig` SHALL be proved equal to `pushBE`, one byte after another (`pushBig_eq`). The reader SHALL read a bignum's bytes by halves (`Wire.bigBE`, proved equal to `takeBE`, `bigBE_eq`). It SHALL refuse a bignum that fits an unsigned integer by its length, at most 8 bytes with no leading zero, before the number is made (`bigHead`), with the same words and in the same order as before. Each was one multiplication or shift of the whole number for each byte, so a number of `n` bytes took time that grew with `n` squared: 2 MiB never finished. What is written and what is read are unchanged by proof.
+
+#### Scenario: The largest number at the boot limit
+
+- GIVEN tag 2 over 2097146 bytes of `ff`, 2 MiB in all, given as a program
+- WHEN it is read, run and printed (`host/out/run --bytes`; the image at boot)
+- THEN it prints `error: unbound` and 5050431 digits, in 3 s on a Mac and 92 s in the image on morphie, most of that the serial port (`host/check.sh`, `unikernel/check.sh`); before, a number of 128 KiB took 393 s as a Linux process
+
+#### Scenario: Each path on a number of 2 MiB
+
+- GIVEN the number of 2097146 bytes of `ff`
+- WHEN it is written, read back, printed in decimal and read from its digits (`reflectCostBench number <kind> 2097146`)
+- THEN on morphie these take 0.22, 0.48, 1.25 and 1.69 s; the tree before took 0.4, 1.1, 6.7 and 1.1 s for 64 KiB, four times as long at each doubling, so about 410 s, 1200 s, 6900 s and 1150 s at 2 MiB
+
 ### Requirement: A program's bytes are the bytes of its quoted form
 
 The byte form of a program SHALL be the byte form of the data value `reify` gives it. The kernel SHALL read a program back from that data and SHALL refuse data that is the form of no program. Reading the data form of a program SHALL give that program; this is proved, with Lean's standard axioms only.
