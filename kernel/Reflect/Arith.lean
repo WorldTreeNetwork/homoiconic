@@ -15,7 +15,9 @@ def scalars? (xs : List Data) : Option (List Char) :=
 
     Division by zero is 0 and the remainder by zero is the dividend. Subtraction
     stops at 0. Comparison answers 1 or 0. `equal` compares any two data values,
-    and tells a text from an array and a name from a number.
+    and tells a text from an array and a name from a number. It answers 1
+    exactly when they are equal (`Data.same_iff`), by a walk that does not
+    recurse on how deep they are nested (`homoiconic-q59.72`).
 
     `text` (7) and `codes` (8) take their operand itself, not an array of
     operands. They go between a text and the array of its code points, and each
@@ -27,7 +29,7 @@ def arith : Nat → Data → Data
   | 2, .arr [.nat a, .nat b] => .nat (a * b)
   | 3, .arr [.nat a, .nat b] => .nat (a / b)
   | 4, .arr [.nat a, .nat b] => .nat (a % b)
-  | 5, .arr [x, y] => .nat (if x == y then 1 else 0)
+  | 5, .arr [x, y] => .nat (if Data.same x y then 1 else 0)
   | 6, .arr [.nat a, .nat b] => .nat (if a < b then 1 else 0)
   | 7, .text t => .text t
   | 7, .arr xs =>

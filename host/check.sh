@@ -17,6 +17,7 @@ lake env lean LogContract.lean
 lake env lean NodeContract.lean
 lake env lean CrossingContract.lean
 lake env lean RootContract.lean
+lake env lean WalkContract.lean
 lake env lean Surface/Check.lean
 # The scenarios print one line each; a line that starts with FAIL fails the check.
 lake env lean ReflectRun.lean > "$OUT/scenarios.txt"

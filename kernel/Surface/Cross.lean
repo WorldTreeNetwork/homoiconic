@@ -119,6 +119,24 @@ def numbers : List Data → Option (List Nat)
   | .nat n :: ds => (numbers ds).map (n :: ·)
   | _ :: _ => none
 
+/-- `numbers`, as a loop over the list (`homoiconic-q59.72`). -/
+def numbersGo (acc : List Nat) : List Data → Option (List Nat)
+  | [] => some acc.reverse
+  | .nat n :: ds => numbersGo (n :: acc) ds
+  | _ :: _ => none
+
+theorem numbersGo_eq (acc : List Nat) (ds : List Data) :
+    numbersGo acc ds = (numbers ds).map (acc.reverse ++ ·) := by
+  induction ds generalizing acc with
+  | nil => simp [numbersGo, numbers]
+  | cons d ds ih =>
+    cases d <;> simp [numbersGo, numbers, ih, Function.comp_def]
+
+def numbersWalk (ds : List Data) : Option (List Nat) := numbersGo [] ds
+
+@[csimp] theorem numbers_eq_walk : @numbers = @numbersWalk := by
+  funext ds; simp [numbersWalk, numbersGo_eq]
+
 /-- Work one packet from the peer. -/
 def Guest.takeIn (g : Guest) : Option Guest :=
   match g.inbox with
@@ -308,6 +326,26 @@ def chain (prev : Data) : Nat → List Data → List Data × Data
     let e := Data.arr [.arr [.nat 0, prev, .nat k], body]
     let r := chain (Keep.entryName e) (k + 1) bodies
     (e :: r.1, r.2)
+
+/-- `chain`, with the entries written so far kept newest first: one call for
+    each entry is a loop, however long the log grows (`homoiconic-q59.72`). -/
+def chainGo (acc : List Data) (prev : Data) : Nat → List Data → List Data × Data
+  | _, [] => (acc.reverse, prev)
+  | k, body :: bodies =>
+    let e := Data.arr [.arr [.nat 0, prev, .nat k], body]
+    chainGo (e :: acc) (Keep.entryName e) (k + 1) bodies
+
+theorem chainGo_eq (acc : List Data) (prev : Data) (k : Nat) (bodies : List Data) :
+    chainGo acc prev k bodies = (acc.reverse ++ (chain prev k bodies).1, (chain prev k bodies).2) := by
+  induction bodies generalizing acc prev k with
+  | nil => simp [chainGo, chain]
+  | cons b bs ih => simp [chainGo, chain, ih]
+
+def chainWalk (prev : Data) (k : Nat) (bodies : List Data) : List Data × Data :=
+  chainGo [] prev k bodies
+
+@[csimp] theorem chain_eq_walk : @chain = @chainWalk := by
+  funext prev k bodies; simp [chainWalk, chainGo_eq]
 
 def procLine (q : Proc MValue MOutcome) : String :=
   (match q.status with

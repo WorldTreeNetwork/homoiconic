@@ -115,26 +115,26 @@ def writeNat (n : Nat) (out : ByteArray) : ByteArray :=
     let k := byteLength n
     pushBE k n (pushHead 2 k (out.push 0xc2))
 
-/-- Write `cur`, then the sibling lists in `stack`, outermost last. A nested
+/-- Write the items of each list in `stack`, the first list first. A nested
     array is another list on the stack, not another call: a `cons` chain of
-    about 66,000 items is that many nested arrays. -/
-partial def writeGo (stack : List (List Item)) (cur : Item) (out : ByteArray) : ByteArray :=
-  match cur with
-  | .nat n => writeNext stack (writeNat n out)
-  | .name n => writeNext stack (writeNat n (pushHead 6 39 out))
-  | .text t =>
-      let b := (String.ofList t).toUTF8
-      writeNext stack (pushHead 3 b.size out ++ b)
-  | .bytes b => writeNext stack (pushHead 2 b.size out ++ b)
-  | .arr xs => writeNext (xs :: stack) (pushHead 4 xs.length out)
-where
-  writeNext (stack : List (List Item)) (out : ByteArray) : ByteArray :=
-    match stack with
-    | [] => out
-    | [] :: rest => writeNext rest out
-    | (x :: xs) :: rest => writeGo (xs :: rest) x out
+    about 66,000 items is that many nested arrays. The walk is one function
+    that calls only itself, in tail position, so it is a loop whatever the C
+    compiler does with calls between functions (`homoiconic-q59.72`). -/
+partial def writeGo (stack : List (List Item)) (out : ByteArray) : ByteArray :=
+  match stack with
+  | [] => out
+  | [] :: rest => writeGo rest out
+  | (x :: xs) :: rest =>
+    match x with
+    | .nat n => writeGo (xs :: rest) (writeNat n out)
+    | .name n => writeGo (xs :: rest) (writeNat n (pushHead 6 39 out))
+    | .text t =>
+        let b := (String.ofList t).toUTF8
+        writeGo (xs :: rest) (pushHead 3 b.size out ++ b)
+    | .bytes b => writeGo (xs :: rest) (pushHead 2 b.size out ++ b)
+    | .arr ys => writeGo (ys :: xs :: rest) (pushHead 4 ys.length out)
 
-def writeTo (i : Item) (out : ByteArray) : ByteArray := writeGo [] i out
+def writeTo (i : Item) (out : ByteArray) : ByteArray := writeGo [[i]] out
 
 def writeItem (i : Item) : ByteArray := writeTo i ByteArray.empty
 

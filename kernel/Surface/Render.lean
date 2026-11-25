@@ -41,6 +41,92 @@ mutual
         go yt (s :: acc)
 end
 
+/-- What is still to print in `renderGo`. -/
+inductive PAct where
+  | data : Data → PAct
+  /-- The items after an array's first, each after a comma and a space. -/
+  | items : List Data → PAct
+  | close : PAct
+
+mutual
+  /-- How many steps `renderGo` takes on a data value. -/
+  def stepsData : Data → Nat
+    | .arr (x :: xs) => stepsData x + stepsItems xs + 2
+    | _ => 1
+  def stepsItems : List Data → Nat
+    | [] => 1
+    | y :: ys => stepsData y + stepsItems ys + 1
+end
+
+def PAct.steps : PAct → Nat
+  | .data d => stepsData d
+  | .items ys => stepsItems ys
+  | .close => 1
+
+def PAct.total : List PAct → Nat
+  | [] => 0
+  | a :: as => a.steps + PAct.total as
+
+/-- `acc` and then the text of each thing in the list. What is still to print
+    waits in the list, so nothing here recurses on how deep the data is
+    nested. -/
+def renderGo (acc : String) : List PAct → String
+  | [] => acc
+  | .close :: as => renderGo (acc ++ "]") as
+  | .items [] :: as => renderGo acc as
+  | .items (y :: ys) :: as => renderGo (acc ++ ", ") (.data y :: .items ys :: as)
+  | .data (.nat n) :: as => renderGo (acc ++ toString n) as
+  | .data (.name n) :: as => renderGo (acc ++ ("#" ++ toString n)) as
+  | .data (.text t) :: as => renderGo (acc ++ renderText t) as
+  | .data (.arr []) :: as => renderGo (acc ++ "[]") as
+  | .data (.arr (x :: xs)) :: as => renderGo (acc ++ "[") (.data x :: .items xs :: .close :: as)
+termination_by as => PAct.total as
+decreasing_by all_goals simp_wf; all_goals (simp only [PAct.total, PAct.steps, stepsData, stepsItems]; omega)
+
+theorem renderItems_eq (xs : List Data) : renderItems xs = xs.map renderData := by
+  suffices h : ∀ acc, renderItems.go xs acc = acc.reverse ++ xs.map renderData by
+    simp [renderItems, h]
+  induction xs with
+  | nil => intro acc; simp [renderItems.go]
+  | cons x xs ih => intro acc; simp [renderItems.go, ih]
+
+theorem intercalate_cons (x : String) (xs : List String) :
+    ", ".intercalate (x :: xs) = x ++ String.join (xs.map (", " ++ ·)) := by
+  induction xs generalizing x with
+  | nil => simp only [List.map_nil, String.join_nil, String.append_empty]; rfl
+  | cons y ys ih =>
+    rw [String.intercalate_cons_cons, ih]; simp [String.join_cons, String.append_assoc]
+
+
+mutual
+  theorem renderGo_data (d : Data) (acc : String) (as : List PAct) :
+      renderGo acc (.data d :: as) = renderGo (acc ++ renderData d) as := by
+    match d with
+    | .nat n => rw [renderGo]; simp [renderData]
+    | .name n => rw [renderGo]; simp [renderData]
+    | .text t => rw [renderGo]; simp [renderData]
+    | .arr [] => rw [renderGo]; simp [renderData, renderItems_eq, String.intercalate]
+    | .arr (x :: xs) =>
+      rw [renderGo, renderGo_data x, renderGo_items xs, renderGo]
+      simp only [renderData, renderItems_eq, List.map_cons, intercalate_cons, String.append_assoc, List.map_map, Function.comp_def]
+  theorem renderGo_items (ys : List Data) (acc : String) (as : List PAct) :
+      renderGo acc (.items ys :: as) =
+        renderGo (acc ++ String.join (ys.map (fun y => ", " ++ renderData y))) as := by
+    match ys with
+    | [] => rw [renderGo]; simp
+    | y :: ys =>
+      rw [renderGo, renderGo_data y, renderGo_items ys]
+      simp [String.join_cons, String.append_assoc]
+end
+
+/-- `renderData`, as a walk; the compiler runs it (`renderData_eq_walk`), so
+    data nested a million deep prints in constant native stack
+    (`homoiconic-q59.72`). -/
+def renderWalk (d : Data) : String := renderGo "" [.data d]
+
+@[csimp] theorem renderData_eq_walk : @renderData = @renderWalk := by
+  funext d; simp only [renderWalk, renderGo_data]; rw [renderGo]; simp
+
 /-- A source outcome as text. -/
 def render : Outcome → String
   | .value (.data d) => renderData d

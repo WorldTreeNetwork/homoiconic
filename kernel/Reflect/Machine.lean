@@ -22,7 +22,8 @@ inductive Code where
   | prim : Code → Code
   deriving Repr
 
-/-- Postfix flattening: `comp t k` computes `t`, pushes it, and continues as `k`. -/
+/-- Postfix flattening: `comp t k` computes `t`, pushes it, and continues as `k`.
+    What the compiler runs is `compWalk`, proved equal (`comp_eq_walk`). -/
 def comp : Term → Code → Code
   | .var i, k => .access i k
   | .lam b, k => .closure (comp b .done) k
@@ -34,9 +35,73 @@ def comp : Term → Code → Code
       comp s (.dcase (comp z .done) (comp sc .done) (comp n .done) (comp c .done) k)
   | .prim c x, k => comp c (.checkNat (comp x (.prim k)))
 
+/-- What is still to do in `compGo`. `term t` compiles `t` onto the code on
+    top of the stack; `block` pushes an empty block; the rest wrap the code on
+    top, or close the blocks on top into one instruction. -/
+inductive CAct where
+  | term : Term → CAct
+  | block | closure | checkFun | apply | checkData | succ | cons | dcase | checkNat | prim
+
+def CAct.weight : CAct → Nat
+  | .term t => 10 * t.size
+  | _ => 0
+
+def CAct.weights : List CAct → Nat
+  | [] => 0
+  | a :: as => a.weight + 1 + CAct.weights as
+
+def compGo : List CAct → List Code → Code
+  | [], k :: _ => k
+  | [], [] => .done
+  | .term (.var i) :: as, k :: s => compGo as (.access i k :: s)
+  | .term (.lit d) :: as, k :: s => compGo as (.literal d k :: s)
+  | .term (.lam b) :: as, s => compGo (.block :: .term b :: .closure :: as) s
+  | .term (.app f a) :: as, s => compGo (.apply :: .term a :: .checkFun :: .term f :: as) s
+  | .term (.succ t) :: as, s => compGo (.succ :: .term t :: as) s
+  | .term (.cons a b) :: as, s => compGo (.cons :: .term b :: .checkData :: .term a :: as) s
+  | .term (.dcase sc z su n c) :: as, s =>
+      compGo (.block :: .term z :: .block :: .term su :: .block :: .term n :: .block :: .term c ::
+        .dcase :: .term sc :: as) s
+  | .term (.prim c x) :: as, s => compGo (.prim :: .term x :: .checkNat :: .term c :: as) s
+  | .block :: as, s => compGo as (.done :: s)
+  | .closure :: as, b :: k :: s => compGo as (.closure b k :: s)
+  | .checkFun :: as, k :: s => compGo as (.checkFun k :: s)
+  | .apply :: as, k :: s => compGo as (.apply k :: s)
+  | .checkData :: as, k :: s => compGo as (.checkData k :: s)
+  | .succ :: as, k :: s => compGo as (.succ k :: s)
+  | .cons :: as, k :: s => compGo as (.cons k :: s)
+  | .dcase :: as, c :: n :: su :: z :: k :: s => compGo as (.dcase z su n c k :: s)
+  | .checkNat :: as, k :: s => compGo as (.checkNat k :: s)
+  | .prim :: as, k :: s => compGo as (.prim k :: s)
+  | _ :: as, s => compGo as s
+termination_by as => CAct.weights as
+decreasing_by all_goals simp_wf; all_goals (simp only [CAct.weights, CAct.weight, Term.size]; omega)
+
+theorem compGo_term (t : Term) : ∀ as k s, compGo (.term t :: as) (k :: s) = compGo as (comp t k :: s) := by
+  induction t with
+  | var i => intro as k s; rw [compGo]; rfl
+  | lit d => intro as k s; rw [compGo]; rfl
+  | lam b ih => intro as k s; rw [compGo, compGo, ih, compGo]; rfl
+  | app f a ihf iha => intro as k s; rw [compGo, compGo, iha, compGo, ihf]; rfl
+  | succ t ih => intro as k s; rw [compGo, compGo, ih]; rfl
+  | cons a b iha ihb => intro as k s; rw [compGo, compGo, ihb, compGo, iha]; rfl
+  | dcase sc z su n c h1 h2 h3 h4 h5 =>
+    intro as k s
+    rw [compGo, compGo, h2, compGo, h3, compGo, h4, compGo, h5, compGo, h1]; rfl
+  | prim c x ihc ihx => intro as k s; rw [compGo, compGo, ihx, compGo, ihc]; rfl
+
+/-- `comp`, with what is still to compile in a list: a long list, a deep
+    nest of functions or a long chain of calls compiles in constant native
+    stack (`homoiconic-q59.72`). -/
+def compWalk (t : Term) (k : Code) : Code := compGo [.term t] [k]
+
+@[csimp] theorem comp_eq_walk : @comp = @compWalk := by
+  funext t k; simp only [compWalk, compGo_term]; rw [compGo]
+
 def compile (t : Term) : Code := comp t .done
 
-/-- Read code back as a term, with a stack of finished subterms. -/
+/-- Read code back as a term, with a stack of finished subterms. What the
+    compiler runs is `decompWalk`, proved equal (`decomp_eq_walk`). -/
 def decomp : Code → List Term → Option Term
   | .done, [t] => some t
   | .done, _ => none
@@ -62,6 +127,149 @@ def decomp : Code → List Term → Option Term
   | .checkNat k, stk => decomp k stk
   | .prim k, x :: c :: stk => decomp k (.prim c x :: stk)
   | .prim _, _ => none
+
+/-- Steps `decompGo` takes on a block of code. A measure for proofs. -/
+def codeSteps : Code → Nat
+  | .done => 1
+  | .access _ k => codeSteps k + 1
+  | .closure b k => codeSteps b + codeSteps k + 2
+  | .literal _ k => codeSteps k + 1
+  | .checkFun k => codeSteps k + 1
+  | .apply k => codeSteps k + 1
+  | .checkData k => codeSteps k + 1
+  | .succ k => codeSteps k + 1
+  | .cons k => codeSteps k + 1
+  | .dcase z sc n c k => codeSteps z + codeSteps sc + codeSteps n + codeSteps c + codeSteps k + 5
+  | .checkNat k => codeSteps k + 1
+  | .prim k => codeSteps k + 1
+
+/-- What is still to do in `decompGo`: a block to read back onto a stack of
+    finished subterms, or what to do with a block's term once it is read. -/
+inductive DAct where
+  | dec : Code → List Term → DAct
+  | lam : Code → List Term → DAct
+  | dc1 : Code → Code → Code → Code → Term → List Term → DAct
+  | dc2 : Code → Code → Code → Term → List Term → DAct
+  | dc3 : Code → Code → Term → List Term → DAct
+  | dc4 : Code → Term → List Term → DAct
+
+def DAct.steps : DAct → Nat
+  | .dec c _ => codeSteps c
+  | .lam k _ => codeSteps k + 1
+  | .dc1 sc n c k _ _ => codeSteps sc + codeSteps n + codeSteps c + codeSteps k + 4
+  | .dc2 n c k _ _ => codeSteps n + codeSteps c + codeSteps k + 3
+  | .dc3 c k _ _ => codeSteps c + codeSteps k + 2
+  | .dc4 k _ _ => codeSteps k + 1
+
+def DAct.total : List DAct → Nat
+  | [] => 0
+  | a :: as => a.steps + DAct.total as
+
+def decompGo : List DAct → List Term → Option Term
+  | [], t :: _ => some t
+  | [], [] => none
+  | .dec .done [t] :: as, r => decompGo as (t :: r)
+  | .dec .done _ :: _, _ => none
+  | .dec (.access i k) stk :: as, r => decompGo (.dec k (.var i :: stk) :: as) r
+  | .dec (.closure b k) stk :: as, r => decompGo (.dec b [] :: .lam k stk :: as) r
+  | .dec (.literal d k) stk :: as, r => decompGo (.dec k (.lit d :: stk) :: as) r
+  | .dec (.checkFun k) stk :: as, r => decompGo (.dec k stk :: as) r
+  | .dec (.apply k) (a :: f :: stk) :: as, r => decompGo (.dec k (.app f a :: stk) :: as) r
+  | .dec (.apply _) _ :: _, _ => none
+  | .dec (.checkData k) stk :: as, r => decompGo (.dec k stk :: as) r
+  | .dec (.succ k) (t :: stk) :: as, r => decompGo (.dec k (.succ t :: stk) :: as) r
+  | .dec (.succ _) _ :: _, _ => none
+  | .dec (.cons k) (b :: a :: stk) :: as, r => decompGo (.dec k (.cons a b :: stk) :: as) r
+  | .dec (.cons _) _ :: _, _ => none
+  | .dec (.dcase z sc n c k) (s :: stk) :: as, r => decompGo (.dec z [] :: .dc1 sc n c k s stk :: as) r
+  | .dec (.dcase _ _ _ _ _) [] :: _, _ => none
+  | .dec (.checkNat k) stk :: as, r => decompGo (.dec k stk :: as) r
+  | .dec (.prim k) (x :: c :: stk) :: as, r => decompGo (.dec k (.prim c x :: stk) :: as) r
+  | .dec (.prim _) _ :: _, _ => none
+  | .lam k stk :: as, t :: r => decompGo (.dec k (.lam t :: stk) :: as) r
+  | .dc1 sc n c k s stk :: as, r => decompGo (.dec sc [] :: .dc2 n c k s stk :: as) r
+  | .dc2 n c k s stk :: as, r => decompGo (.dec n [] :: .dc3 c k s stk :: as) r
+  | .dc3 c k s stk :: as, r => decompGo (.dec c [] :: .dc4 k s stk :: as) r
+  | .dc4 k s stk :: as, c' :: n' :: sc' :: z' :: r =>
+      decompGo (.dec k (.dcase s z' sc' n' c' :: stk) :: as) r
+  | _ :: _, _ => none
+termination_by as => DAct.total as
+decreasing_by all_goals simp_wf; all_goals (simp only [DAct.total, DAct.steps, codeSteps]; omega)
+
+theorem decompGo_dec (c : Code) : ∀ stk as r, decompGo (.dec c stk :: as) r =
+    match decomp c stk with
+    | some t => decompGo as (t :: r)
+    | none => none := by
+  induction c with
+  | done =>
+    intro stk as r
+    match stk with
+    | [] => rw [decompGo] <;> simp [decomp]
+    | [t] => rw [decompGo] <;> simp [decomp]
+    | _ :: _ :: _ => rw [decompGo] <;> simp [decomp]
+  | access i k ih => intro stk as r; rw [decompGo, ih]; rfl
+  | closure b k ihb ihk =>
+    intro stk as r; rw [decompGo, ihb]; simp only [decomp]
+    cases decomp b [] with
+    | none => rfl
+    | some tb => simp only; rw [decompGo, ihk]
+  | literal d k ih => intro stk as r; rw [decompGo, ih]; rfl
+  | checkFun k ih => intro stk as r; rw [decompGo, ih]; rfl
+  | apply k ih =>
+    intro stk as r
+    match stk with
+    | [] => rw [decompGo] <;> simp [decomp]
+    | [_] => rw [decompGo] <;> simp [decomp]
+    | a :: f :: stk => rw [decompGo, ih]; rfl
+  | checkData k ih => intro stk as r; rw [decompGo, ih]; rfl
+  | succ k ih =>
+    intro stk as r
+    match stk with
+    | [] => rw [decompGo] <;> simp [decomp]
+    | t :: stk => rw [decompGo, ih]; rfl
+  | cons k ih =>
+    intro stk as r
+    match stk with
+    | [] => rw [decompGo] <;> simp [decomp]
+    | [_] => rw [decompGo] <;> simp [decomp]
+    | b :: a :: stk => rw [decompGo, ih]; rfl
+  | dcase z sc n c k hz hsc hn hc hk =>
+    intro stk as r
+    match stk with
+    | [] => rw [decompGo] <;> simp [decomp]
+    | s :: stk =>
+      rw [decompGo, hz]; simp only [decomp]
+      cases decomp z [] with
+      | none => rfl
+      | some z' =>
+        simp only; rw [decompGo, hsc]
+        cases decomp sc [] with
+        | none => rfl
+        | some sc' =>
+          simp only; rw [decompGo, hn]
+          cases decomp n [] with
+          | none => rfl
+          | some n' =>
+            simp only; rw [decompGo, hc]
+            cases decomp c [] with
+            | none => rfl
+            | some c' => simp only; rw [decompGo, hk]
+  | checkNat k ih => intro stk as r; rw [decompGo, ih]; rfl
+  | prim k ih =>
+    intro stk as r
+    match stk with
+    | [] => rw [decompGo] <;> simp [decomp]
+    | [_] => rw [decompGo] <;> simp [decomp]
+    | x :: c :: stk => rw [decompGo, ih]; rfl
+
+/-- `decomp`, as a walk; the compiler runs it (`decomp_eq_walk`), so code
+    nested a million functions deep reads back in constant native stack
+    (`homoiconic-q59.72`). -/
+def decompWalk (c : Code) (stk : List Term) : Option Term := decompGo [.dec c stk] []
+
+@[csimp] theorem decomp_eq_walk : @decomp = @decompWalk := by
+  funext c stk; simp only [decompWalk, decompGo_dec]
+  cases decomp c stk <;> simp [decompGo]
 
 def decompile (c : Code) : Option Term := decomp c []
 

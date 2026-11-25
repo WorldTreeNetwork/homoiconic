@@ -44,6 +44,37 @@ mutual
     | x :: xs, n => x.mentions n || mentionsAny xs n
 end
 
+/-- Whether a name occurs in any of the data, which waits in a list: nothing
+    here recurses on how deep the data is nested (`homoiconic-q59.72`). -/
+def mentionsGo (n : Nat) : List Data → Bool
+  | [] => false
+  | .name k :: ds => k == n || mentionsGo n ds
+  | .nat _ :: ds => mentionsGo n ds
+  | .text _ :: ds => mentionsGo n ds
+  | .arr xs :: ds => mentionsGo n (xs ++ ds)
+termination_by ds => Data.sizeList ds
+decreasing_by all_goals simp_wf; all_goals (simp only [Data.sizeList, Data.size, Data.sizeList_append]; omega)
+
+theorem mentionsAny_append (xs ys : List Data) (n : Nat) :
+    mentionsAny (xs ++ ys) n = (mentionsAny xs n || mentionsAny ys n) := by
+  induction xs with
+  | nil => simp [mentionsAny]
+  | cons x xs ih => simp [mentionsAny, ih, Bool.or_assoc]
+
+theorem mentionsGo_eq (n : Nat) (ds : List Data) : mentionsGo n ds = mentionsAny ds n := by
+  induction ds using mentionsGo.induct with
+  | case1 => simp [mentionsGo, mentionsAny]
+  | case2 k ds ih => simp [mentionsGo, mentionsAny, Data.mentions, ih]
+  | case3 k ds ih => simp [mentionsGo, mentionsAny, Data.mentions, ih]
+  | case4 k ds ih => simp [mentionsGo, mentionsAny, Data.mentions, ih]
+  | case5 xs ds ih => simp [mentionsGo, mentionsAny, Data.mentions, ih, mentionsAny_append]
+
+/-- `Data.mentions`, as a walk; the compiler runs it (`mentions_eq_walk`). -/
+def Data.mentionsWalk (d : Data) (n : Nat) : Bool := mentionsGo n [d]
+
+@[csimp] theorem mentions_eq_walk : @Data.mentions = @Data.mentionsWalk := by
+  funext d n; simp [Data.mentionsWalk, mentionsGo_eq, mentionsAny]
+
 /-- The names among `held` that occur in `d`: what handing over `d` hands over. -/
 def grant (held : List Nat) (d : Data) : List Nat := held.filter (d.mentions ·)
 
