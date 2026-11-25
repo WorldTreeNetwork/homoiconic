@@ -649,3 +649,12 @@ change among them.
 `evidence/q59.63-controls.log` is each fix of this change undone in turn on
 tree `ca88f86`: 18 cases of `quic-self` and 3 runs of `check-quic.sh` and
 `check-wire.sh`, each failing at its own step.
+
+2026-11-25 UTC, on morphie, the merged tree: `695ce77` (add-quic-admission
+folded on the deep-nesting change, the code of `fd3ff39`) exported to
+`~/hom-695ce77` and built from nothing. All six checks exited 0: `check.sh` 84
+`ok`, `check-net.sh` 19, `check-quic.sh` 29, `check-wire.sh` 30. Logs
+`evidence/q59.63-695ce77-*.log`, exit codes and hashes
+`evidence/run-695ce77.txt`; `source.sha256` and `objects.sha256` came out the
+same as the two runs above. `reflect-net.elf` is sha256 `1f12c42c…260b64e8`,
+the same before and after the checks.
