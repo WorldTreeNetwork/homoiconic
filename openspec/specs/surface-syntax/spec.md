@@ -114,7 +114,7 @@ The reader SHALL resolve `ask` as a built-in name for the term `askTerm`. A bind
 
 ### Requirement: The reader and renderer are not part of the proof
 
-The reader and the renderer SHALL be tested against examples. They SHALL NOT be cited as proved. What is run SHALL be the term the reader produced, on the machine in `openspec/specs/bytecode-machine/spec.md`.
+The reader and the renderer SHALL be tested against examples. They SHALL NOT be cited as proved. That the printer the compiled kernel runs is `renderData`, a walk with its work in a list, is proved (`renderData_eq_walk`); what `renderData` prints is tested. What is run SHALL be the term the reader produced, on the machine in `openspec/specs/bytecode-machine/spec.md`.
 
 #### Scenario: The proof boundary is stated
 

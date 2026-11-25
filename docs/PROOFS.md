@@ -7,7 +7,8 @@ out. The exact statements are in `kernel/ReflectContract.lean`,
 the requirements are in `openspec/specs/`.
 Written 2026-11-10, after `add-operation-tables`; updated 2026-11-10, after
 `add-requests`, 2026-11-11, after `add-state-store` and `add-wire-bytes`, and
-2026-11-12, after `add-kept-state`, and 2026-11-17, after `add-data-kinds`.
+2026-11-12, after `add-kept-state`, 2026-11-17, after `add-data-kinds`, and
+2026-11-25, after `homoiconic-q59.72` (walks).
 
 ## In one sentence
 
@@ -258,6 +259,31 @@ must be refused, every string of one or two bytes, eleven programs written,
 read back and run from their bytes, and a waiting run kept as bytes and
 continued.
 
+### Walks
+
+What the compiled kernel runs in place of a function that would recurse once
+for each level of nesting (`homoiconic-q59.72`). Each `@[csimp]` theorem says
+the walk is the function, so the compiler runs a loop over a list of work on
+the heap and no definition a theorem mentions changed. Restated, with axioms
+printed, in `kernel/WalkContract.lean`.
+
+| Theorem | Says |
+|---|---|
+| `reify_eq_walk`, `unreify_eq_walk` | Quoting a program and reading it back are walks |
+| `comp_eq_walk`, `decomp_eq_walk` | Compiling and reading code back are walks |
+| `mentions_eq_walk` | Finding the names a value hands over is a walk |
+| `Data.same_iff` | `Data.same x y = true ↔ x = y`; it is `==` on data and operation 5 |
+| `Wire.valueData_eq_walk`, `Wire.codeFits_eq_walk` | A machine value's byte form, and what it is counted at, are walks |
+| `Wire.Code.same_iff` | `Code.same a b = true ↔ a = b`, the comparison in `blockTerm` |
+| `Surface.renderData_eq_walk` | The printer is a walk |
+| `Surface.Cross.chain_eq_walk`, `numbers_eq_walk` | A crossing record's chain and a packet's names are loops |
+
+The derived `==` on data was opaque (a `partial` function), so operation 5
+could not be proved to decide anything and nothing was proved of it;
+`Data.same` replaced it as the instance, and is proved. That it answers as
+the derived one did is tested: `host/check.sh` gives the same text before and
+after.
+
 ### Kept state
 
 Nothing new is proved. What a kept program rests on is already in
@@ -305,6 +331,8 @@ theorems; `advance` is tested against it.
 - **New operations cost no proof.** Adding a table changes no lemma.
 - **The fast path equals the specification.** What the host runs is the
   machine with the early-exit loop, and both are proved equal to `Direct`.
+  Where the compiled kernel runs a walk instead of a definition, a `@[csimp]`
+  theorem says they are equal; no `implemented_by` is left in the kernel.
 - **Compiled code is still data.** Bytecode decompiles to the term it came
   from.
 - **Read by another model family.** Each change went to an outside reviewer
@@ -339,9 +367,15 @@ theorems; `advance` is tested against it.
   one step of `cons` onto a text makes cells without bound. The lazy machine
   of a kept session has no space limit (`homoiconic-q59.70`), and a guest of
   a crossing bounds each turn but not what it holds between turns
-  (`homoiconic-q59.71`). Data nested deeper than the native stack still ends
-  the image in a full stack (`homoiconic-q59.72`).
-- **Reader, renderer, Zig host.** Tested, not proved.
+  (`homoiconic-q59.71`). How deep data, programs, code and functions nest is
+  bounded by memory and the space limit, not by the native stack: every
+  function the compiled kernel runs on them is a walk proved equal to its
+  definition (see Walks, `homoiconic-q59.72`). The source reader is not: it
+  recurses on how deep a source nests, and an image reads only the source
+  built into it.
+- **Reader, renderer, Zig host.** Tested, not proved. That the printer the
+  compiled kernel runs is `renderData` is proved (`renderData_eq_walk`); what
+  `renderData` prints is tested.
 - **Running through the interpreter, and text.** `reflect_interp` runs the
   closed term `interp` on the machine, so what runs is covered by the
   interpreter and machine theorems. Reading the answer back through the

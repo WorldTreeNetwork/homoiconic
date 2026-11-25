@@ -147,6 +147,28 @@ A Lean allocation abort, fatal runtime panic or processor fault during a request
 - WHEN that request is delivered
 - THEN serial names the allocation failure/abort, Cloud Hypervisor terminates, no matching successful response arrives, and subsequent ping times out; no new readiness is announced
 
+### Requirement: No message fills the guest's stack
+
+A run request, a crossing's program and a peer's batch SHALL NOT end the guest in a full native stack, however deep the data, programs or functions they build (`homoiconic-q59.72`, `openspec/specs/code-as-data/spec.md`). The network check SHALL send, at the default space, a program that compares data a million arrays deep with itself and one that answers such data, and, to a guest whose space limit is undone, one that answers a chain of 300000 functions each holding the last; the wire check SHALL run `examples/cross-deep.hom` on two guests. Each of these ended the guest of `d2171ce` in the report of a full stack.
+
+#### Scenario: Deep data in one small message
+
+- GIVEN a real guest and a run request of 119 bytes of program that compares data a million arrays deep with itself
+- WHEN it is delivered, and factorial after it
+- THEN the reply is `82 00 82 00 01`, the Linux process's, and factorial's reply is unchanged
+
+#### Scenario: A deep answer and a deep chain of functions
+
+- GIVEN a run request whose answer is data a million arrays deep, and, to a guest told `reflect.space=18446744073709551615`, one whose answer is a chain of 300000 functions
+- WHEN each is delivered
+- THEN each reply has status 2, too large for one datagram, and no payload, and the guest answers the next request
+
+#### Scenario: A crossing builds a deep program and starts it
+
+- GIVEN two guests and `examples/cross-deep.hom`, which builds data nested 960000 deep and a quoted program nested 288000 deep over 24 turns, starts the program on the data and compares the data with itself
+- WHEN the wire check runs it
+- THEN both guests close, the records are accepted, and the replay says `process 1: 7; holds [#48]` and process 0 answered 1
+
 ### Requirement: Contradictory spike results reopen the contract
 
 A device-spike result contradicting the reviewed discovery, MMIO, feature or queue contract SHALL cause an amendment and fresh architecture advise before implementation. A compiling image or native parser test SHALL NOT be used as hardware evidence.

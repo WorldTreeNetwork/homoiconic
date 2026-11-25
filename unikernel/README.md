@@ -80,13 +80,18 @@ program whose answer is the data, so the data is read, run and printed.
 | literal: array of zeros, of names, a text of `a` | answer (up to 227 s of serial output) | answer |
 | literal: array of empty texts, of empty arrays, a text of line ends | `INTERNAL PANIC: out of memory` | answer (243 MiB peak as a Linux process) |
 | list of zeros written out (`[0, 0, ...]`), 1000 steps, 1 to 8 levels | | `no result within 1000 steps` (at most 132 MiB as a Linux process) |
-| literal nested arrays | full stack | full stack (from 262144 deep; 131072 answers) |
+| literal nested arrays | full stack | full stack (from 262144 deep; 131072 answers); since `homoiconic-q59.72` the answer, 2097149 deep |
 | one number of 2 MiB (tag 2) | | no answer in 300 s, 12 MiB |
 
 At 16 MiB one array of zeros ran out of memory as data. 2 MiB is the largest
 power of two at which every shape here gave its answer or the kernel's text.
-Two limits are not the byte limit's. A literal nested deeper than the stack
-holds ends in the report of a full stack, as a deep source does. A number of
+Two limits were not the byte limit's. A literal nested deeper than the stack
+held ended in the report of a full stack, as a deep source does; since
+`homoiconic-q59.72` the printer, the comparison, reading a program back and
+compiling it are walks with their work on the heap, and the literal of 2 MiB
+nested 2097149 deep is printed (the image of `d2171ce` filled its stack at
+about 175000 levels, `evidence/q59.72-measurements.log`). A deep source still
+fills the stack: the reader recurses. A number of
 megabytes is read (`takeBE`) and printed in time that grows with the square of
 its length: one of 128 KiB took 393 s as a Linux process, so one near the
 limit never finishes inside any check's time (`homoiconic-q59.64`).
@@ -360,7 +365,10 @@ Page/stack/double faults use a separate 64 KiB fault stack. The guarantee
 covers contiguous growth touching the guard, including syscall save space;
 it does not cover arbitrary unchecked allocations that jump over 2 MiB.
 The guard probe checks a fault at its named address and an intact sentinel
-below it. A separate deeply nested source must fault on the alternate stack.
+below it. A separate deeply nested source must fault on the alternate stack:
+the source reader is the one part of the kernel that still recurses on
+nesting. Data, programs given as bytes, code and functions do not
+(`homoiconic-q59.72`, `kernel/WalkContract.lean`).
 The entire address space is privileged and writable: this is not a security
 boundary against arbitrary native code.
 

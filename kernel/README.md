@@ -25,6 +25,7 @@ lake env lean ChannelContract.lean   # the channel theorems, exact statements
 lake env lean CrossingContract.lean  # the crossing theorems, exact statements
 lake env lean CrossCheck.lean        # two guests in one process, their records, the check, and tampered records
 lake env lean RootContract.lean      # equal states are saved under one root, exact statements
+lake env lean WalkContract.lean      # the walks the compiler runs are the definitions
 lake env lean ReflectRun.lean        # the scenarios, executed
 lake env lean Surface/Check.lean     # the reader and renderer against examples
 lake env lean StoreCheck.lean        # runs cut into pieces and continued
@@ -40,7 +41,7 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 
 | File | Holds |
 |---|---|
-| `Reflect/Syntax.lean` | `Data` (numbers and arrays), `Term`, and `reify : Term → Data` |
+| `Reflect/Syntax.lean` | `Data` (numbers and arrays), `Term`, `reify : Term → Data` and `unreify`, their walks, and `Data.same`, which is `==` on data |
 | `Reflect/Semantics.lean` | `Ops`, the table of operations; `Direct`, the call-by-value relation; `evalFuel`, its total executable form |
 | `Reflect/Arith.lean` | `arith`, the first table: exact arithmetic and comparison. No theorem depends on it |
 | `Reflect/Interpreter.lean` | `interp`, the interpreter as one closed term; `level k` nests it |
@@ -234,8 +235,9 @@ data. For Blake3 that is assumed, not proved, as it is for stored pieces.
 `vmRun` is
 `List.foldl handleRun` over the log, on the machine, with a step budget for
 each machine run; it reports no state when a run does not halt. `Log.lean`
-also decides equality of data by a definition of its own, because nothing is
-proved about the derived `==`.
+also decides equality of data by a definition of its own, written when the
+derived `==` was opaque; `==` on data is now `Data.same`, proved to decide
+equality (`Data.same_iff`).
 
 ## Nodes
 
@@ -305,6 +307,21 @@ The C exports are `reflect_node_start`, `reflect_node_from`, `reflect_vm_start`,
 look inside. Each export that takes a session uses it up: Lean refuses borrow
 annotations on an exported function. A caller that will use the session again
 calls `kernel_retain` (`ffi.c`, which is `lean_inc`) on it first.
+
+## Walks
+
+Data nests as deep as a run makes it, and functions capture functions without
+limit. A function that called itself once for each level filled the image's
+16 MiB stack at about 200000 levels (`homoiconic-q59.72`). `reify`,
+`unreify`, `comp`, `decomp`, `Data.mentions`, `Wire.valueData`,
+`Wire.codeFits`, `Surface.renderData`, `Surface.Cross.chain` and
+`Surface.Cross.numbers` each have a walk beside them that keeps its work in a
+list on the heap, and a `@[csimp]` theorem that the walk is the function: the
+compiler runs the walk, and the theorems keep the definition. `==` on data is
+`Data.same` (in `Reflect/Syntax.lean`) and code is compared by `Wire.Code.same`,
+each a walk proved to decide equality. `WalkContract.lean` restates all twelve.
+The source reader in `Surface/Read.lean` still recurses on how deep a source
+nests.
 
 ## Surface
 

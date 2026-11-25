@@ -172,11 +172,17 @@ Cloud Hypervisor 54.0 loads the ELF file and then copies the `--initramfs` file 
 - WHEN the image boots with each through the launch, the list with the budget 1000 and one interpreter
 - THEN each serial stream is what the Linux process prints for the same bytes followed by `reflect: exit 0`: `bytes error: the value is not a program` twice, the two answers, and `no result within 1000 steps`; none ends in `INTERNAL PANIC: out of memory`, and at 4 MiB the literal array of empty texts does
 
-#### Scenario: A literal nested deeper than the stack
+#### Scenario: A literal nested deeper than the stack once held
 
-- GIVEN a literal of 2 MiB that is arrays of one nested around 0
+- GIVEN a literal of 2 MiB that is arrays of one nested around 0, 2097149 deep
 - WHEN the image boots with it
-- THEN the serial port shows the report of a full stack from the alternate fault stack, and no `reflect: exit` line
+- THEN the serial port shows what the Linux process prints, the 2097149 arrays around 0, and `reflect: exit 0`; the image of `d2171ce` reported a full stack (`homoiconic-q59.72`)
+
+#### Scenario: Data and programs nested deeper than the stack once held
+
+- GIVEN at boot a program that compares data a million arrays deep with itself, the 2000001 bytes of a million functions each inside the last at levels 0 and 1, and the list of 419429 zeros at level 0
+- WHEN the image boots with each
+- THEN the serial port shows what the Linux process prints, `1`, `<function>` twice and `no result within 1000 steps`, and `reflect: exit 0`; the image of `d2171ce` reported a full stack for each
 
 #### Scenario: A file that would land on the image
 

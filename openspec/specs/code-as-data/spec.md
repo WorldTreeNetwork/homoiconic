@@ -148,7 +148,7 @@ The language SHALL have a construct `prim c x`. Evaluation SHALL evaluate `c` fi
 
 ### Requirement: The first table is exact arithmetic
 
-The package SHALL define a table `arith`. On a two-item array of numbers it SHALL answer: 0, the sum; 1, the difference, or 0 when the second is larger; 2, the product; 3, the quotient rounded down, or 0 when the divisor is 0; 4, the remainder, or the first number when the divisor is 0; 6, 1 when the first is less than the second and 0 otherwise. Operation 5 SHALL take any two data values and answer 1 when they are equal and 0 otherwise; a text SHALL NOT equal an array, and a name SHALL NOT equal a number. The operands of operations 0 to 4 and 6 SHALL be plain numbers: a name is not one, and on a two-item array that holds a name these operations SHALL answer the empty array. Operation 7 SHALL answer, for an array whose items are all numbers that are Unicode scalar values, the text of those code points, and for a text, that text. Operation 8 SHALL answer, for a text, the array of its code points, and for an array whose items are all numbers that are Unicode scalar values, that array. Numbers SHALL be exact at any size. For any other number or argument, `arith` SHALL answer the empty array. No operation SHALL answer a name that is not in its argument. No theorem SHALL depend on `arith`.
+The package SHALL define a table `arith`. On a two-item array of numbers it SHALL answer: 0, the sum; 1, the difference, or 0 when the second is larger; 2, the product; 3, the quotient rounded down, or 0 when the divisor is 0; 4, the remainder, or the first number when the divisor is 0; 6, 1 when the first is less than the second and 0 otherwise. Operation 5 SHALL take any two data values and answer 1 when they are equal and 0 otherwise, by `Data.same`, proved to decide equality (`Data.same_iff`); a text SHALL NOT equal an array, and a name SHALL NOT equal a number. The operands of operations 0 to 4 and 6 SHALL be plain numbers: a name is not one, and on a two-item array that holds a name these operations SHALL answer the empty array. Operation 7 SHALL answer, for an array whose items are all numbers that are Unicode scalar values, the text of those code points, and for a text, that text. Operation 8 SHALL answer, for a text, the array of its code points, and for an array whose items are all numbers that are Unicode scalar values, that array. Numbers SHALL be exact at any size. For any other number or argument, `arith` SHALL answer the empty array. No operation SHALL answer a name that is not in its argument. No theorem SHALL depend on `arith`.
 
 #### Scenario: Large numbers are exact
 
@@ -195,6 +195,28 @@ The package SHALL define a table `arith`. On a two-item array of numbers it SHAL
 - GIVEN the compiled theorem `reflective`
 - WHEN its axiom dependencies are printed
 - THEN `sorryAx` is absent and no axiom from this package is present
+
+### Requirement: Nesting is bounded by memory, not by the native stack
+
+A function the compiled kernel runs on data, a program, compiled code or a machine value SHALL NOT call itself once for each level of nesting or each item of a list (`homoiconic-q59.72`). Where a function that a theorem mentions would, the kernel SHALL keep its definition and run a walk that keeps its work in a list on the heap and calls itself only in tail position, with a `@[csimp]` theorem that the walk equals the definition: `reify`, `unreify`, `comp`, `decomp` and `Data.mentions` in `Reflect`, `valueData` and `codeFits` in `Wire`, and `renderData`, `chain` and `numbers` in `Surface`. Equality of data (`==`, and operation 5) SHALL be `Data.same` and equality of code in `blockTerm` `Code.same`, each a walk proved to decide equality. `kernel/WalkContract.lean` SHALL restate each of these and print its axioms, which SHALL be Lean's standard three at most. The source reader and the derived `Repr` instances are outside this requirement: the reader still recurses on how deep a source nests, and an image reads only the source built into it.
+
+#### Scenario: Data a million arrays deep
+
+- GIVEN a program that builds an array nested a million deep and answers it, and one that compares such an array with itself by operation 5
+- WHEN each runs under the run command with an 8 MiB stack, or in the image
+- THEN the first prints the million brackets, the zero and the million brackets, and the second prints `1`
+
+#### Scenario: A program a million functions deep
+
+- GIVEN the byte form of a million functions each inside the last, and of a list of 419429 zeros
+- WHEN each is read back and compiled, and the first is also quoted through one interpreter
+- THEN the functions print `<function>` and the list runs out of its 1000 steps
+
+#### Scenario: The walks are the definitions
+
+- GIVEN `kernel/WalkContract.lean`
+- WHEN it is checked
+- THEN each walk is restated as equal to its definition, or as deciding equality, and no axiom but `propext`, `Classical.choice` and `Quot.sound` is printed
 
 ### Requirement: The interpreter is unchanged by text and names
 
