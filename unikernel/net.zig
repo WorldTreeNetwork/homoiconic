@@ -739,7 +739,11 @@ fn wireTick(nic: Nic, ep: Endpoint) void {
 // and the record; this file opens connections, moves the bytes and prints.
 var cross: Guest = undefined;
 var cross_buf: [8192]u8 = undefined;
-var record_buf: [1 << 24]u8 = undefined;
+/// The record's text, up to 16 MiB, taken from the heap when it is printed.
+/// A static buffer of that size moved the guest's memory so that QUIC no
+/// longer answered (seen 2026-11-25); the heap is where Lean's objects are.
+const record_room: usize = 1 << 24;
+extern fn malloc(n: usize) ?[*]u8;
 var cross_printed = false;
 var cross_closed_at: u64 = 0;
 var cross_peer: entity.Name = .{0} ** 32; // the entity the batches come from
@@ -777,8 +781,9 @@ fn crossPrint() void {
     const mine = entity.text(&me.name);
     const theirs = entity.text(&cross_peer);
     const peer: []const u8 = if (cross_peer_known) theirs.slice() else "";
+    const record_buf = (malloc(record_room) orelse halt("no memory for the record"))[0..record_room];
     kernel_retain(cross);
-    const n = reflect_cross_record(cross, mine.slice().ptr, mine.slice().len, peer.ptr, peer.len, &record_buf, record_buf.len);
+    const n = reflect_cross_record(cross, mine.slice().ptr, mine.slice().len, peer.ptr, peer.len, record_buf.ptr, record_buf.len);
     if (n > record_buf.len) halt("the record does not fit");
     const sig = me.pair.sign(record_buf[0..n], null) catch halt("the record was not signed");
     say("reflect: cross sig ");

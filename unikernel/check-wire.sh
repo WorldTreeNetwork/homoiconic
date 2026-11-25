@@ -335,7 +335,11 @@ accepted fan "places a: [0]"
 full fan b
 run worst "$EX/cross-worst.hom" "" ""
 accepted worst "places a: [0, 1]"
-full worst a
+if grep -q "processor fault\|INTERNAL PANIC" "$W/worst-a.log" "$W/worst-b.log"; then fail "worst: a guest stopped"; fi
+last=$(grep -o "\[[56], [0-9]*\]\]$" "$W/worst.a" | tail -1 | tr -dc '0-9 ' | awk '{ print $2 }')
+[ -n "$last" ] && [ "$last" -ge 1400000 ] || fail "worst: A did not hold close to its bar (last count '$last')"
+grep -q "^proc waiting on \[2, #[0-9]*\]; holds \[#[0-9]*\]; root " "$W/worst.a" || fail "worst: the worst start did not happen"
+echo "ok   worst: the largest local start, on top of $last cells counted, and no guest stopped"
 BUDGET=100000
 WAIT=400 LIFE=600 run chatter "$EX/cross-chatter.hom" "" ""
 accepted chatter "places b: []"
