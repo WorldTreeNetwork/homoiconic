@@ -1,0 +1,12 @@
+- [ ] Fresh-context advise read of this directory (Opus), verdict and findings answered in `design.md` before any code
+- [ ] `kernel/Reflect/Crossing.lean`: `Note.held`, `Note.full`; `Mix.place` places them with no event; `combineTrace` (the walk with the order it placed in), `combineMix` and `combine` its projections; `kernel/Reflect/CrossingProof.lean`: the existing theorems with the new entries, `combineTrace_walk`
+- [ ] `kernel/Reflect/Hold.lean`: `runSpaceLeft`, `runTurnMade`, `settleMade`, `turnMade`, `beginMade`, `stepMade`, `cellsOf`, the charge constants, `Hold.walk`; `kernel/Reflect/HoldProof.lean`: the `_fst` theorems, `hold_stretch`, `hold_count`, `hold_full`; restated with `#print axioms` in `kernel/CrossingContract.lean`
+- [ ] `kernel/Surface/Cross.lean`: the guest's limit, budget agreement, hold ledger and counts, full, `outLimit`, `queueLimit`, `sent` trimmed; lines with roots and bounded payloads; record form 2; the reader; the check (turn, limits, acknowledgement order, ledger replay); `reseal`; `simulate` with a setup
+- [ ] `kernel/Surface/Host.lean`: `reflect_cross_start(flags, limit, hold)`, the count in `reflect_cross_work`; `host/check.sh` compiles `Reflect/Hold`
+- [ ] `examples/cross-grow.hom`, `examples/cross-fan.hom`, `examples/cross-hidden.hom`
+- [ ] `kernel/CrossCheck.lean`: every test of design D-7 marked Lean, old expectations moved to the new lines; `kernel/cross-controls.py`: a control for each new refusal; log in `unikernel/evidence/`
+- [ ] `unikernel/net.zig`: `reflect.budget=`, `reflect.hold=`, the record buffer; `unikernel/cross-check.zig`: buffers; `unikernel/build-net.sh` compiles `Reflect/Hold`
+- [ ] `unikernel/check-wire.sh`: every test of design D-7 marked wire, the hold undone ends in a panic
+- [ ] morphie: fetch, rebase, export with `git archive` into `~/hom-<sha>`, `build.sh`, `build-net.sh`, `check.sh`, `check-net.sh`, `check-quic.sh`, `check-wire.sh`; logs `unikernel/evidence/harden-crossing-<sha>-*.log`; `source.sha256`, `objects.sha256`; peaks of the worst programs in `unikernel/README.md`
+- [ ] A bead for more than two guests
+- [ ] Fold: specs, `ARCHITECTURE.md`, `docs/PROOFS.md`, `docs/LEARNINGS.md`; beads closed with hashes
