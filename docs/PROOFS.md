@@ -222,6 +222,11 @@ as its guest did.
 | `merged_exact` | A walk keeps each guest's log whole and in its order |
 | `merged_once`, `Walk.once` | In a walk no crossing is taken twice |
 | `combineTrace_walk` | The order the check replays in is such a walk, and its events are the schedule `combine` gives |
+| `combine_complete` | The greedy walk is complete: two logs that have any schedule the table allows combine, so `combine` refuses only when no order of the entries is allowed |
+| `replay_agrees`, `Walk.replay` | Take two logs that are each what a guest's log allows read alone (`SideRun`: each entry against that guest's own processes, with the machine's runs), every crossing taken as the packet its guest made for it. Any walk the table allows over them replays to the end; when they combine, `accept` accepts them and what the replay reaches is, at each guest's places and in order, that guest's processes |
+| `honest_combine`, `honest_accept` | Two guests that follow `Surface.Cross` (`Reach`), where nothing is in flight (`Quiet`): their logs combine, and once `a` has begun, `accept` (the merge and the replay; the ledger walk and the record's text are not in it) accepts them with the budgets `a` ran with and replays to the processes each guest holds |
+| `honest_budget` | A guest that has run anything runs with the other guest's step budget and turn space, in every state reached |
+| `honest_acks` | Where nothing is in flight, each guest's acknowledgements are in the order the other took its crossings: the comparison the check makes |
 | `traceRun_sched` | The check's replay, which charges each entry, is `schedIn` on that schedule when it runs every event: `accepted_network` speaks of what the check ran |
 | `runTurnMade_fst`, `settleMade_fst`, `turnMade_fst`, `beginMade_fst`, `stepMade_fst` | The measured runs a guest and the check charge with are the runs (`runTurnIn`, `settleIn`, `turnIn`, `beginIn`, `stepIn`); `runSpaceLeft_eq_within` runs them with each step's charge capped by its fuel |
 | `hold_stretch` | In a side's ledger the check accepts, the entries from the start or a count up to the next count charged, without the last, at most the credit the stretch began with |
@@ -232,12 +237,30 @@ as its guest did.
 The channel soundness theorems (`settleIn_sound` to `replayIn_true`) hold for
 every turn space; the old statements at `turnSpace` follow from them.
 Axioms: `propext`, `Quot.sound`, and `Classical.choice` for
-`runSpaceLeft_eq_within` (`kernel/CrossingContract.lean`).
-Nothing is proved of a guest: that two guests following `Surface.Cross` produce
-logs that combine, that the replay ends where they report, and that the
-replay's charges are the guest's, is tested by `kernel/CrossCheck.lean` and on
-two real guests by `unikernel/check-wire.sh`. That the walk finds a schedule
-whenever the table allows one is not proved. A guest's counts (`held m`,
+`runSpaceLeft_eq_within`, `combine_complete`, `replay_agrees` and the four
+`honest_` theorems (`kernel/CrossingContract.lean`,
+`kernel/GuestContract.lean`).
+
+The `honest_` theorems are about a model, `kernel/Surface/CrossModel.lean`: a
+guest changes only by the functions the image calls (a step of `Guest.work`
+with any count, `give`, `batch`, `take`), and a batch a guest takes is one the
+other made at some earlier time. A batch may be lost, taken twice, or taken
+after a later one. A batch is taken as the data it was made from. What is
+proved of every state so reached is `Reach.inv`: each guest is what its own
+log says, each packet worked is one the other made, in order and once, and the
+entries in the order they were recorded are a path the table allows. The
+theorems are read off it, three of them where nothing is in flight. Mid-run
+two honest logs need not combine: a crossing taken whose acknowledgement is
+not yet worked is refused by the merge (`kernel/CrossCheck.lean` shows one).
+
+Not proved of a guest: that two guests that have closed have nothing in flight
+(it rests on batches being answered one exchange at a time, as
+`unikernel/net.zig` does it), and that a guest that ran nothing ends with the
+other's budgets, which the check compares (`homoiconic-q59.85`); that the
+replay's charges are the guest's, so that the ledger walk accepts
+(`homoiconic-q59.86`); that a batch's bytes and a record's text read back
+(`homoiconic-q59.87`). These are tested by `kernel/CrossCheck.lean` and on two
+real guests by `unikernel/check-wire.sh`. A guest's counts (`held m`,
 `full m`) are its runtime's and are not verified: the check verifies where
 they are, not what they say. What a guest that lies can still hand over is in
 the design of `harden-crossing`, D-3.

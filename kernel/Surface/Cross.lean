@@ -30,10 +30,14 @@ guest did (`Reflect.traceRun`), walks each side's ledger
 (`Reflect.holdWalk`), and compares each process with the line its guest
 reported, a digest of its state among it.
 
-What a guest does is tested, not proved. Of the check it is proved that an
-accepted record is a run of the one-machine network (`accepted_network`,
-`traceRun_sched`) and what the ledger walk accepts (`hold_stretch` and its
-relatives).
+Of the check it is proved that an accepted record is a run of the one-machine
+network (`accepted_network`, `traceRun_sched`) and what the ledger walk
+accepts (`hold_stretch` and its relatives). Of two guests that follow these
+functions it is proved (`Surface.CrossProof`, over the model of
+`Surface.CrossModel`) that where nothing is in flight their logs combine, the
+merge replays to what each holds, and their acknowledgements are in the order
+of the other's takings. That a batch's bytes read back, that the replay's
+charges are the guest's, and that a record's text reads back are tested.
 -/
 namespace Surface.Cross
 open Reflect

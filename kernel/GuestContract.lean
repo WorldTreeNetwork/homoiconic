@@ -28,11 +28,12 @@ example : ∀ {s : Pair}, Reach s → s.Quiet →
     ∃ t last, combineTrace s.a.log.reverse s.b.log.reverse = some (t, last) :=
   fun h hq => Surface.Cross.honest_combine h hq
 
--- And once `a` has begun the program it was given, the check accepts them
--- with the budgets `a` ran with, and what the replay reaches is, at each
--- guest's places and in order, the processes that guest holds. So the lines
--- the check prints for a side (`procLines` of the replay at that side's
--- places) are the lines of what the guest holds.
+-- And once `a` has begun the program it was given, `accept` (the merge and
+-- the replay) accepts them with the budgets `a` ran with, and what the replay
+-- reaches is, at each guest's places and in order, the processes that guest
+-- holds. So the lines `Surface.Cross.check` makes for a side (`procLines` of
+-- the replay at that side's places) are the lines of what the guest holds.
+-- The ledger walk and the reading of a record's text are not in `accept`.
 example : ∀ {s : Pair} {t : Term}, Reach s → s.Quiet → s.prog = some t → s.a.waiting = false →
     ∃ tr last cfg,
       combineTrace s.a.log.reverse s.b.log.reverse = some (tr, last) ∧

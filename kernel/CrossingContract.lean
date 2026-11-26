@@ -111,7 +111,7 @@ example : ∀ {a b : List Note} {evs : List Event}, Merged a b evs → ∃ evs',
 -- it took when it took one: what the entry needs of that guest's own
 -- processes, and what it does to them with the machine's runs. Take two logs
 -- that are each such a run from their guest's first state, with every crossing
--- taken as the packet its guest made for it. If they combine, the check
+-- taken as the packet its guest made for it. If they combine, `accept`
 -- accepts them with the budgets they were run with, and what the replay
 -- reaches is, at each guest's places and in order, that guest's processes. The
 -- proof (`Walk.replay`) is for any order the table allows, not only the one
