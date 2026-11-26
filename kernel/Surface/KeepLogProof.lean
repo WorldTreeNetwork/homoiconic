@@ -174,9 +174,9 @@ def StandsGood (σ : Store Ref) : Stands → Prop
   | .waiting k => Good pieceSize σ k
   | _ => True
 
-theorem openState_good (hle : σ'.le σ) (n : Nat) {root : P Ref} {seen : List Data}
+theorem openState_good (hle : σ'.le σ) (n lim : Nat) {root : P Ref} {seen : List Data}
     {stands : Stands} (hg : RootGood σ root)
-    (h : openState σ' n root = .ok (some (seen, stands))) : StandsGood σ stands := by
+    (h : openState σ' n lim root = .ok (some (seen, stands))) : StandsGood σ stands := by
   unfold openState at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   split at h
@@ -238,8 +238,8 @@ structure NodeGood (σ : Store Ref) (part : NodePart) : Prop where
   cfg : CfgGood σ part.cfg
   doing : ∀ d, part.doing = some d → DoingGood σ d
 
-theorem openStatus_good (hle : σ'.le σ) (n : Nat) {p : P Ref} {st : Status (P Ref) Final}
-    (hg : Good pieceSize σ p) (h : openStatus σ' n p = .ok (some st)) : StatusGood σ st := by
+theorem openStatus_good (hle : σ'.le σ) (n lim : Nat) {p : P Ref} {st : Status (P Ref) Final}
+    (hg : Good pieceSize σ p) (h : openStatus σ' n lim p = .ok (some st)) : StatusGood σ st := by
   unfold openStatus at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' step h
@@ -248,9 +248,9 @@ theorem openStatus_good (hle : σ'.le σ) (n : Nat) {p : P Ref} {st : Status (P 
   rename_i tag a b hparts _ _ _ _ _ held _ _ _ hheld _ _ _ _
   exact chase_good hle n (parts_good hle n p hg hparts a (by simp)) hheld
 
-theorem openProcs_good (hle : σ'.le σ) (n : Nat) : ∀ (qs : List (P Ref))
+theorem openProcs_good (hle : σ'.le σ) (n lim : Nat) : ∀ (qs : List (P Ref))
     {procs : List (Proc (P Ref) Final)}, (∀ q ∈ qs, Good pieceSize σ q) →
-    openProcs σ' n qs = .ok (some procs) → ProcsGood σ procs
+    openProcs σ' n lim qs = .ok (some procs) → ProcsGood σ procs
   | [], procs, _, h => by
     simp only [openProcs, pure, Except.pure, Except.ok.injEq, Option.some.injEq] at h
     subst h
@@ -265,19 +265,19 @@ theorem openProcs_good (hle : σ'.le σ) (n : Nat) : ∀ (qs : List (P Ref))
     subst h
     intro x hx
     rcases List.mem_cons.mp hx with rfl | hx
-    · exact openStatus_good hle n
+    · exact openStatus_good hle n lim
         (parts_good hle n q (hg q (by simp)) hparts statusP (by simp)) hstatus
-    · exact openProcs_good hle n qs (fun y hy => hg y (List.mem_cons_of_mem _ hy)) hrest x hx
+    · exact openProcs_good hle n lim qs (fun y hy => hg y (List.mem_cons_of_mem _ hy)) hrest x hx
 
-theorem openNode_good (hle : σ'.le σ) (n : Nat) {root : P Ref} {seen : List Data} {cfg : LConfig}
-    (hg : RootGood σ root) (h : openNode σ' n root = .ok (some (seen, cfg))) : CfgGood σ cfg := by
+theorem openNode_good (hle : σ'.le σ) (n lim : Nat) {root : P Ref} {seen : List Data} {cfg : LConfig}
+    (hg : RootGood σ root) (h : openNode σ' n lim root = .ok (some (seen, cfg))) : CfgGood σ cfg := by
   unfold openNode at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' step h
   rename_i seenP namesP procsP hroot _ _ _ _ _ _ _ _ _ _ _ _ _ ps hps _ _ rest hrest
   simp only [Except.ok.injEq, Option.some.injEq, Prod.mk.injEq] at h
   obtain ⟨_, rfl⟩ := h
-  exact openProcs_good hle n ps
+  exact openProcs_good hle n lim ps
     (parts_good hle n procsP (hg.parts hle n hroot procsP (by simp)) hps) hrest
 
 /-! ## What an event leaves -/
@@ -430,6 +430,14 @@ theorem ended_kept (hw : s.written = #[]) (line : String) {status : P Ref}
   · exact .over rfl hw
   · exact .state (vmState_good _ hst)
 
+/-- A walk that is stuck needs a piece and holds what it held, or is out of
+    space and over. -/
+theorem stuck_kept (h : Held σ s) (r : Ref) : Kept σ (s.stuck r) := by
+  unfold Session.stuck
+  split
+  · exact .over rfl h.written
+  · exact .holds ⟨h.le, h.good, h.node, h.written⟩
+
 theorem stopped_kept (hw : s.written = #[]) (st : PState Ref) : Kept σ (s.stopped st) := by
   unfold Session.stopped
   split
@@ -449,14 +457,15 @@ theorem advance_kept : ∀ (fuel : Nat) {s : Session}, Held σ s → Kept σ (ad
     | run st =>
       rw [hph] at hg'
       simp only [advance, hph]
-      cases hst : steps s.store s.left st with
-      | mk out left =>
-        have good := steps_good hle s.left hg' hst
+      cases hst : steps s st with
+      | mk out rest =>
+        have good := steps_good hle hg' hst
         split
-        · rename_i r st' left' heq
+        · rename_i r st' left' credit' heq
           cases heq
-          exact .holds ⟨hle, good.2 _ _ rfl, hnode, hw⟩
-        · rename_i v _ heq
+          exact .holds ⟨hle, good.2.1 _ _ rfl, hnode, hw⟩
+        · exact .over rfl hw
+        · rename_i v _ _ heq
           cases heq
           exact advance_kept fuel ⟨hle, good.1 _ rfl, hnode, hw⟩
         · split
@@ -475,14 +484,15 @@ theorem advance_kept : ∀ (fuel : Nat) {s : Session}, Held σ s → Kept σ (ad
     | payload k st =>
       rw [hph] at hg'
       simp only [advance, hph]
-      cases hst : steps s.store s.left st with
-      | mk out left =>
-        have good := steps_good hle s.left hg'.2 hst
+      cases hst : steps s st with
+      | mk out rest =>
+        have good := steps_good hle hg'.2 hst
         split
-        · rename_i r st' left' heq
+        · rename_i r st' left' credit' heq
           cases heq
-          exact .holds ⟨hle, ⟨hg'.1, good.2 _ _ rfl⟩, hnode, hw⟩
-        · rename_i v _ heq
+          exact .holds ⟨hle, ⟨hg'.1, good.2.1 _ _ rfl⟩, hnode, hw⟩
+        · exact .over rfl hw
+        · rename_i v _ _ heq
           cases heq
           exact advance_kept fuel ⟨hle, hg'.1, hnode, hw⟩
         · split
@@ -494,7 +504,7 @@ theorem advance_kept : ∀ (fuel : Nat) {s : Session}, Held σ s → Kept σ (ad
       have hk : Good pieceSize σ k := hg'
       simp only [advance, hph]
       split
-      · exact .holds ⟨hle, hg', hnode, hw⟩
+      · exact stuck_kept ⟨hle, hg, hnode, hw⟩ _
       · split
         · exact advance_kept fuel ⟨hle, hg', hnode, hw⟩
         · exact .waits hg'
@@ -507,7 +517,7 @@ theorem advance_kept : ∀ (fuel : Nat) {s : Session}, Held σ s → Kept σ (ad
     | result p =>
       simp only [advance, hph]
       split
-      · exact .holds ⟨hle, trivial, hnode, hw⟩
+      · exact stuck_kept ⟨hle, hg, hnode, hw⟩ _
       · split
         · exact advance_kept fuel ⟨hle, trivial, hnode, hw⟩
         · exact ended_kept hw _ (by simp)
@@ -525,10 +535,10 @@ theorem advance_kept : ∀ (fuel : Nat) {s : Session}, Held σ s → Kept σ (ad
       rw [hph] at hg'
       simp only [advance, hph]
       split
-      · exact .holds ⟨hle, hg', hnode, hw⟩
+      · exact stuck_kept ⟨hle, hg, hnode, hw⟩ _
       · exact .over rfl hw
       · rename_i seen stands heq
-        have hs := openState_good hle _ hg' heq
+        have hs := openState_good hle _ _ hg' heq
         split
         · have hk : Good pieceSize σ _ := hs
           exact advance_kept fuel ⟨hle, ⟨hk, by simp [GoodS, hk]⟩, hnode, hw⟩
@@ -541,12 +551,12 @@ theorem advance_kept : ∀ (fuel : Nat) {s : Session}, Held σ s → Kept σ (ad
       rw [hph] at hg'
       simp only [advance, hph]
       split
-      · exact .holds ⟨hle, hg', hnode, hw⟩
+      · exact stuck_kept ⟨hle, hg, hnode, hw⟩ _
       · rename_i seen cfg part heq hpart
         refine advance_kept fuel ⟨hle, trivial, ?_, hw⟩
         intro _ e
         cases e
-        exact ⟨openNode_good hle _ hg' heq, (hnode _ hpart).doing⟩
+        exact ⟨openNode_good hle _ _ hg' heq, (hnode _ hpart).doing⟩
       · exact .over rfl hw
     | landed st =>
       rw [hph] at hg'

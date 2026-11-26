@@ -201,10 +201,24 @@ unsafe def reflectSourceBytes (program length out capacity : USize) : USize :=
     as Lean's exported functions do; a caller that will use the session again
     calls `kernel_retain` on it first (`ffi.c`). -/
 
-/-- C ABI: begin a program from its source. -/
+/-- Native-only: how many cells a kept turn holds, its phase and the state of
+    its run counted in one walk, each object once, stopping past `cut`
+    (`reflect_live_cells`). -/
+@[extern "reflect_live_cells"]
+private unsafe opaque liveKept (s : @& (Keep.Phase × Reflect.PState Wire.Ref)) (cut : USize) : USize
+
+/-- The count a kept turn is given, as `spaceOf` gives a run's: the runtime's,
+    cut at three quarters of the default space (`Reflect.LSpace.bar`). The
+    session adds the bytes of the pieces it was given. -/
+private unsafe def keptCount : Option (Keep.Phase → Reflect.PState Wire.Ref → Nat) :=
+  some fun ph ps =>
+    (liveKept (ph, ps) (Reflect.defaultSpace - Reflect.defaultSpace / 4).toUSize).toNat
+
+/-- C ABI: begin a program from its source. The turn has the default space
+    and the runtime's count, as a run has (`bound-kept-sessions`). -/
 @[export reflect_keep_start]
 unsafe def keepStart (program length : USize) (budget : UInt64) : Keep.Session :=
-  Keep.start (copyBytes program length) budget.toNat
+  Keep.start (copyBytes program length) budget.toNat Reflect.defaultSpace keptCount
 
 /-- C ABI: answer the waiting program stored under the root named by the text
     at `root`, with the result of the program at `answer`. -/
@@ -212,7 +226,7 @@ unsafe def keepStart (program length : USize) (budget : UInt64) : Keep.Session :
 unsafe def keepAnswer (root rootLength answer answerLength : USize) (budget : UInt64) :
     Keep.Session :=
   Keep.answer ((String.fromUTF8? (copyBytes root rootLength)).getD "")
-    (copyBytes answer answerLength) budget.toNat
+    (copyBytes answer answerLength) budget.toNat Reflect.defaultSpace keptCount
 
 /-- C ABI: a VM from the start: the program at `program` handles the log at
     `log`, a program whose result is an array of `[identifier, answer]`. -/

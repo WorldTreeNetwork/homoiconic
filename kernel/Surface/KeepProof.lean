@@ -1,6 +1,7 @@
 import Surface.Keep
 import Wire.PieceProof
 import Reflect.LogProof
+import Reflect.StoreSpaceProof
 
 /-! Equal VM states are saved under one root.
 
@@ -152,41 +153,44 @@ theorem chase_good (hle : σ'.le σ) : ∀ (n : Nat) {v k x : P Ref}, Good size 
           exact h.1 ▸ hg
     | _ => simp only [chase, Except.ok.injEq, Prod.mk.injEq] at h; exact h.1 ▸ hg
 
+/-- The lazy machine's steps keep every reference one that saving made. -/
+theorem lrun_good (hle : σ'.le σ) : ∀ (k : Nat) {st t : PState Ref},
+    GoodS size σ st → lrun σ' k st = .at t → GoodS size σ t
+  | 0, st, t, hg, h => by simp only [lrun, LRun.at.injEq] at h; exact h ▸ hg
+  | k + 1, st, t, hg, h => by
+    simp only [lrun] at h
+    split at h
+    · rename_i s' hl; exact lrun_good hle k (lstep_good hle hg hl) h
+    · cases h
+
 /-- A machine run of a session keeps every reference one that saving made,
-    whether it ends at a state or pauses at one. -/
-theorem steps_good (hle : σ'.le σ) : ∀ (n : Nat) {st : PState Ref} {out : LRun Ref} {left : Nat},
-    GoodS size σ st → steps σ' n st = (out, left) →
-    (∀ st', out = .at st' → GoodS size σ st') ∧ ∀ r st', out = .paused r st' → GoodS size σ st' := by
-  intro n
-  induction n using Nat.strongRecOn with
-  | _ n ih =>
-    intro st out left hg h
-    have stay : out = .at st →
-        (∀ st', out = .at st' → GoodS size σ st') ∧ ∀ r st', out = .paused r st' → GoodS size σ st' :=
-      fun e => e ▸ ⟨fun _ e => (by cases e; exact hg), fun _ _ e => (by cases e)⟩
-    cases n with
-    | zero =>
-      unfold steps at h
-      simp only [Prod.mk.injEq] at h
-      exact stay h.1.symm
-    | succ n =>
-      unfold steps at h
-      split at h
-      · simp only [Prod.mk.injEq] at h; exact stay h.1.symm
-      · simp only [Prod.mk.injEq] at h; exact stay h.1.symm
-      · split at h
-        · split at h
-          · rename_i s' hl
-            exact ih _ (by omega) (lstep_good hle hg hl) h
-          · simp only [Prod.mk.injEq] at h
-            obtain ⟨rfl, _⟩ := h
-            exact ⟨fun _ e => (by cases e), fun _ _ e => (by cases e; exact hg)⟩
-        · simp only [Prod.mk.injEq] at h; exact stay h.1.symm
+    whether it ends at a state, pauses at one or is stopped for space at
+    one: it takes the lazy machine's steps (`Reflect.lrunSpace_ledger`). -/
+theorem steps_good {s : Session} (hle : s.store.le σ) {st : PState Ref} {out : LEnded Ref}
+    {rest : Nat × Nat} (hg : GoodS size σ st) (h : steps s st = (out, rest)) :
+    (∀ st', out = .at st' → GoodS size σ st') ∧ (∀ r st', out = .paused r st' → GoodS size σ st') ∧
+      (∀ st', out = .full st' → GoodS size σ st') := by
+  obtain ⟨k, _, hl, _, _⟩ := lrunSpace_ledger s.store s.space s.left s.credit st
+  have hst : (lrunSpace s.store s.space s.left s.credit st).1 = out := by
+    have := congrArg Prod.fst h; simpa [steps] using this
+  rw [hst] at hl
+  have g := lrun_good hle k hg hl
+  refine ⟨fun st' e => ?_, fun r st' e => ?_, fun st' e => ?_⟩ <;> (subst e; exact g)
 
 variable {s : Session}
 
 theorem finish_over (hw : s.written = #[]) (text : String) : Turn σ (s.finish text) :=
   .over rfl hw
+
+theorem outOfSpace_over (hw : s.written = #[]) : Turn σ s.outOfSpace := .over rfl hw
+
+/-- A walk that is stuck needs a piece, and holds what it held, or is out of
+    space and over. -/
+theorem stuck_turn (h : Inv σ s) (r : Ref) : Turn σ (s.stuck r) := by
+  unfold Session.stuck
+  split
+  · exact outOfSpace_over h.written
+  · exact .holds ⟨h.le, h.good, h.vm, h.node, h.written⟩
 
 theorem stopped_over (hvm : s.vm = none) (hw : s.written = #[]) (st : PState Ref) :
     Turn σ (s.stopped st) := by
@@ -206,14 +210,15 @@ theorem advance_turn : ∀ (fuel : Nat) {s : Session}, Inv σ s → Turn σ (adv
     | run st =>
       rw [hph] at hg'
       simp only [advance, hph]
-      cases hst : steps s.store s.left st with
-      | mk out left =>
-        have good := steps_good hle s.left hg' hst
+      cases hst : steps s st with
+      | mk out rest =>
+        have good := steps_good hle hg' hst
         split
-        · rename_i r st' left' heq
+        · rename_i r st' left' credit' heq
           cases heq
-          exact .holds ⟨hle, good.2 _ _ rfl, hvm, hnode, hw⟩
-        · rename_i v _ heq
+          exact .holds ⟨hle, good.2.1 _ _ rfl, hvm, hnode, hw⟩
+        · exact outOfSpace_over hw
+        · rename_i v _ _ heq
           cases heq
           exact advance_turn fuel ⟨hle, good.1 _ rfl, hvm, hnode, hw⟩
         · simp only [hnode]
@@ -230,14 +235,15 @@ theorem advance_turn : ∀ (fuel : Nat) {s : Session}, Inv σ s → Turn σ (adv
     | payload k st =>
       rw [hph] at hg'
       simp only [advance, hph]
-      cases hst : steps s.store s.left st with
-      | mk out left =>
-        have good := steps_good hle s.left hg'.2 hst
+      cases hst : steps s st with
+      | mk out rest =>
+        have good := steps_good hle hg'.2 hst
         split
-        · rename_i r st' left' heq
+        · rename_i r st' left' credit' heq
           cases heq
-          exact .holds ⟨hle, ⟨hg'.1, good.2 _ _ rfl⟩, hvm, hnode, hw⟩
-        · rename_i v _ heq
+          exact .holds ⟨hle, ⟨hg'.1, good.2.1 _ _ rfl⟩, hvm, hnode, hw⟩
+        · exact outOfSpace_over hw
+        · rename_i v _ _ heq
           cases heq
           exact advance_turn fuel ⟨hle, hg'.1, hvm, hnode, hw⟩
         · simp only [hnode]
@@ -246,7 +252,7 @@ theorem advance_turn : ∀ (fuel : Nat) {s : Session}, Inv σ s → Turn σ (adv
       rw [hph] at hg'
       simp only [advance, hph]
       split
-      · exact .holds ⟨hle, hg', hvm, hnode, hw⟩
+      · exact stuck_turn ⟨hle, hg, hvm, hnode, hw⟩ _
       · simp only [hnode, hvm]
         exact .waits hg'
       · simp only [hnode, Session.ended, hvm]
@@ -254,7 +260,7 @@ theorem advance_turn : ∀ (fuel : Nat) {s : Session}, Inv σ s → Turn σ (adv
     | result p =>
       simp only [advance, hph]
       split
-      · exact .holds ⟨hle, trivial, hvm, hnode, hw⟩
+      · exact stuck_turn ⟨hle, hg, hvm, hnode, hw⟩ _
       · simp only [hnode, Session.ended, hvm]
         exact finish_over hw _
       · exact finish_over hw _
@@ -276,14 +282,14 @@ theorem advance_turn : ∀ (fuel : Nat) {s : Session}, Inv σ s → Turn σ (adv
     | step => rw [hph] at hg'; exact hg'.elim
 
 /-- A session that has seen no piece holds a part of every store. -/
-theorem fresh_le {budget left : Nat} {phase : Phase} :
-    ({ phase, budget, left } : Session).store.le σ := by
-  intro r p h
-  simp [Session.store] at h
+theorem fresh_le {s : Session} (h : s.pieces = {}) : s.store.le σ := by
+  intro r p hr
+  simp [Session.store, h] at hr
 
 /-- A program begun from its source: every phase of its first turn holds only
     references that saving made. It holds none. -/
-theorem start_turn (src : ByteArray) (budget : Nat) : Turn σ (start src budget) := by
+theorem start_turn (src : ByteArray) (budget cells : Nat)
+    (count : Option (Phase → PState Ref → Nat)) : Turn σ (start src budget cells count) := by
   unfold start
   split
   · exact .over rfl rfl
@@ -291,20 +297,21 @@ theorem start_turn (src : ByteArray) (budget : Nat) : Turn σ (start src budget)
     have hg : PhaseGood σ (Phase.run (load (compile t)).toP) := by
       simp only [PhaseGood]
       exact goodS_whole _
-    exact advance_turn _ ⟨fresh_le, hg, rfl, rfl, rfl⟩
+    exact advance_turn _ ⟨fresh_le rfl, hg, rfl, rfl, rfl⟩
 
 /-- A turn that answers the program under a root, when the piece under the
     root, as a turn holds it, has only references that saving made.
     `Wire.save_opened` says it has, for a root saving gave. -/
 theorem answer_turn {root : String} {r : Ref} (hr : unhex root = some r)
     (h : ∃ p, σ r = some p ∧ Good pieceSize σ (opened pieceSize r p)) (src : ByteArray)
-    (budget : Nat) : Turn σ (answer root src budget) := by
+    (budget cells : Nat) (count : Option (Phase → PState Ref → Nat)) :
+    Turn σ (answer root src budget cells count) := by
   unfold answer
   simp only [hr]
   split
   · exact .over rfl rfl
   · split
-    · exact advance_turn _ ⟨fresh_le, h, rfl, rfl, rfl⟩
+    · exact advance_turn _ ⟨fresh_le rfl, h, rfl, rfl, rfl⟩
     · exact .over rfl rfl
 
 /-- Supplying a piece. The hypothesis is that the pieces the session holds,

@@ -406,3 +406,60 @@ def heldRoots : String :=
               | _, _ => s!"FAIL the second turn did not wait: {t2}"
 
 #eval IO.println heldRoots
+
+/-! A kept session is bounded as a run is (`bound-kept-sessions`). Its lazy
+    machine charges the conversions its steps make, found within the budget
+    left (`homoiconic-q59.80`); it has a space, and a result or a state too
+    large is refused, each with its line (`homoiconic-q59.70`). Each check
+    beside it runs the same session with the limit undone. -/
+
+def dblDefs : String :=
+  "def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\n"
+def fillDefs : String :=
+  "def fill n acc =\n  case n\n    0 -> acc\n    m + 1 -> fill m [0, ...acc]\n\n"
+
+def firstOf (s : Surface.Keep.Session) : String := (s.text.splitOn "\n").headD ""
+
+#eval do
+  -- `add` is charged one by the table whatever its argument; converting an
+  -- argument doubled forty times is charged its pieces, and refused within
+  -- the budget at once. It was charged one and walked 2^40 pieces.
+  let t := firstOf (Surface.Keep.start (dblDefs ++ "add (dbl [0] 40) 1\n").toUTF8 100000)
+  IO.println (line (t == "no result within 100000 steps of a turn")
+    s!"add on data doubled forty times is refused within the budget: {t}")
+  let small := firstOf (Surface.Keep.start (dblDefs ++ "equal (dbl [0] 4) (dbl [0] 4)\n").toUTF8 100000)
+  IO.println (line (small == "1") s!"equal on data doubled four times is paid for: {small}")
+
+-- The lazy charge is the plain machine's on an operation whose argument has
+-- at most `convFree` pieces, and one more for each piece past it.
+#eval do
+  let at3 (x : Data) : State := .running (.prim .done) [] [.data x, .data (.nat 3)] []
+  let small : Data := .arr [.nat 2, .nat 3]
+  let wide : Data := .arr [.nat 1, .nat 2, .nat 3, .nat 4, .nat 5]
+  let ls (s : State) : Nat := lstepCost (s.toP : PState Ref)
+  IO.println (line (ls (at3 small) == stepCost (at3 small) && ls (at3 wide) == stepCost (at3 wide) + 4)
+    s!"the lazy charge of operation 3 on [2, 3] is the plain one ({ls (at3 small)}), on five numbers four more ({ls (at3 wide)} against {stepCost (at3 wide)})")
+  let lit : State := .running (.literal (.arr (List.replicate 20 (.nat 7))) .done) [] [] []
+  IO.println (line (ls lit == 1 + 41 / 8 && stepCost lit == 1)
+    s!"a literal of 41 pieces is charged one and one for each eight: {ls lit}")
+
+#eval do
+  -- A turn that makes more cells than its space, with the ledger alone.
+  let deep := "def deep x = [x, ...deep x]\ndeep 0\n"
+  let t := firstOf (Surface.Keep.start deep.toUTF8 1000000 2000)
+  let u := firstOf (Surface.Keep.start deep.toUTF8 1000000 (10 ^ 9))
+  IO.println (line (t == "no result within 2000 cells of a turn" && u == "no result within 1000000 steps of a turn")
+    s!"a turn that keeps what it makes ends in the space line: {t}; with the space undone: {u}")
+  -- A result more than four units written for each cell.
+  let fill := fillDefs ++ "fill 500 []\n"
+  let r := firstOf (Surface.Keep.start fill.toUTF8 1000000 100)
+  let r' := firstOf (Surface.Keep.start fill.toUTF8 1000000 (10 ^ 9))
+  IO.println (line (r == "no result within 100 cells of a turn" && r'.startsWith "[0, 0, 0")
+    s!"a result of 500 items is too large for 100 cells: {r}; with the space undone it is the list")
+  -- A waiting program too large to save: what it holds is few cells and,
+  -- written as the tree saving walks, many.
+  let held := dblDefs ++ "(fn xs -> ask [1] (fn a -> xs)) (dbl [0] 12)\n"
+  let w := firstOf (Surface.Keep.start held.toUTF8 1000000 2000)
+  let w' := firstOf (Surface.Keep.start held.toUTF8 1000000 (10 ^ 9))
+  IO.println (line (w == "the waiting program is too large to keep within 2000 cells" && w' == "asked: [1]")
+    s!"a waiting program that holds data doubled twelve times is not saved within 2000 cells: {w}; with the space undone: {w'}")

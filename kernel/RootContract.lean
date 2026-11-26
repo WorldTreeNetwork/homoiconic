@@ -127,14 +127,16 @@ example : ∀ {σ : Store Ref} (fuel : Nat) {s : Session}, Inv σ s → Turn σ 
   Surface.Keep.advance_turn
 
 -- The first turn of a program.
-example : ∀ {σ : Store Ref} (src : ByteArray) (budget : Nat), Turn σ (start src budget) :=
+example : ∀ {σ : Store Ref} (src : ByteArray) (budget cells : Nat)
+    (count : Option (Phase → PState Ref → Nat)), Turn σ (start src budget cells count) :=
   Surface.Keep.start_turn
 
 -- A turn that answers the program under a root. `save_opened` gives the
 -- hypothesis for a root that saving gave.
 example : ∀ {σ : Store Ref} {root : String} {r : Ref}, unhex root = some r →
     (∃ p, σ r = some p ∧ Good pieceSize σ (opened pieceSize r p)) →
-    ∀ (src : ByteArray) (budget : Nat), Turn σ (answer root src budget) :=
+    ∀ (src : ByteArray) (budget cells : Nat) (count : Option (Phase → PState Ref → Nat)),
+      Turn σ (answer root src budget cells count) :=
   Surface.Keep.answer_turn
 
 -- Supplying a piece. That the session's pieces, with the piece read from the
@@ -250,13 +252,14 @@ example : ∀ {σ : Store Ref} {s : Session}, Kept σ s ↔
       · exact .node h
       · exact .over a b⟩
 
--- Reading a kept state and a kept node, on any part of the store, gives only
--- functions every reference of which `cut` made.
-example : ∀ {σ σ' : Store Ref}, σ'.le σ → ∀ (n : Nat) {root : P Ref} {seen : List Data}
-    {stands : Stands}, RootGood σ root → openState σ' n root = .ok (some (seen, stands)) →
+-- Reading a kept state and a kept node, on any part of the store and within
+-- any limit on what is read, gives only functions every reference of which
+-- `cut` made.
+example : ∀ {σ σ' : Store Ref}, σ'.le σ → ∀ (n lim : Nat) {root : P Ref} {seen : List Data}
+    {stands : Stands}, RootGood σ root → openState σ' n lim root = .ok (some (seen, stands)) →
     StandsGood σ stands := Surface.Keep.openState_good
-example : ∀ {σ σ' : Store Ref}, σ'.le σ → ∀ (n : Nat) {root : P Ref} {seen : List Data}
-    {cfg : LConfig}, RootGood σ root → openNode σ' n root = .ok (some (seen, cfg)) →
+example : ∀ {σ σ' : Store Ref}, σ'.le σ → ∀ (n lim : Nat) {root : P Ref} {seen : List Data}
+    {cfg : LConfig}, RootGood σ root → openNode σ' n lim root = .ok (some (seen, cfg)) →
     CfgGood σ cfg := Surface.Keep.openNode_good
 
 -- The runs an event needs take only functions the configuration held, and the
