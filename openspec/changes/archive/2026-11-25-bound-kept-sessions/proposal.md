@@ -1,6 +1,6 @@
 # Bound a kept session's time, space and stack
 
-> **ACTIVE BUILD** 2026-11-25. Beads `homoiconic-q59.80`, `homoiconic-q59.70`, `homoiconic-q59.78` (and `homoiconic-q59.75` for a kept session only). Host-only paths: the lazy store machine and the session behind the `keep`, `vm` and `node` commands, and the walkers those commands, `ask` and `chan` use. The image links these modules but no guest reaches them.
+> **FOLDED** 2026-11-25 into `openspec/specs/bytecode-machine`, `code-as-data`, `state-store` and `zig-host` (bases stamped by `fold_base.py`, checked clean). Was ACTIVE BUILD, 2026-11-25. Beads `homoiconic-q59.80`, `homoiconic-q59.70`, `homoiconic-q59.78` (and `homoiconic-q59.75` for a kept session only). Host-only paths: the lazy store machine and the session behind the `keep`, `vm` and `node` commands, and the walkers those commands, `ask` and `chan` use. The image links these modules but no guest reaches them.
 
 **Rigor:** architecture (a new run of the lazy machine with a ledger of cells and its theorems in `Reflect`, a new charge on the lazy machine, a new field on the session, a new line, walks swapped in by `@[csimp]`).
 

@@ -164,7 +164,7 @@ The host SHALL provide a command that takes the path of a program file, passes i
 
 ### Requirement: A command runs one turn with the program's state in a directory
 
-The host SHALL provide a command that takes a store directory and either `start` with a program file, or `answer` with a root and an answer file, and an optional step budget. It SHALL read from the directory the file named by each piece the kernel asks for and pass its bytes to the kernel. It SHALL write each piece the kernel hands back to a file with the name the kernel gives, before printing. It SHALL print the kernel's text and a newline. The host SHALL NOT read, hash or name a piece. It SHALL exit 0 whenever the kernel answered. It SHALL exit 3, print one line on standard error and write nothing when the directory lacks a piece the turn needs. It SHALL exit 2 with a message on standard error for a wrong call, a file or directory it cannot read, or a file it cannot write.
+The host SHALL provide a command that takes a store directory and either `start` with a program file, or `answer` with a root and an answer file, and an optional step budget. It SHALL read from the directory the file named by each piece the kernel asks for and pass its bytes to the kernel. It SHALL write each piece the kernel hands back to a file with the name the kernel gives, before printing. It SHALL print the kernel's text and a newline. The kernel runs the turn under the default space with the runtime's count (`reflect_keep_start` and `reflect_keep_answer`, `bound-kept-sessions`); the command takes no new argument, and the space lines are the kernel's text. The host SHALL NOT read, hash or name a piece. It SHALL exit 0 whenever the kernel answered. It SHALL exit 3, print one line on standard error and write nothing when the directory lacks a piece the turn needs. It SHALL exit 2 with a message on standard error for a wrong call, a file or directory it cannot read, or a file it cannot write.
 
 #### Scenario: A program is kept between calls
 
@@ -189,6 +189,12 @@ The host SHALL provide a command that takes a store directory and either `start`
 - GIVEN a root whose file has a byte added
 - WHEN it is answered
 - THEN the command prints `store error: piece <name> does not match its name` and exits 0
+
+#### Scenario: A kept turn out of space
+
+- GIVEN `def deep x = [x, ...deep x]` applied to 0
+- WHEN the command starts it with the default budget
+- THEN it prints `no result within 4000000 cells of a turn` and exits 0, under 256 MiB (`host/check.sh`)
 
 ### Requirement: A command runs a program as processes
 
