@@ -1,0 +1,23 @@
+== build: sh unikernel/build.sh examples/factorial.hom
+   exit 0  2026-11-26T01:14:03Z
+9e19ece0abd5a325d00812db31ac869f19cd1847502a93c1363af60e88c80881  unikernel/out/reflect.elf
+cb94c8b60a86976abfe30a10749fdd00b8c2c0230fdbf824ef73aacc903ebebe  unikernel/out/reflect-linux
+== build-net: sh unikernel/build-net.sh
+   exit 0  2026-11-26T01:16:51Z
+129ed3bfbeff1e8ca7f5857301189c1f14b4868292edda2310b449032a802f64  unikernel/out-net/reflect-net.elf
+0fbdc5e6fa6a03389b390fe61473f68d599dd71c59315b0f0e011728a540e058  unikernel/out-net/reply
+ddb3f75707405c1884efa7a0703b0aced53751b97e274aa2d3468742c2ee1d3b  unikernel/out-net/quic-client
+   out and out-net have one source stamp
+   out and out-net have the same objects
+== check: sh unikernel/check.sh
+   exit 0  2026-11-26T01:34:50Z
+== check-net: sh unikernel/check-net.sh
+   exit 0  2026-11-26T01:38:34Z
+== check-quic: sh unikernel/check-quic.sh
+   exit 0  2026-11-26T01:41:18Z
+== check-wire: sh unikernel/check-wire.sh
+   exit 0  2026-11-26T01:47:16Z
+== after the checks
+2df72544e6e98c9bdcf98871eeba79146fd935aafacfedaaef07c71397193743  unikernel/out/reflect.elf
+129ed3bfbeff1e8ca7f5857301189c1f14b4868292edda2310b449032a802f64  unikernel/out-net/reflect-net.elf
+== done
