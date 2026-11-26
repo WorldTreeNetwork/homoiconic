@@ -154,6 +154,19 @@ def main : IO Unit := do
   expect "a budget that stops the first turn: nothing is recorded"
     (check p s.toUTF8 t.toUTF8) "accepted\nschedule: []\nplaces a: [0]\nplaces b: []\nbudget 30 steps"
 
+  -- Mid-run two honest logs need not combine (q59.68): `b` has taken `a`'s
+  -- start and `a` has not yet worked the acknowledgement, so the crossing is
+  -- taken and not acknowledged. `honest_combine` speaks of a pair with nothing
+  -- in flight, and this one has the acknowledgement still to send.
+  let ma₀ := (start true false true false defaultLimit defaultTurn defaultHold).give p 100000
+  let mb₀ := start false true false false defaultLimit defaultTurn defaultHold
+  let ma := (ma₀.take (mb₀.batch roomLimit)).work ledgerCount workLimit
+  let mb := (mb₀.take (ma.batch roomLimit)).work ledgerCount workLimit
+  expect "mid-run, a start taken and its acknowledgement not yet worked: the logs do not combine"
+    (chk (ma.record "a" "b") (mb.record "b" "a")) "refused: the logs do not combine"
+  truth "and the pair is not quiet: the acknowledgement is still to be sent"
+    (ma.log.any (· == .out 0 0) && mb.log.any (· == .spawnIn 0) && mb.sent.any (· == ackPacket 0))
+
   -- Budgets are the guest's own (q59.79).
   let (fa, fb) := simulatedWith p { far := true, frame := 100000, limitB := 50000, turnB := 300000 }
   expect "the program comes with more than the peer allows: a runs with b's" fa "budget 50000 300000\n"

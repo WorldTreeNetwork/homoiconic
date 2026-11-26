@@ -41,11 +41,11 @@ if grep -v "depends on axioms: \[propext\(, Classical.choice\)\?\(, Quot.sound\)
     exit 1
 fi
 ( cd "$ROOT/kernel" && lake env lean CrossCheck.lean ) > "$W/lean.txt"
-if grep -q "^FAIL\|error" "$W/lean.txt" || [ "$(grep -c "^ok" "$W/lean.txt")" -ne 85 ]; then
+if grep -q "^FAIL\|error" "$W/lean.txt" || [ "$(grep -c "^ok" "$W/lean.txt")" -ne 87 ]; then
     cat "$W/lean.txt" >&2
     exit 1
 fi
-echo "ok   two guests in one process: 85 checks"
+echo "ok   two guests in one process: 87 checks"
 
 ( umask 077
   for k in a b host other; do head -c 32 /dev/urandom > "$W/key-$k"; done )
