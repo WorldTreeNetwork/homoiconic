@@ -23,5 +23,6 @@ import Reflect.StoreProof
 import Reflect.Crossing
 import Reflect.CrossingProof
 import Reflect.CrossingComplete
+import Reflect.CrossingLocal
 import Reflect.Hold
 import Reflect.HoldProof

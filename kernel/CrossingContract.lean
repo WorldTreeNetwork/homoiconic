@@ -106,8 +106,32 @@ example : ∀ {hold first : Nat} {es : List Charged} {r : Option (Nat × Nat)},
 example : ∀ {a b : List Note} {evs : List Event}, Merged a b evs → ∃ evs', combine a b = some evs' :=
   Reflect.combine_complete
 
+-- A guest's log read alone (`homoiconic-q59.68`). `SideRun cells budget s L rs F`
+-- reads the log `rs` of guest `s` from `L` to `F`, each entry with the packet
+-- it took when it took one: what the entry needs of that guest's own
+-- processes, and what it does to them with the machine's runs. Take two logs
+-- that are each such a run from their guest's first state, with every crossing
+-- taken as the packet its guest made for it. If they combine, the check
+-- accepts them with the budgets they were run with, and what the replay
+-- reaches is, at each guest's places and in order, that guest's processes. The
+-- proof (`Walk.replay`) is for any order the table allows, not only the one
+-- the walk chooses.
+example : ∀ [Ops] {cells budget : Nat} {p : Term} {c₀ : MConfig} {ra rb : List (Note × Data)}
+    {FA FB : Local} {t : List (Side × Note × List Event)} {last : Mix},
+    beginIn cells budget p = some c₀ →
+    SideRun cells budget .a (Local.init c₀.procs) ra FA →
+    SideRun cells budget .b (Local.init []) rb FB →
+    (∀ r ∈ ra, ∀ k, r.1.taking = some k → FB.outPkts[k]? = some r.2) →
+    (∀ r ∈ rb, ∀ k, r.1.taking = some k → FA.outPkts[k]? = some r.2) →
+    combineTrace (ra.map (·.1)) (rb.map (·.1)) = some (t, last) →
+    ∃ cfg, accept cells budget p (ra.map (·.1)) (rb.map (·.1)) = some (traceEvents t, cfg) ∧
+      last.placeA.filterMap (cfg.procs[·]?) = FA.procs ∧
+      last.placeB.filterMap (cfg.procs[·]?) = FB.procs :=
+  fun hb runA runB linkA linkB ht => Reflect.replay_agrees hb runA runB linkA linkB ht
+
 #print axioms Reflect.accepted_network
 #print axioms Reflect.combine_complete
+#print axioms Reflect.replay_agrees
 #print axioms Reflect.combine_merged
 #print axioms Reflect.merged_exact
 #print axioms Reflect.merged_once
