@@ -207,3 +207,13 @@ def link (parent : Data) (order : Nat) : Data := .arr [.nat 0, parent, .nat orde
   let (plain, _) := finish {} 100000 (vmStart src.toUTF8 noOrder.toUTF8 budget)
   IO.println (line ((plain.splitOn "\n").head? == some "42")
     "a link with no order still names the entry before it")
+
+/-! A long log is read by a walk, not a call for each entry
+    (`bound-kept-sessions`, `homoiconic-q59.78`). -/
+#eval do
+  let n := 200000
+  let ds := (List.range n).map fun i => Data.arr [.nat (i + 1), .nat i]
+  let ok := match dataEntries (.arr []) 0 ds with
+    | .ok es => es.length == n
+    | .error _ => false
+  IO.println (line ok s!"a log of {n} entries is read")

@@ -52,6 +52,42 @@ example : @Surface.Read.takeWhileB = @Surface.Read.takeWhileWalk := Surface.Read
 example : ∀ b pos k, Wire.bigBE b pos k = Wire.takeBE b pos k 0 := fun b pos k => Wire.bigBE_eq b k pos
 example : ∀ k n out, Wire.pushBig k n out = Wire.pushBE k n out := Wire.pushBig_eq
 
+-- A kept session's machine and the paths behind `keep`, `vm`, `node`, `ask`
+-- and `chan` (`bound-kept-sessions`, `homoiconic-q59.78`): pieces made from
+-- data and machine values, data read back from pieces, a piece's references
+-- replaced, the pieces of a partial value counted (and counted within a cap),
+-- equality on data, a piece and its byte form, saving, and the drivers' and
+-- readers' loops over answers, events, entries and lines.
+example : @Data.toP = @Data.toPWalk := Reflect.Data.toP_eq_walk
+example : @Data.listToP = @Data.listToPWalk := Reflect.Data.listToP_eq_walk
+example : @MValue.toP = @MValue.toPWalk := Reflect.MValue.toP_eq_walk
+example : @envToP = @envToPWalk := Reflect.envToP_eq_walk
+example : @P.toData = @P.toDataWalk := Reflect.P.toData_eq_walk
+example : @P.hyd = @P.hydWalk := Reflect.P.hyd_eq_walk
+example : @P.nodes = @P.nodesWalk := Reflect.P.nodes_eq_walk
+example : @Data.nodes = @Data.nodesWalk := Reflect.Data.nodes_eq_walk
+example : ∀ {R : Type} (p : P R) (cap : Nat), p.nodesWithin cap = min p.nodes (cap + 1) :=
+  Reflect.P.nodesWithin_eq
+example : ∀ (d : Data) (cap : Nat), d.nodesWithin cap = min d.nodes (cap + 1) :=
+  Reflect.Data.nodesWithin_eq
+example : @Data.decEq = @Data.decEqWalk := Reflect.Data.decEq_eq_walk
+example : @Wire.pieceItem = @Wire.pieceItemWalk := Wire.pieceItem_eq_walk
+example : @Wire.itemPiece = @Wire.itemPieceWalk := Wire.itemPiece_eq_walk
+example : @Wire.cut = @Wire.cutWalk := Wire.cut_eq_walk
+example : @driveRun = @driveRunWalk := Reflect.driveRun_eq_walk
+example : @schedIn = @schedInWalk := Reflect.schedIn_eq_walk
+example : @autoRun = @autoRunWalk := Reflect.autoRun_eq_walk
+example : @Surface.Keep.parts = @Surface.Keep.partsWalk := Surface.Keep.parts_eq_walk
+example : @Surface.Keep.openProcs = @Surface.Keep.openProcsWalk := Surface.Keep.openProcs_eq_walk
+example : @Surface.Keep.renderNodeProcs = @Surface.Keep.renderNodeProcsWalk :=
+  Surface.Keep.renderNodeProcs_eq_walk
+example : @Surface.Keep.dataEntries = @Surface.Keep.dataEntriesWalk := Surface.Keep.dataEntries_eq_walk
+example : @Surface.Keep.dataOps = @Surface.Keep.dataOpsWalk := Surface.Keep.dataOps_eq_walk
+example : @Surface.dataEvents = @Surface.dataEventsWalk := Surface.dataEvents_eq_walk
+example : @Surface.renderProcs = @Surface.renderProcsWalk := Surface.renderProcs_eq_walk
+example : @Surface.Cross.readLines = @Surface.Cross.readLinesWalk := Surface.Cross.readLines_eq_walk
+example : @Surface.Cross.readChain = @Surface.Cross.readChainWalk := Surface.Cross.readChain_eq_walk
+
 #print axioms Reflect.runPriced_eq_within
 #print axioms Reflect.runSpace_eq_within
 #print axioms Reflect.arithCostWithin_eq
@@ -72,3 +108,29 @@ example : ∀ k n out, Wire.pushBig k n out = Wire.pushBE k n out := Wire.pushBi
 #print axioms Surface.renderData_eq_walk
 #print axioms Surface.Cross.chain_eq_walk
 #print axioms Surface.Cross.numbers_eq_walk
+#print axioms Reflect.Data.toP_eq_walk
+#print axioms Reflect.Data.listToP_eq_walk
+#print axioms Reflect.MValue.toP_eq_walk
+#print axioms Reflect.envToP_eq_walk
+#print axioms Reflect.P.toData_eq_walk
+#print axioms Reflect.P.hyd_eq_walk
+#print axioms Reflect.P.nodes_eq_walk
+#print axioms Reflect.Data.nodes_eq_walk
+#print axioms Reflect.P.nodesWithin_eq
+#print axioms Reflect.Data.nodesWithin_eq
+#print axioms Reflect.Data.decEq_eq_walk
+#print axioms Wire.pieceItem_eq_walk
+#print axioms Wire.itemPiece_eq_walk
+#print axioms Wire.cut_eq_walk
+#print axioms Reflect.driveRun_eq_walk
+#print axioms Reflect.schedIn_eq_walk
+#print axioms Reflect.autoRun_eq_walk
+#print axioms Surface.Keep.parts_eq_walk
+#print axioms Surface.Keep.openProcs_eq_walk
+#print axioms Surface.Keep.renderNodeProcs_eq_walk
+#print axioms Surface.Keep.dataEntries_eq_walk
+#print axioms Surface.Keep.dataOps_eq_walk
+#print axioms Surface.dataEvents_eq_walk
+#print axioms Surface.renderProcs_eq_walk
+#print axioms Surface.Cross.readLines_eq_walk
+#print axioms Surface.Cross.readChain_eq_walk

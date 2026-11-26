@@ -725,6 +725,51 @@ refuseKeep "$STORE" start "$EXAMPLES/missing.hom"
 refuseKeep "$OUT/no-such-store" start "$EXAMPLES/keep.hom"
 refuseKeep "$STORE" start "$EXAMPLES/keep.hom" many
 refuseKeep "$STORE" answer "$SECOND" "$OUT/twenty.hom" 1 extra
+# A kept session is bounded as a run is (bound-kept-sessions). Its lazy
+# machine has the default space and the runtime's count: a recursion whose
+# calls wait, and a loop that builds data, end in the space line of a turn and
+# not in the machine's memory (before: 542 MiB for deep and the step line). An
+# operation on data doubled forty times is charged the pieces it converts,
+# found within the budget, so it is the step line in seconds (before: 17 GiB
+# and 3 GiB, no answer). A result of 200000 items, a nest of a million, and a
+# waiting program that holds 500000 numbers or a nest of a million are written
+# and saved by walks (before: each ended the process on a full stack). A
+# waiting program that holds a million numbers is more than saving may walk.
+BOUNDSTORE="$OUT/bound-store"
+rm -rf "$BOUNDSTORE"
+mkdir -p "$BOUNDSTORE"
+kept() {
+    wanted="$1"; most="$2"; shift 2
+    start="$(date +%s)"
+    kib="$(peak_kib timeout 120 "$OUT/keep" "$BOUNDSTORE" "$@")" || { echo "keep $*: no answer in 120 s" >&2; exit 1; }
+    took=$(( $(date +%s) - start ))
+    got="$(sed -n 1p "$OUT/peak.out")"
+    if [ "$got" != "$wanted" ] || [ "$kib" -gt "$most" ]; then
+        echo "keep $*: expected '$wanted' under $most KiB, got '$(echo "$got" | cut -c1-60)' at $kib KiB" >&2
+        exit 1
+    fi
+    echo "keep $(basename "$2") => $(echo "$got" | cut -c1-60) (peak $kib KiB, ${took} s)"
+}
+kept "no result within 4000000 cells of a turn" 262144 start "$OUT/deep.hom"
+kept "no result within 4000000 cells of a turn" 262144 start "$OUT/build.hom"
+printf 'def dbl x n =\n  case n\n    0 -> x\n    m + 1 -> dbl [x, ...x] m\n\nadd (dbl [0] 40) 1\n' > "$OUT/add40.hom"
+kept "no result within 100000000 steps of a turn" 65536 start "$OUT/equal40.hom"
+kept "no result within 100000000 steps of a turn" 65536 start "$OUT/add40.hom"
+printf 'def fill n acc =\n  case n\n    0 -> acc\n    m + 1 -> fill m [m, ...acc]\n\nfill 200000 []\n' > "$OUT/kept-list.hom"
+awk 'BEGIN { printf "["; for (i = 0; i < 199999; i++) printf "%d, ", i; printf "199999]\n" }' > "$OUT/kept-list.expected"
+kept "$(cat "$OUT/kept-list.expected")" 262144 start "$OUT/kept-list.hom"
+printf 'def nest n acc =\n  case n\n    0 -> acc\n    m + 1 -> nest m [acc]\n\nnest 1000000 []\n' > "$OUT/kept-nest.hom"
+python3 -c 'print("[" * 1000001 + "]" * 1000001)' > "$OUT/kept-nest.expected"
+kept "$(cat "$OUT/kept-nest.expected")" 524288 start "$OUT/kept-nest.hom"
+printf 'def fill n acc =\n  case n\n    0 -> acc\n    m + 1 -> fill m [0, ...acc]\n\n(fn xs -> ask [1] (fn a -> xs)) (fill 500000 [])\n' > "$OUT/kept-wait.hom"
+kept "asked: [1]" 524288 start "$OUT/kept-wait.hom"
+grep -q '^root: [0-9a-f]\{64\}$' "$OUT/peak.out" || { echo "keep kept-wait.hom: no root" >&2; exit 1; }
+printf 'def nest n acc =\n  case n\n    0 -> acc\n    m + 1 -> nest m [acc]\n\n(fn xs -> ask [1] (fn a -> xs)) (nest 1000000 [])\n' > "$OUT/kept-wait-nest.hom"
+kept "asked: [1]" 524288 start "$OUT/kept-wait-nest.hom"
+grep -q '^root: [0-9a-f]\{64\}$' "$OUT/peak.out" || { echo "keep kept-wait-nest.hom: no root" >&2; exit 1; }
+printf 'def fill n acc =\n  case n\n    0 -> acc\n    m + 1 -> fill m [0, ...acc]\n\n(fn xs -> ask [1] (fn a -> xs)) (fill 1000000 [])\n' > "$OUT/kept-wait-more.hom"
+kept "the waiting program is too large to keep within 4000000 cells" 524288 start "$OUT/kept-wait-more.hom"
+echo "a kept turn is bounded in time, space and stack as a run is"
 echo "keep command checks passed"
 
 # The chan command: a program run as the first of several processes that talk
@@ -1088,6 +1133,12 @@ refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/missing.log"
 refuseVm "$OUT/no-such-store" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log"
 refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log" many
 refuseVm "$VMSTORE" start "$EXAMPLES/ask.hom" "$EXAMPLES/ask.log" 1 extra
+# A log of 100000 entries is read by a walk (bound-kept-sessions; before, it
+# ended the process on a full stack in Keep.dataEntries).
+python3 -c 'import sys; n = 100000; sys.stdout.write("[" + ", ".join("[%d, %d]" % (i + 1, 20 if i == 0 else 22 if i == 1 else i) for i in range(n)) + "]\n")' > "$OUT/long.log"
+vm start "$EXAMPLES/ask.hom" "$OUT/long.log"
+wantVm "$STANDS" "42"
+wantVm "$ENTRIES" "100000 given, 2 acted on"
 echo "vm command checks passed"
 
 # The node command: several processes applying a log, kept in a directory.
@@ -1239,4 +1290,10 @@ refuseNode "$NODESTORE" start "$EXAMPLES/missing.hom" "$EXAMPLES/ping.log"
 refuseNode "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/missing.log"
 refuseNode "$OUT/no-such-store" start "$EXAMPLES/ping.hom" "$EXAMPLES/ping.log"
 refuseNode "$NODESTORE" start "$EXAMPLES/ping.hom" "$EXAMPLES/ping.log" many
+# A log of 70000 ops is read by a walk (bound-kept-sessions). The turn that
+# reads a log is under the turn's space, which refuses one much longer.
+python3 -c 'import sys; n = 70000; ops = ["[1, [0, 0, 0]]", "[2, [1, 0]]", "[3, [0, 0, 1]]", "[4, [2, 0, 1]]", "[5, [2, 0, 1]]", "[6, [2, 1, 0]]"] + ["[%d, [1, 0]]" % (i + 7) for i in range(n - 6)]; sys.stdout.write("[" + ", ".join(ops) + "]\n")' > "$OUT/long-node.log"
+node start "$EXAMPLES/ping.hom" "$OUT/long-node.log"
+wantNode "$(sed -n 's/^entries: //p' "$OUT/node.out")" "70000 given, 6 acted on"
+wantNode "$(sed -n 's/^refused: //p' "$OUT/node.out")" "entry 6, [1, 0], cannot happen"
 echo "node command checks passed"

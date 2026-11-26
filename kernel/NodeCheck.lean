@@ -445,3 +445,13 @@ def errorsText : String := "ask [3, 3, 0] (fn s -> ask [9] (fn a -> a 1))"
         part "entries: " again == "entries: 2 given, 1 acted on" &&
         part "process 0: " again == "process 0: [2000, 7]; holds []")
       s!"keep: kept after one answer, {part "store: " mid}; resumed, {part "store: " again}, {part "process 0: " again}")
+
+/-! A long log of ops is read by a walk, not a call for each op
+    (`bound-kept-sessions`, `homoiconic-q59.78`). -/
+#eval do
+  let n := 200000
+  let ds := (List.range n).map fun i => Data.arr [.nat (i + 1), .arr [.nat 1, .nat 0]]
+  let ok := match dataOps (.arr []) 0 ds with
+    | .ok os => os.length == n
+    | .error _ => false
+  IO.println (line ok s!"a log of {n} ops is read")
