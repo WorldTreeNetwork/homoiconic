@@ -1,10 +1,10 @@
 - [x] Measure the faults on `3122521` (`kernel/CostBench.lean` `lazy` cases; probes of `keep`, `vm`, `node` built from that tree)
-- [ ] Fresh-context read of `design.md` (Opus), answered before any Lean
-- [ ] `Reflect/Store.lean`: `P.nodes`, `Data.nodes`, `nodesWithin` walks and laws, `convUnit`, the new `lstepCost`, `lstepCostWithin` and `lstepCostWithin_eq`
-- [ ] `Reflect/StoreSpace.lean`: `lowed`, `lanswered`, `lcharge`, `lmade`, `LSpace`, `LEnded`, `afford`, `lrunSpace`; theorems `lrunSpace_lrun`, `lrunSpace_ledger`, `lrunSpace_within`; restated in `StoreContract.lean`
-- [ ] `Surface/Keep.lean`: the session's space, `steps` as `lrunSpace`, `fullWithin`, the save guard, the space line; `KeepProof`, `KeepLogProof` follow
-- [ ] `Surface/Host.lean`: the count for a `PState`, the exports give the default space
-- [ ] Walks with `@[csimp]` (the table in `design.md`), restated in `WalkContract.lean`
-- [ ] Checks and controls (`design.md`, "Checks and controls"); `host/check.sh` output diffed against `3122521`
-- [ ] morphie: the six image scripts (the image links `Surface/Keep` and `Reflect/Store`)
+- [x] Fresh-context read of `design.md` (Opus), answered (`reviews/2026-11-25-advise.md`; `design.md`, "The advise read, answered"). It came after the walks in `Reflect/Store.lean`, before the rest
+- [x] `Reflect/Store.lean`: `P.nodes`, `Data.nodes`, `nodesWithin` walks and laws, `convUnit`, the new `lstepCost`, `lstepCostWithin` and `lstepCostWithin_eq`
+- [x] `Reflect/StoreSpace.lean`: `lowed`, `lanswered`, `lcharge`, `lmade`, `LSpace`, `LEnded`, `afford`, `lrunSpace`; theorems `lrunSpace_ledger` (which holds what `lrunSpace_lrun` was to say), `lrunSpace_full`, `lrunSpace_within`, and `lstepCostWithin_eq`, `lfloor_le`, `lfloorWithin_eq`; restated in `StoreContract.lean`
+- [x] `Surface/Keep.lean`: the session's space, `steps` as `lrunSpace`, `fullWithin`, the save guard, the space line; `KeepProof`, `KeepLogProof` follow
+- [x] `Surface/Host.lean`: the count for a `PState`, the exports give the default space
+- [x] Walks with `@[csimp]` (the table in `design.md`), restated in `WalkContract.lean`
+- [x] Checks and controls (`design.md`, "Checks and controls"); `host/check.sh` output diffed against `3122521`. Mac, tree `7d67ff2`: `host/check.sh` exit 0; every line it printed before is unchanged, and every `.txt` it writes and every stored root (`store`, `vm-store`, `node-store`, `handoff-store`) is byte for byte the tree before's; the new lines are the keep, vm and node bounds, `KeepCheck`'s seven, and one each in `LogCheck` and `NodeCheck`. Controls on `3122521`: `deep` 542 MiB and the step line; the two doubled operations no answer (3.4 GiB after 115 s, 17 GiB after 50 s); the list, the nest, both saves and the vm log a segfault. No failing control for the node log or for the Lean long-log checks (`design.md`, "What the build found"). Lazy `CostBench` at or under 160 ns a unit on morphie (worst 156, `text-arr`)
+- [x] morphie: the six image scripts (the image links `Surface/Keep` and `Reflect/Store`). Tree `7d67ff2`, Cloud Hypervisor 54.0: build, build-net, check (88 `ok`), check-net, check-quic, check-wire (46 `ok`) each exit 0; `host/check.sh` exit 0 (820 s). Logs and hashes in `evidence/` (not `unikernel/evidence/`, which this change does not edit)
 - [ ] Fold

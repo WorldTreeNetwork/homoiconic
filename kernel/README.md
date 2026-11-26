@@ -59,6 +59,8 @@ three (`propext`, `Classical.choice`, `Quot.sound`), with no admissions.
 | `Reflect/Channel.lean` | `classify`, which reads a payload as a channel request; `PSys`; `Settle`, `Turn`; `Event`, `Step`, `Sched`, `Network`; `stepRun`, `schedRun`, `autoRun`, the executable scheduler; `pick`, which chooses an event |
 | `Reflect/ChannelProof.lean` | A schedule leads to one configuration; a process uses only names it holds, and where a held name comes from; `PSim`, agreement of two ways of evaluating on schedules; soundness of the executable scheduler |
 | `Reflect/Store.lean` | `P`, a piece; `Store`; `Unf`, which resolves a piece; partial states; `lstep` and `lrun`, the lazy machine, with a pause; `RState` |
+| `Reflect/StoreSpace.lean` | `lowed`, `lanswered`, `lcharge`, `lmade`: the cells a lazy step makes; `LSpace`, `LEnded`, `afford`; `lrunSpace`, the lazy run priced by `lstepCost` within the fuel left and with a ledger of cells |
+| `Reflect/StoreSpaceProof.lean` | `lrunSpace_ledger`, `lrunSpace_full`, `lrunSpace_within`: a kept session's run takes `lrun`'s steps, pauses only on a step that needs the piece it names, and makes no more cells than it has |
 | `Reflect/StoreProof.lean` | Saving loses nothing; the lazy machine reaches every plain state; a missing piece is a pause; more pieces change nothing; stores that agree give the same result; a turn of the request driver from a stored continuation |
 | `Reflect/Examples.lean` | Worked cases, checked by the kernel |
 
@@ -81,8 +83,11 @@ or `case` of a number, `cons` onto a text, a variable deep in the
 environment), and `costWithin`, the charge found within a cap. Every budgeted
 run charges these (`runPriced`, run as `runPricedWithin`, proved equal): the
 run command, `--interp`, the reply bytes, requests, channels, the VM, the node
-and a kept session's lazy machine. `lake exe reflectCostBench` times the worst
-program found for each (`kernel/CostBench.lean`, `homoiconic-q59.73`). The interpreter is the same term for
+and, by its own charge (`lstepCost`, which adds the conversions its steps
+make, run as `lrunSpace`), a kept session's lazy machine. `lake exe
+reflectCostBench` times the worst program found for each, and `lazy <case>` on
+the lazy machine (`kernel/CostBench.lean`, `homoiconic-q59.73`,
+`bound-kept-sessions`). The interpreter is the same term for
 every table, so adding an operation is adding a line to a table: no proof
 changes.
 

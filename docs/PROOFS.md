@@ -388,7 +388,10 @@ theorems; `advance` is tested against it.
   bytes, the allocator, the walk's own table and the printer are measured
   (`unikernel/README.md`). P3 as stated, a bound linear in steps, is false:
   one step of `cons` onto a text makes cells without bound. The lazy machine
-  of a kept session has no space limit (`homoiconic-q59.70`). A guest of a
+  of a kept session has its own ledger (`lrunSpace`, `bound-kept-sessions`):
+  `lrunSpace_ledger`, `lrunSpace_full` and `lrunSpace_within` are the plain
+  run's theorems for the state a run ends at; that each `lowed` and
+  `lanswered` is at least what `lstep` makes is checked by reading. A guest of a
   crossing bounds what it holds by a ledger of what it made and the runtime's
   count when the ledger is spent (`harden-crossing`, `hold_stretch`). How deep data, programs, code and functions nest is
   bounded by memory and the space limit, not by the native stack: every
@@ -453,8 +456,11 @@ theorems; `advance` is tested against it.
   (`runPriced_eq_within`). That a unit of charge takes a bounded time is not
   a theorem: it is measured, at most about 160 ns on morphie for the worst
   program found for each step (`openspec/specs/bytecode-machine/spec.md`, "A
-  charge bounds a step's time"). The lazy machine of a kept session is not
-  bounded so (`homoiconic-q59.80`).
+  charge bounds a step's time"). The lazy machine of a kept session is
+  bounded the same way by its own charge, which counts the conversions its
+  steps make and is found within the fuel left (`lstepCostWithin_eq`,
+  `bound-kept-sessions`); a kept turn's time is bounded for each piece the
+  host supplies, not for the turn (`homoiconic-q59.88`).
 - **The fault state outside compiled code.** `machine_never_faults` is about
   runs that start from `load (compile t)`. `step` does fault on code no term
   compiles to (`fault_reachable_from_uncompiled`), so a machine value or state

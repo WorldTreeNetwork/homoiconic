@@ -21,3 +21,5 @@ ddb3f75707405c1884efa7a0703b0aced53751b97e274aa2d3468742c2ee1d3b  unikernel/out-
 2df72544e6e98c9bdcf98871eeba79146fd935aafacfedaaef07c71397193743  unikernel/out/reflect.elf
 129ed3bfbeff1e8ca7f5857301189c1f14b4868292edda2310b449032a802f64  unikernel/out-net/reflect-net.elf
 == done
+host-check exit 0 (820 s)
+lazybench exit 0

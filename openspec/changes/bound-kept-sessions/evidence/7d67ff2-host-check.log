@@ -1,0 +1,1161 @@
+⚠ [28/58] Replayed Reflect.Store
+warning: Reflect/Store.lean:917:0: automatically included section variable(s) unused in theorem `Reflect.lfloorWithin_eq`:
+  [Ops]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Ops] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+⚠ [30/58] Replayed Reflect.StoreSpace
+warning: Reflect/StoreSpace.lean:172:19: Variable name `h` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _h
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+⚠ [31/58] Replayed Reflect.StoreSpaceProof
+warning: Reflect/StoreSpaceProof.lean:34:0: automatically included section variable(s) unused in theorem `Reflect.afford_some`:
+  [Ops]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Ops] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Reflect/StoreSpaceProof.lean:45:0: automatically included section variable(s) unused in theorem `Reflect.afford_none`:
+  [Ops]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Ops] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Reflect/StoreSpaceProof.lean:62:0: automatically included section variable(s) unused in theorem `Reflect.LSpace.bar_le`:
+  [Ops]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Ops] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+⚠ [35/58] Replayed Reflect.HoldProof
+warning: Reflect/HoldProof.lean:104:17: This simp argument is unused:
+  hm
+
+Hint: Omit it from the simp argument list.
+  [apply] simp only
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+⚠ [55/58] Replayed Surface.Cross
+warning: Surface/Cross.lean:686:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:686:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:688:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:688:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:690:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:690:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:692:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:692:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:694:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:694:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:696:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:696:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:698:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:698:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:700:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:700:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:702:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:702:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:706:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:706:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:708:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:708:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:712:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:712:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:714:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:714:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:718:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:718:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:720:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:720:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:726:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:726:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:728:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:728:20: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+warning: Surface/Cross.lean:730:8: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+warning: Surface/Cross.lean:730:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Build completed successfully (58 jobs).
+'Reflect.reflective' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.reflective_coverage' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.reflective_env' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.tower' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.direct_deterministic' depends on axioms: [propext]
+'Reflect.direct_iff_evalFuel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.machine_correct' depends on axioms: [propext, Quot.sound]
+'Reflect.machine_exact' depends on axioms: [propext, Quot.sound]
+'Reflect.machine_never_halts' depends on axioms: [propext, Quot.sound]
+'Reflect.run_add' depends on axioms: [propext, Quot.sound]
+'Reflect.run_halted' depends on axioms: [propext]
+'Reflect.decompile_compile' depends on axioms: [propext]
+'Reflect.depth_bound' depends on axioms: [propext, Quot.sound]
+'Reflect.runUntil_eq' depends on axioms: [propext]
+'Reflect.machine_never_faults' depends on axioms: [propext]
+'Reflect.machine_never_faults_until' depends on axioms: [propext]
+'Reflect.machine_never_faults_priced' depends on axioms: [propext, Quot.sound]
+'Reflect.runPriced_run' depends on axioms: [propext, Quot.sound]
+'Reflect.runPriced_reach' depends on axioms: [propext, Quot.sound]
+'Reflect.runPriced_unit' depends on axioms: [propext, Quot.sound]
+'Reflect.machine_exact_priced' depends on axioms: [propext, Quot.sound]
+'Reflect.run_cycle' depends on axioms: [propext, Quot.sound]
+'Reflect.runPriced_cycle' depends on axioms: [propext, Quot.sound]
+'Reflect.omega_cycle' depends on axioms: [propext]
+'Reflect.forever_cycle' depends on axioms: [propext]
+'Reflect.forever_cycle_interp' depends on axioms: [propext, Quot.sound]
+'Reflect.forever_bounded' depends on axioms: [propext, Quot.sound]
+'Reflect.runSpace_run' depends on axioms: [propext, Quot.sound]
+'Reflect.runSpace_priced' depends on axioms: [propext, Quot.sound]
+'Reflect.runSpace_full' depends on axioms: [propext, Quot.sound]
+'Reflect.runSpace_within' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.trail_last' depends on axioms: [propext, Quot.sound]
+'Reflect.trail_held' depends on axioms: [propext, Quot.sound]
+'Reflect.runSpace_ledger' depends on axioms: [propext, Quot.sound]
+'Reflect.runIn_ledger' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.machine_never_faults_space' depends on axioms: [propext, Quot.sound]
+'Reflect.machine_exact_space' depends on axioms: [propext, Quot.sound]
+'Reflect.runTurn_reach' depends on axioms: [propext, Quot.sound]
+'Reflect.interact_deterministic' depends on axioms: [propext]
+'Reflect.interact_resume' depends on axioms: [propext]
+'Reflect.interact_extra' depends on axioms: [propext]
+'Reflect.interact_reflective' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.interact_coverage' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.interact_machine' depends on axioms: [propext, Quot.sound]
+'Reflect.interact_machine_exact' depends on axioms: [propext, Quot.sound]
+'Reflect.converse_finished' depends on axioms: [propext, Quot.sound]
+'Reflect.converse_waiting' depends on axioms: [propext, Quot.sound]
+'Reflect.saved_resolves' does not depend on any axioms
+'Reflect.cut_resolves' does not depend on any axioms
+'Reflect.RState.mono' does not depend on any axioms
+'Reflect.Unf.unique' does not depend on any axioms
+'Reflect.resolve_unique' depends on axioms: [propext]
+'Reflect.lazy_simulates' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lazy_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lazy_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lazy_pause' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lrun_mono' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lazy_agree' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lazy_program' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lazy_turn_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lazy_turn_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lstepCostWithin_eq' depends on axioms: [propext, Quot.sound]
+'Reflect.lfloor_le' depends on axioms: [propext, Quot.sound]
+'Reflect.lfloorWithin_eq' depends on axioms: [propext, Quot.sound]
+'Reflect.lrunSpace_ledger' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lrunSpace_full' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.lrunSpace_within' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.network_deterministic' depends on axioms: [propext]
+'Reflect.Step.comm_held' depends on axioms: [propext]
+'Reflect.Step.held_from' depends on axioms: [propext]
+'Reflect.Network.held_issued' depends on axioms: [propext]
+'Reflect.Network.held_nodup' depends on axioms: [propext, Quot.sound]
+'Reflect.network_machine' depends on axioms: [propext, Quot.sound]
+'Reflect.network_machine_exact' depends on axioms: [propext, Quot.sound]
+'Reflect.network_reflective' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.network_interpreted_exact' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.replay_true' depends on axioms: [propext, Quot.sound]
+'Reflect.auto_true' depends on axioms: [propext, Quot.sound]
+'Reflect.log_deterministic' depends on axioms: [propext]
+'Reflect.log_prefix' depends on axioms: [propext]
+'Reflect.log_again' depends on axioms: [propext]
+'Reflect.log_redeliver' depends on axioms: [propext]
+'Reflect.log_once' depends on axioms: [propext]
+'Reflect.log_restart' depends on axioms: [propext]
+'Reflect.log_interact' depends on axioms: [propext]
+'Reflect.log_machine' depends on axioms: [propext, Quot.sound]
+'Reflect.log_machine_exact' depends on axioms: [propext, Quot.sound]
+'Reflect.vm_true' depends on axioms: [propext, Quot.sound]
+'Reflect.sealed_same' depends on axioms: [propext]
+'Reflect.sealed_first' depends on axioms: [propext]
+'Reflect.signed_parent' depends on axioms: [propext]
+'Reflect.node_deterministic' depends on axioms: [propext]
+'Reflect.node_prefix' depends on axioms: [propext]
+'Reflect.node_again' depends on axioms: [propext]
+'Reflect.node_redeliver' depends on axioms: [propext]
+'Reflect.node_restart' depends on axioms: [propext]
+'Reflect.node_network' depends on axioms: [propext]
+'Reflect.node_machine' depends on axioms: [propext, Quot.sound]
+'Reflect.node_machine_exact' depends on axioms: [propext, Quot.sound]
+'Reflect.node_true' depends on axioms: [propext, Quot.sound]
+'Reflect.sealed_op_same' depends on axioms: [propext]
+'Reflect.sealed_op_first' depends on axioms: [propext]
+'Reflect.plan_step' depends on axioms: [propext, Quot.sound]
+'Reflect.step_plan' depends on axioms: [propext, Quot.sound]
+'Reflect.accepted_network' depends on axioms: [propext, Quot.sound]
+'Reflect.combine_merged' depends on axioms: [propext]
+'Reflect.merged_exact' depends on axioms: [propext]
+'Reflect.merged_once' depends on axioms: [propext]
+'Reflect.Walk.once' depends on axioms: [propext]
+'Reflect.combineTrace_walk' depends on axioms: [propext]
+'Reflect.traceRun_sched' depends on axioms: [propext, Quot.sound]
+'Reflect.runTurnMade_fst' depends on axioms: [propext, Quot.sound]
+'Reflect.turnMade_fst' depends on axioms: [propext, Quot.sound]
+'Reflect.beginMade_fst' depends on axioms: [propext, Quot.sound]
+'Reflect.stepMade_fst' depends on axioms: [propext, Quot.sound]
+'Reflect.hold_stretch' depends on axioms: [propext, Quot.sound]
+'Reflect.hold_count' depends on axioms: [propext, Quot.sound]
+'Reflect.hold_full' depends on axioms: [propext, Quot.sound]
+'Reflect.hold_entries' depends on axioms: [propext, Quot.sound]
+'Reflect.runSpaceLeft_eq_within' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Wire.made_iff' depends on axioms: [propext, Quot.sound]
+'Wire.Made.whole' depends on axioms: [propext, Quot.sound]
+'Wire.cut_function' depends on axioms: [propext, Quot.sound]
+'Wire.cut_made' depends on axioms: [propext, Quot.sound]
+'Wire.lstep_good' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Wire.lrun_good' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Wire.same_root' depends on axioms: [propext, Quot.sound]
+'Wire.save_resolves' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.state_same_root' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.restart_same_root' depends on axioms: [propext, Quot.sound]
+'Wire.save_opened' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Wire.good_root' depends on axioms: [propext, Quot.sound]
+'Wire.norm_small' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.chase_good' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.steps_good' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.advance_turn' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.start_turn' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.answer_turn' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.give_turn' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.waits_root' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.parts' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.parts_good' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.openState_good' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.openNode_good' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.plan_good' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.advance_kept' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.vmStart_kept' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.vmFrom_kept' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.nodeStart_kept' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.nodeFrom_kept' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.give_kept' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.restart_root' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.made_node' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.node_same_root' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.node_restart_same_root' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.node_restart_root' depends on axioms: [propext, Quot.sound]
+'Reflect.runPriced_eq_within' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.runSpace_eq_within' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.arithCostWithin_eq' depends on axioms: [propext, Quot.sound]
+'Surface.decimal_eq_go' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Read.digitsValue_eq_split' depends on axioms: [propext, Quot.sound]
+'Surface.Read.takeWhileB_eq_walk' depends on axioms: [propext, Quot.sound]
+'Wire.bigBE_eq' depends on axioms: [propext, Quot.sound]
+'Wire.pushBig_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.reify_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.unreify_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.comp_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.decomp_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.mentions_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.Data.same_iff' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Wire.valueData_eq_walk' depends on axioms: [propext, Quot.sound]
+'Wire.codeFits_eq_walk' depends on axioms: [propext, Quot.sound]
+'Wire.Code.same_iff' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.renderData_eq_walk' depends on axioms: [propext, Quot.sound]
+'Surface.Cross.chain_eq_walk' depends on axioms: [propext, Quot.sound]
+'Surface.Cross.numbers_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.Data.toP_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.Data.listToP_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.MValue.toP_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.envToP_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.P.toData_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.P.hyd_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.P.nodes_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.Data.nodes_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.P.nodesWithin_eq' depends on axioms: [propext, Quot.sound]
+'Reflect.Data.nodesWithin_eq' depends on axioms: [propext, Quot.sound]
+'Reflect.Data.decEq_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Wire.pieceItem_eq_walk' depends on axioms: [propext, Quot.sound]
+'Wire.itemPiece_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Wire.cut_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.driveRun_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Reflect.schedIn_eq_walk' depends on axioms: [propext, Quot.sound]
+'Reflect.autoRun_eq_walk' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.parts_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.openProcs_eq_walk' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.renderNodeProcs_eq_walk' depends on axioms: [propext, Quot.sound]
+'Surface.Keep.dataEntries_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Keep.dataOps_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.dataEvents_eq_walk' depends on axioms: [propext, Quot.sound]
+'Surface.renderProcs_eq_walk' depends on axioms: [propext, Quot.sound]
+'Surface.Cross.readLines_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Surface.Cross.readChain_eq_walk' depends on axioms: [propext, Classical.choice, Quot.sound]
+406 of 406 checks passed
+0
+Reflect/Store.lean:917:0: warning: automatically included section variable(s) unused in theorem `Reflect.lfloorWithin_eq`:
+  [Ops]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Ops] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+Reflect/StoreSpace.lean:172:19: warning: Variable name `h` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _h
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+Surface/Cross.lean:686:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:686:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:688:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:688:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:690:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:690:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:692:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:692:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:694:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:694:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:696:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:696:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:698:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:698:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:700:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:700:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:702:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:702:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:706:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:706:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:708:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:708:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:712:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:712:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:714:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:714:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:718:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:718:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:720:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:720:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:726:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:726:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:728:10: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:728:20: warning: `if_pos` has been deprecated: Use `ite_eq_left` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵p̵o̵s̵i̲t̲e̲_̲e̲q̲_̲l̲e̲f̲t̲
+Surface/Cross.lean:730:8: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+Surface/Cross.lean:730:18: warning: `if_neg` has been deprecated: Use `ite_eq_right` instead
+
+Hint: Replace the deprecated name:
+  i̵f̵_̵n̵e̵g̵i̲t̲e̲_̲e̲q̲_̲r̲i̲g̲h̲t̲
+42
+  => 42
+add 2 3
+  => 5
+mul (add 2 3) (sub 9 5)
+  => 20
+sub 2 5
+  => 0
+div 7 2
+  => 3
+div 7 0
+  => 0
+mod 7 0
+  => 7
+equal [1, [2]] [1, [2]]
+  => 1
+equal 1 [1]
+  => 0
+less 2 3
+  => 1
+less 3 3
+  => 0
+add 1 [2]
+  => []
+op 0 [20, 22]
+  => 42
+op 99 [1, 2]
+  => []
+op (fn x -> x) 1
+  => error: wrong
+op 0 (fn x -> x)
+  => error: wrong
+let add = fn a b -> a
+add 7 8
+  => 7
+def factorial n =
+  case n
+    0 -> 1
+    m + 1 -> mul n (factorial m)
+
+factorial 20
+  => 2432902008176640000
+def power b n =
+  case n
+    0 -> 1
+    m + 1 -> mul b (power b m)
+
+power 2 100
+  => 1267650600228229401496703205376
+interpret (quote (add 2 3))
+  => [0, [1, 5]]
+let id = fn x -> x
+id id
+  => <function>
+def countdown n =
+  case n
+    0 -> 0
+    m + 1 -> countdown m
+
+countdown 1000
+  => 0
+def append xs ys =
+  case xs
+    [] -> ys
+    [head, ...tail] -> [head, ...append tail ys]
+
+append [1, 2] [3, 4]
+  => [1, 2, 3, 4]
+def add a b =
+  case a
+    0 -> b
+    m + 1 -> add m b + 1
+
+add 2 3
+  => 5
+quote (fn x -> x)
+  => [1, 0]
+; code with a hole in it
+let inner = quote 41
+interpret (quote (~inner + 1))
+  => [0, [1, 42]]
+[1, [2, 3], []]
+  => [1, [2, 3], []]
+1 2
+  => error: wrong
+interpret (quote 5) 6
+  => error: wrong
+interpret [9]
+  => [2]
+def loop x = loop x
+loop 0
+  => no result within 10000 steps
+let w = fn x -> x x
+w w
+  => no result within 10000 steps
+let x = 99
+case 0
+  0 -> x
+  x -> x
+  => 99
+let x = 99
+case 3
+  m + 1 -> x
+  x -> 0
+  => 99
+let x = 99
+case [1]
+  [h, ...t] -> x
+  x -> 0
+  => 99
+fn f -> case f
+  _ -> 1
+  => <function>
+let x = 99
+case []
+  [] ->
+    let y = x
+    y
+  x -> 0
+  => 99
+[1, 2, [3, 4]]
+  => [1, 2, [3, 4]]
+case [1]
+  [h,
+...t] -> h
+  => 1
+case []
+  [
+] -> 7
+  => 7
+def even n =
+  case n
+    0 -> 1
+    m + 1 -> odd m
+def odd n =
+  case n
+    0 -> 0
+    m + 1 -> even m
+[even 10, odd 10, even 7, odd 7]
+  => [1, 0, 0, 1]
+def a x = b x
+def twice x = [x, x]
+def b x = c x
+def c x =
+  case x
+    0 -> twice 7
+    m + 1 -> a m
+[a 5, b 4, c 3]
+  => [[7, 7], [7, 7], [7, 7]]
+def a = [1, ...b]
+def b = [2]
+a
+  => [1, 2]
+def f x = add x 1
+def add a b = 99
+[f 1, add 1 1]
+  => [2, 99]
+let g = fn x -> 7
+def f x = g x
+def g x = 8
+[f 1, g 1]
+  => [7, 8]
+def f x = g x
+def g x = 1
+def g x = 2
+[f 0, g 0]
+  => [1, 2]
+def f x = h x
+def h x =
+  def p y = q y
+  def q y = [y, x, r 1]
+  p 3
+def r x = [x]
+f 9
+  => [3, 9, [1]]
+def f x = quote (~(g x))
+def g x = quote 5
+f 1
+  => [2, 5]
+def a = b
+def b = a
+a
+  => no result within 10000 steps
+case [1, 2, 3]
+  [a, b, c] -> [c, b, a]
+  => [3, 2, 1]
+case [1, 2]
+  [a, b, c] -> [c, b, a]
+  => error: wrong
+case [1, 2]
+  [a, b, c] -> [c, b, a]
+  _ -> 9
+  => 9
+case [1]
+  [a, b, ...rest] -> rest
+  other -> [other]
+  => [[1]]
+case [1, 2, 3, 4]
+  [a, b, ...rest] -> [b, a, rest]
+  => [2, 1, [3, 4]]
+case 5
+  [a, b] -> a
+  n -> [n]
+  => [5]
+def f xs =
+  case xs
+    [] -> 0
+    [a] -> [1, a]
+    [a, b] -> [2, b, a]
+    [_, _, c, ...rest] -> [3, c, rest]
+[f [], f [5], f [5, 6], f [5, 6, 7], f [5, 6, 7, 8]]
+  => [0, [1, 5], [2, 6, 5], [3, 7, []], [3, 7, [8]]]
+def f xs =
+  case xs
+    [a, b] -> 2
+    [x, ...r] -> [x, r]
+    y -> [y]
+[f [], f [5], f [5, 6], f [5, 6, 7], f 3]
+  => [[[]], [5, []], 2, [5, [6, 7]], [3]]
+case [1, 2]
+  [a, a] -> a
+  => 2
+"h\\i\n"
+  => "h\\i\n"
+""
+  => ""
+"hé →"
+  => "hé →"
+"tab\t quote\" single\'"
+  => "tab\t quote\" single'"
+["a", 'a', "", ["b"]]
+  => ["a", 97, "", ["b"]]
+equal "h\\i\n" [104, 92, 105, 10]
+  => 0
+equal "" []
+  => 0
+equal "hi" "hi"
+  => 1
+equal "hi" "ha"
+  => 0
+def count t =
+  case t
+    [] -> 0
+    [c, ...rest] ->
+      case equal c 'i'
+        0 -> count rest
+        _ -> add 1 (count rest)
+count "h\\i\n"
+  => 1
+case "hi"
+  [c, ...rest] -> [c, rest]
+  => [104, "i"]
+case ""
+  [] -> 7
+  [c, ...rest] -> 8
+  => 7
+case "hi"
+  0 -> 1
+  m + 1 -> 2
+  => error: wrong
+case "hi"
+  0 -> 1
+  m + 1 -> 2
+  t -> [t]
+  => ["hi"]
+[1, ..."hi"]
+  => [1, 104, 105]
+[1, ...""]
+  => [1]
+"a" + 1
+  => error: wrong
+op "a" 1
+  => error: wrong
+add "a" 1
+  => []
+text [104, ...codes "i"]
+  => "hi"
+codes "hé"
+  => [104, 233]
+codes ""
+  => []
+text []
+  => ""
+text "hi"
+  => "hi"
+codes [104, 105]
+  => [104, 105]
+text [55296]
+  => []
+text [104, [105]]
+  => []
+text 104
+  => []
+codes 104
+  => []
+text
+  => <function>
+let text = fn a -> 7
+text [104]
+  => 7
+interpret (quote (text [104, ...codes "i"]))
+  => [0, [1, "hi"]]
+interpret (quote ("a" + 1))
+  => [2]
+case "abc"
+  [a, b, c] -> [c, b, a]
+  => [99, 98, 97]
+case "ab"
+  [a, b, c] -> [c, b, a]
+  => error: wrong
+case "abcd"
+  [a, b, c] -> [c, b, a]
+  other -> other
+  => "abcd"
+case "abcd"
+  [a, b, ...rest] -> [a, b, rest]
+  => [97, 98, "cd"]
+case "ab"
+  [a, b, ...rest] -> [a, b, rest]
+  => [97, 98, ""]
+case "a"
+  [a, b, ...rest] -> [a, b, rest]
+  other -> [9, other]
+  => [9, "a"]
+def f xs =
+  case xs
+    [a, b] -> 2
+    [x, ...r] -> [x, r]
+    y -> [y]
+[f "", f "a", f "ab", f "abc"]
+  => [[""], [97, ""], 2, [97, "bc"]]
+reflect_run checks passed
+run /home/dorje/hom-7d67ff2-bks/host/../examples/append.hom => [1, 2, 3, 4]
+run /home/dorje/hom-7d67ff2-bks/host/../examples/code.hom => [0, [1, 42]]
+run /home/dorje/hom-7d67ff2-bks/host/../examples/factorial.hom => 265252859812191058636308480000000
+run /home/dorje/hom-7d67ff2-bks/host/../examples/forever.hom 5000 => no result within 5000 steps
+run  forever.hom 100000000 => no result within 100000000 steps (peak 0 KiB)
+run --interp=1 forever.hom 100000000 => no result within 100000000 steps (peak 0 KiB)
+run --interp=2 forever.hom 100000000 => no result within 100000000 steps (peak 0 KiB)
+run /home/dorje/hom-7d67ff2-bks/host/out/deep.hom 100000000 => no result within 4000000 cells (peak 0 KiB)
+run --interp=1 /home/dorje/hom-7d67ff2-bks/host/out/deep.hom 100000000 => no result within 4000000 cells (peak 0 KiB)
+run /home/dorje/hom-7d67ff2-bks/host/out/build.hom 100000000 => no result within 4000000 cells (peak 0 KiB)
+run --interp=2 /home/dorje/hom-7d67ff2-bks/host/out/deep.hom 100000000 100000 => no result within 100000 cells (peak 0 KiB)
+run --interp=1 /home/dorje/hom-7d67ff2-bks/host/out/build.hom 100000000 100000 => no result within 100000 cells (peak 0 KiB)
+run --interp=2 /home/dorje/hom-7d67ff2-bks/host/out/deep.hom 100000000 => no result within 100000000 steps (peak 0 KiB)
+run --interp=1 /home/dorje/hom-7d67ff2-bks/host/out/build.hom 100000000 => no result within 100000000 steps (peak 0 KiB)
+run --interp=2 /home/dorje/hom-7d67ff2-bks/host/out/build.hom 100000000 => no result within 100000000 steps (peak 0 KiB)
+run /home/dorje/hom-7d67ff2-bks/host/out/deep.hom 10000000 => no result within 4000000 cells
+run /home/dorje/hom-7d67ff2-bks/host/out/deep.hom 10000000 18446744073709551615 => no result within 10000000 steps
+run /home/dorje/hom-7d67ff2-bks/host/out/build.hom 2000000 100000 => no result within 100000 cells
+run /home/dorje/hom-7d67ff2-bks/host/out/build.hom 2000000 18446744073709551615 => no result within 2000000 steps
+run /home/dorje/hom-7d67ff2-bks/host/out/double.hom => no result within 4000000 cells (peak 0 KiB)
+run --interp /home/dorje/hom-7d67ff2-bks/host/out/double.hom => no result within 4000000 cells (peak 0 KiB)
+run --bytes largest.bytes (2 MiB) => error: unbound and 5050431 digits (3 s)
+run digits.hom, bytes, run --bytes: a million digits back the same (2 s)
+run  equal40.hom 100000000 => no result within 100000000 steps (10 s)
+run --interp=1 equal40.hom 100000000 => no result within 100000000 steps (9 s)
+run /home/dorje/hom-7d67ff2-bks/host/out/numbers.hom => no result within 4000000 cells (peak 0 KiB)
+run /home/dorje/hom-7d67ff2-bks/host/out/held.hom => no result within 4000000 cells (peak 0 KiB)
+run /home/dorje/hom-7d67ff2-bks/host/out/held-less.hom => 6004001 bytes (peak 0 KiB)
+a run that passes its space ends in the kernel's line, and an answer too large to write does
+run refused: usage: run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget [space]]   (default budget: 100000000 machine steps; default space: the kernel's, in cells)
+run refused: usage: run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget [space]]   (default budget: 100000000 machine steps; default space: the kernel's, in cells)
+run refused: run: the space must be a whole number
+run refused: run: the space must be a whole number
+run refused: run: the space must be a whole number
+run refused: run: cannot read the program file: FileNotFound
+run refused: run: cannot read the program file: FileNotFound
+run refused: run: cannot read the program file: IsDir
+run refused: run: the step budget must be a whole number
+run refused: run: the step budget must be a whole number
+run /home/dorje/hom-7d67ff2-bks/host/out/small-mul.hom 200 => 6
+run /home/dorje/hom-7d67ff2-bks/host/out/big-mul.hom 200 => no result within 200 steps
+run /home/dorje/hom-7d67ff2-bks/host/out/big-mul.hom 200000 => 99999999999999999999999999999999999999980000000000000000000000000000000000000001
+run --interp /home/dorje/hom-7d67ff2-bks/host/out/big-mul.hom 200 => no result within 200 steps
+run --interp=2 /home/dorje/hom-7d67ff2-bks/host/out/big-mul.hom 200 => no result within 200 steps
+run /home/dorje/hom-7d67ff2-bks/host/out/big-mul.hom 18000 => 99999999999999999999999999999999999999980000000000000000000000000000000000000001
+run --interp /home/dorje/hom-7d67ff2-bks/host/out/big-mul.hom 18000 => no result within 18000 steps
+run --interp /home/dorje/hom-7d67ff2-bks/host/out/big-mul.hom 200000 => 99999999999999999999999999999999999999980000000000000000000000000000000000000001
+a step budget bounds a large operation and lets a small one finish
+run command checks passed
+run --bytes append.hom (105 bytes) => [1, 2, 3, 4]
+run --bytes code.hom (1744 bytes) => [0, [1, 42]]
+run --bytes factorial.hom (98 bytes) => 265252859812191058636308480000000
+run --bytes forever.hom (52 bytes) => no result within 5000 steps
+run --bytes long.hom (79 bytes) => [20000, 19999, 19998, 19997, 19996, 19995, 19994, 19993, 199
+run --bytes wide.hom (270008 bytes) => [70000, 70000, 70000, 70000, 70000, 70000, 70000, 70000, 700
+array of 66000 items reads from source and from bytes
+run nest.hom => data a million arrays deep, printed
+run /home/dorje/hom-7d67ff2-bks/host/out/nest-equal.hom => 1
+run --bytes /home/dorje/hom-7d67ff2-bks/host/out/lams.bytes 1000 => <function>
+run --bytes --interp /home/dorje/hom-7d67ff2-bks/host/out/lams.bytes 1000 => <function>
+run --bytes /home/dorje/hom-7d67ff2-bks/host/out/zeros.bytes 1000 => no result within 1000 steps
+run --bytes /home/dorje/hom-7d67ff2-bks/host/out/long-form.bytes => bytes error: a number or length is not in its shortest form
+run --bytes /home/dorje/hom-7d67ff2-bks/host/out/empty-array.bytes => bytes error: the value is not a program
+run --bytes /home/dorje/hom-7d67ff2-bks/host/../examples/append.hom => bytes error: a kind of value that is not a number, an array, a text or a name
+run refused: usage: run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget [space]]   (default budget: 100000000 machine steps; default space: the kernel's, in cells)
+run refused: run: cannot read the program file: FileNotFound
+run --interp=0 append.hom => [1, 2, 3, 4]
+run --interp=0 code.hom => [0, [1, 42]]
+run --interp=0 factorial.hom => 265252859812191058636308480000000
+run --interp=0 identity.hom => <function>
+run --interp=0 wrong.hom => error: wrong
+run --interp=1 append.hom => [1, 2, 3, 4]
+run --interp=1 code.hom => [0, [1, 42]]
+run --interp=1 factorial.hom => 265252859812191058636308480000000
+run --interp=1 identity.hom => <function>
+run --interp=1 wrong.hom => error: wrong
+run --interp=2 append.hom => [1, 2, 3, 4]
+run --interp=2 code.hom => [0, [1, 42]]
+run --interp=2 factorial.hom => 265252859812191058636308480000000
+run --interp=2 identity.hom => <function>
+run --interp=2 wrong.hom => error: wrong
+run /home/dorje/hom-7d67ff2-bks/host/../examples/brainfuck.hom => [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 10]
+run --interp=1 brainfuck.hom => [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 10]
+run /home/dorje/hom-7d67ff2-bks/host/out/quine-again.hom => [0, [1, [0, [1, [4, [2, 0], [4, 0, [4, [4, [2, 2], [4, 0, [2, []]]], [2, []]]]]], [2, [1, [4, [2, 0], [4, 0, [4, [4, [2, 2], [4, 0, [2, []]]], [2, []]]]]]]]]]
+run --interp=2 quine.hom => [0, [1, [4, [2, 0], [4, 0, [4, [4, [2, 2], [4, 0, [2, []]]],
+run /home/dorje/hom-7d67ff2-bks/host/out/string.hom => "h\\i\n"
+run --text /home/dorje/hom-7d67ff2-bks/host/out/string.hom => h\i
+run /home/dorje/hom-7d67ff2-bks/host/out/string-again.hom => "h\\i\n"
+run /home/dorje/hom-7d67ff2-bks/host/out/string-equal.hom => 0
+run /home/dorje/hom-7d67ff2-bks/host/out/string-count.hom => 1
+run /home/dorje/hom-7d67ff2-bks/host/out/chars.hom => [97, 10, 39]
+run /home/dorje/hom-7d67ff2-bks/host/out/utf8.hom => "hé →"
+run --text /home/dorje/hom-7d67ff2-bks/host/out/utf8.hom => hé →
+run --text --interp /home/dorje/hom-7d67ff2-bks/host/out/utf8.hom => hé →
+run --text --bytes /home/dorje/hom-7d67ff2-bks/host/out/utf8.bytes => hé →
+run /home/dorje/hom-7d67ff2-bks/host/out/codes.hom => [104, 233, 32, 8594]
+run --text /home/dorje/hom-7d67ff2-bks/host/out/codes.hom => [104, 233, 32, 8594]
+run /home/dorje/hom-7d67ff2-bks/host/out/text.hom => "hi"
+run --text /home/dorje/hom-7d67ff2-bks/host/out/text.hom => hi
+run --text --interp=2 /home/dorje/hom-7d67ff2-bks/host/out/text.hom => hi
+run /home/dorje/hom-7d67ff2-bks/host/out/cons-text.hom => [1, 104, 105]
+run /home/dorje/hom-7d67ff2-bks/host/out/succ-text.hom => error: wrong
+run --text --interp /home/dorje/hom-7d67ff2-bks/host/out/succ-text.hom => error: wrong
+run --text /home/dorje/hom-7d67ff2-bks/host/../examples/append.hom => [1, 2, 3, 4]
+run --text /home/dorje/hom-7d67ff2-bks/host/out/identity.hom => <function>
+run /home/dorje/hom-7d67ff2-bks/host/out/open-string.hom => syntax error: line 1, column 1: a string that does not end on its line, or an escape other than \n \t \\ \" \'
+run /home/dorje/hom-7d67ff2-bks/host/out/text-pattern.hom => [97, 98, "cd"]
+run /home/dorje/hom-7d67ff2-bks/host/out/text-three.hom => [99, 98, 97]
+run --interp=1 string.hom => "h\\i\n"
+run --interp=1 text.hom => "hi"
+run --interp=1 cons-text.hom => [1, 104, 105]
+run --interp=1 succ-text.hom => error: wrong
+run --interp=1 text-pattern.hom => [97, 98, "cd"]
+run --interp=2 string.hom => "h\\i\n"
+run --interp=2 text.hom => "hi"
+run --interp=2 cons-text.hom => [1, 104, 105]
+run --interp=2 succ-text.hom => error: wrong
+run --interp=2 text-pattern.hom => [97, 98, "cd"]
+run /home/dorje/hom-7d67ff2-bks/host/../examples/calc.hom => "2 * (3 + 4) * 5 - 100 / (7 - 2) = 50"
+run --text /home/dorje/hom-7d67ff2-bks/host/../examples/calc.hom => 2 * (3 + 4) * 5 - 100 / (7 - 2) = 50
+run --text --interp /home/dorje/hom-7d67ff2-bks/host/../examples/calc.hom => 2 * (3 + 4) * 5 - 100 / (7 - 2) = 50
+run /home/dorje/hom-7d67ff2-bks/host/../examples/words.hom => "brown dog fox jumps lazy over quick the the\ndog fox the the lazy over brown jumps quick\nthe the quick over lazy jumps fox dog brown\n"
+run --text /home/dorje/hom-7d67ff2-bks/host/../examples/words.hom => brown dog fox jumps lazy over quick the the
+dog fox the the lazy over brown jumps quick
+the the quick over lazy jumps fox dog brown
+run --text --interp /home/dorje/hom-7d67ff2-bks/host/../examples/words.hom => brown dog fox jumps lazy over quick the the
+dog fox the the lazy over brown jumps quick
+the the quick over lazy jumps fox dog brown
+run --interp=1 calc.hom => "2 * (3 + 4) * 5 - 100 / (7 - 2) = 50"
+run --interp=1 words.hom => "brown dog fox jumps lazy over quick the the\ndog fox the th
+run --interp=1 power.hom => [[1, [0, [0, [1, [1, [6, [2, 2], [4, 1, [4, 0, [2, []]]]]]],
+run --interp=1 forever.hom => no result within 5000 steps
+run /home/dorje/hom-7d67ff2-bks/host/out/ring.hom => [1, 0, 0, 1]
+run /home/dorje/hom-7d67ff2-bks/host/out/later.hom => [1, 2]
+run /home/dorje/hom-7d67ff2-bks/host/out/bound.hom => [2, 99]
+run /home/dorje/hom-7d67ff2-bks/host/out/three.hom => [3, 2, 1]
+run /home/dorje/hom-7d67ff2-bks/host/out/other-length.hom => [9, 1, 2]
+run /home/dorje/hom-7d67ff2-bks/host/out/unread-arm.hom => 7
+run --interp /home/dorje/hom-7d67ff2-bks/host/out/unread-arm.hom => 7
+run /home/dorje/hom-7d67ff2-bks/host/out/live-arm.hom => syntax error: line 5, column 8: unbound name `ghost`
+run /home/dorje/hom-7d67ff2-bks/host/out/no-arm.hom => error: wrong
+run /home/dorje/hom-7d67ff2-bks/host/out/at-least.hom => [2, 1, [3, 4]]
+run --interp=1 ring.hom => [1, 0, 0, 1]
+run --interp=1 later.hom => [1, 2]
+run --interp=1 bound.hom => [2, 99]
+run --interp=1 three.hom => [3, 2, 1]
+run --interp=1 other-length.hom => [9, 1, 2]
+run --interp=1 no-arm.hom => error: wrong
+run --interp=1 at-least.hom => [2, 1, [3, 4]]
+run --interp=2 ring.hom => [1, 0, 0, 1]
+run /home/dorje/hom-7d67ff2-bks/host/out/nested-pattern.hom => syntax error: line 2, column 7: an item of an array pattern is a name or `_`: `[a, b]` or `[a, b, ...rest]`
+run /home/dorje/hom-7d67ff2-bks/host/out/dead-arm.hom => syntax error: line 3, column 3: this arm is never taken: an arm above it takes every array this one would
+run /home/dorje/hom-7d67ff2-bks/host/out/split-run.hom => syntax error: line 1, column 11: unbound name `g`
+run --interp=1 wide.hom => [70000, 70000, 70000, 70000, 70000, 70000, 70000, 70000, 700
+run --interp /home/dorje/hom-7d67ff2-bks/host/../examples/append.hom => [1, 2, 3, 4]
+run --bytes --interp /home/dorje/hom-7d67ff2-bks/host/out/empty-array.bytes => bytes error: the value is not a program
+run refused: run: the interpreter levels must be a whole number
+run --interp=8 /home/dorje/hom-7d67ff2-bks/host/../examples/append.hom 1000 => no result within 1000 steps
+run refused: run: the interpreter levels must be at most 8
+run refused: run: the interpreter levels must be at most 8
+run refused: run: the interpreter levels must be at most 8
+run refused: usage: run [--bytes] [--interp[=levels]] [--text] <program-file> [step-budget [space]]   (default budget: 100000000 machine steps; default space: the kernel's, in cells)
+byte form checks passed
+ask /home/dorje/hom-7d67ff2-bks/host/../examples/ask.hom /home/dorje/hom-7d67ff2-bks/host/../examples/ask.answers => asked: [1]|asked: [2, 20]|42|
+ask /home/dorje/hom-7d67ff2-bks/host/../examples/ask.hom /home/dorje/hom-7d67ff2-bks/host/../examples/ask-one.answers => asked: [1]|asked: [2, 20]|waiting|
+ask /home/dorje/hom-7d67ff2-bks/host/../examples/append.hom /home/dorje/hom-7d67ff2-bks/host/../examples/ask.answers => [1, 2, 3, 4]|
+ask /home/dorje/hom-7d67ff2-bks/host/../examples/forever.hom /home/dorje/hom-7d67ff2-bks/host/../examples/ask.answers 5000 => no result within 5000 steps of a turn|
+ask /home/dorje/hom-7d67ff2-bks/host/../examples/ask.hom /home/dorje/hom-7d67ff2-bks/host/../examples/factorial.hom => answers: not an array|
+ask refused: usage: ask <program-file> <answers-file> [step-budget]   (default budget: 100000000 machine steps for each turn)
+ask refused: usage: ask <program-file> <answers-file> [step-budget]   (default budget: 100000000 machine steps for each turn)
+ask refused: usage: ask <program-file> <answers-file> [step-budget]   (default budget: 100000000 machine steps for each turn)
+ask refused: ask: cannot read the program file: FileNotFound
+ask refused: ask: cannot read the answers file: FileNotFound
+ask refused: ask: the step budget must be a whole number
+ask command checks passed
+keep start /home/dorje/hom-7d => asked: [1] (fetched 0, wrote 48)
+keep answer a3994b309d1f5e105 => asked: [2, 20] (fetched 3, wrote 3)
+keep answer 566442f13a6f6150f => [2000, 42] (fetched 48, wrote 0)
+keep answer a3994b309d1f5e105 => asked: [2, 30] (fetched 3, wrote 3)
+keep answer 2b908d339e7e70d66 => [2000, 52] (fetched 48, wrote 0)
+keep answer a3994b309d1f5e105 => asked: [2, 20] (fetched 3, wrote 3)
+keep answer 566442f13a6f6150f => [2000, 42] (fetched 48, wrote 0)
+keep refused: usage: keep <store-dir> start <program-file> [step-budget]
+keep refused: usage: keep <store-dir> start <program-file> [step-budget]
+keep refused: usage: keep <store-dir> start <program-file> [step-budget]
+keep refused: keep: cannot read the program file: FileNotFound
+keep refused: keep: cannot open the store directory: FileNotFound
+keep refused: keep: the step budget must be a whole number
+keep refused: usage: keep <store-dir> start <program-file> [step-budget]
+keep deep.hom => no result within 4000000 cells of a turn (peak 0 KiB, 4 s)
+keep build.hom => no result within 4000000 cells of a turn (peak 0 KiB, 15 s)
+keep equal40.hom => no result within 100000000 steps of a turn (peak 0 KiB, 0 s)
+keep add40.hom => no result within 100000000 steps of a turn (peak 0 KiB, 1 s)
+keep kept-list.hom => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1 (peak 0 KiB, 1 s)
+keep kept-nest.hom => [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[ (peak 0 KiB, 6 s)
+keep kept-wait.hom => asked: [1] (peak 0 KiB, 9 s)
+keep kept-wait-nest.hom => asked: [1] (peak 0 KiB, 17 s)
+keep kept-wait-more.hom => the waiting program is too large to keep within 4000000 cell (peak 0 KiB, 9 s)
+a kept turn is bounded in time, space and stack as a run is
+keep command checks passed
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/ping.hom => schedule: [[0, 0, 0], [1, 0], [0, 0, 1], [2, 0, 1], [2, 0, 1], [2, 1, 0]]|process 0: 42; holds [#1, #0]|process 1: [41]; holds [#1, #0]|no event is offered|
+chan: the recorded schedule replays to the same text
+chan cross-deep.hom => the deep program ran on the deep data, which handed over #24
+chan: the sieve finds the primes to 30 and replays
+chan: in the sieve no process holds a name twice and none after process 2 holds #0
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/ping.hom /home/dorje/hom-7d67ff2-bks/host/out/prefix.schedule => schedule: [[0, 0, 0], [1, 0]]|process 0: waiting on [0]; holds [#0]|process 1: waiting on [2, #0]; holds [#0]|an event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/race.hom => schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 0, 1]]|process 0: []; holds [#0]|process 1: [7]; holds [#0]|process 2: waiting on [2, #0]; holds [#0]|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/race.hom /home/dorje/hom-7d67ff2-bks/host/../examples/race.schedule => schedule: [[0, 0, 5], [1, 0], [1, 0], [2, 0, 2]]|process 0: []; holds [#5]|process 1: waiting on [2, #5]; holds [#5]|process 2: [7]; holds [#5]|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/guess.hom => schedule: [[0, 0, 0], [1, 0]]|process 0: waiting on [1, #0, 7]; holds [#0]|process 1: waiting on [2, #0]; holds []|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/guess.hom /home/dorje/hom-7d67ff2-bks/host/../examples/guess.schedule => schedule: [[0, 0, 0], [1, 0]]|process 0: waiting on [1, #0, 7]; holds [#0]|process 1: waiting on [2, #0]; holds []|refused: [2, 0, 1] cannot happen|
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/number.hom => schedule: [[0, 0, 0], [1, 0]]|process 0: waiting on [1, #0, 7]; holds [#0]|process 1: waiting on [2, 0]; holds []|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/number.hom /home/dorje/hom-7d67ff2-bks/host/../examples/number.schedule => schedule: [[0, 0, 0], [1, 0]]|process 0: waiting on [1, #0, 7]; holds [#0]|process 1: waiting on [2, 0]; holds []|refused: [2, 0, 1] cannot happen|
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/number.hom /home/dorje/hom-7d67ff2-bks/host/out/number-outside.schedule => schedule: [[0, 0, 0], [1, 0], [3, 1, 9]]|process 0: waiting on [1, #0, 7]; holds [#0]|process 1: 9; holds []|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/out/quoted-start.hom => schedule: [[0, 0, 0], [1, 0], [2, 0, 1]]|process 0: []; holds [#0]|process 1: [7]; holds [#0]|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/out/nested-other.hom => schedule: [[0, 0, 0], [0, 0, 1], [1, 0], [2, 0, 1]]|process 0: []; holds [#1, #0]|process 1: [[[2, #1]]]; holds [#1, #0]|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/out/nested-1.hom => schedule: [[0, 0, 0], [0, 0, 1], [1, 0], [2, 0, 1]]|process 0: []; holds [#1, #0]|process 1: [[[2, 1]]]; holds [#0]|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/out/name-kind.hom /home/dorje/hom-7d67ff2-bks/host/out/name-kind.schedule => schedule: [[0, 0, 0]]|process 0: [0, 1, [], 1, #0]; holds [#0]|no event is offered|
+run /home/dorje/hom-7d67ff2-bks/host/out/name-text.hom => syntax error: line 1, column 1: unexpected character; programs are ASCII text
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/ping.hom /home/dorje/hom-7d67ff2-bks/host/out/twice.schedule => schedule: [[0, 0, 3], [1, 0]]|process 0: waiting on [0]; holds [#3]|process 1: waiting on [2, #3]; holds [#3]|refused: [0, 0, 3] cannot happen|
+chan /home/dorje/hom-7d67ff2-bks/host/out/outside.hom => schedule: []|process 0: waiting on [9]; holds []|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/out/outside.hom /home/dorje/hom-7d67ff2-bks/host/out/outside.schedule => schedule: [[3, 0, 41]]|process 0: 42; holds []|no event is offered|
+chan: choosing stopped at the event limit
+chan: the last line says what is offered, not what will finish
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/append.hom => schedule: []|process 0: [1, 2, 3, 4]; holds []|no event is offered|
+chan /home/dorje/hom-7d67ff2-bks/host/../examples/forever.hom - 5000 => no result within 5000 steps of a turn|
+chan /home/dorje/hom-7d67ff2-bks/host/out/outside.hom /home/dorje/hom-7d67ff2-bks/host/../examples/ask.answers => schedule: entry 0 is not an event|
+chan /home/dorje/hom-7d67ff2-bks/host/out/outside.hom /home/dorje/hom-7d67ff2-bks/host/../examples/factorial.hom => schedule: not an array|
+chan refused: usage: chan <program-file> [schedule-file | -] [step-budget] [event-limit]   (default budget: 100000000 machine steps for each turn; default limit: 10000 events)
+chan refused: usage: chan <program-file> [schedule-file | -] [step-budget] [event-limit]   (default budget: 100000000 machine steps for each turn; default limit: 10000 events)
+chan refused: chan: cannot read the program file: FileNotFound
+chan refused: chan: cannot read the schedule file: FileNotFound
+chan refused: chan: the schedule file is empty
+chan refused: chan: the step budget must be a whole number
+chan refused: chan: the event limit must be a whole number
+chan command checks passed
+vm start ask.hom ask.log => 42 (2 given, 2 acted on; state 5caf09f4481d)
+vm start ask.hom ask-one.log => waiting on [2, 20] (1 given, 1 acted on; state 56b9da7df263)
+vm from 56b9da7df263 ask.log => 42 (2 given, 1 acted on; state 5caf09f4481d)
+vm start ask.hom ask.log => 42 (2 given, 2 acted on; state 5caf09f4481d)
+vm start ask.hom ask-again.log => 42 (5 given, 2 acted on; state 5caf09f4481d)
+vm start ask.hom chain.log => 42 (2 given, 2 acted on; state 2e10c5e71af7)
+vm start ask.hom chain-signed.log => 42 (2 given, 2 acted on; state 2e10c5e71af7)
+a log entry names the one before it, and the host checks the signature
+vm start ask.hom one-mark.log => 42 (2 given, 2 acted on; state 40df2ebfb7cc)
+vm from 5caf09f4481d ask-again.log => 42 (5 given, 0 acted on; state 5caf09f4481d)
+vm start ask.hom other.log => 42 (2 given, 2 acted on; state b2ca8bcbd18d)
+vm start keep.hom keep.log => [2000, 42] (2 given, 2 acted on; state 8eeb701573dd)
+vm start keep.hom keep-one.log => waiting on [2, 20] (1 given, 1 acted on; state 9034628ca021)
+vm from 9034628ca021 keep.log => [2000, 42] (2 given, 1 acted on; state 8eeb701573dd)
+vm start ask.hom empty.log => waiting on [1] (0 given, 0 acted on; state 09776d931668)
+vm start append.hom ask.log => [1, 2, 3, 4] (2 given, 0 acted on; state efbe6b4e1dbd)
+vm refused: usage: vm <store-dir> start <program-file> <log-file> [step-budget]
+vm refused: usage: vm <store-dir> start <program-file> <log-file> [step-budget]
+vm refused: usage: vm <store-dir> start <program-file> <log-file> [step-budget]
+vm refused: vm: cannot read the program file: FileNotFound
+vm refused: vm: cannot read the log file: FileNotFound
+vm refused: vm: cannot open the store directory: FileNotFound
+vm refused: vm: the step budget must be a whole number
+vm refused: usage: vm <store-dir> start <program-file> <log-file> [step-budget]
+vm start ask.hom long.log => 42 (100000 given, 2 acted on; state 5caf09f4481d)
+vm command checks passed
+node start ping.hom ping.log => process 0: 42; holds [#1, #0]|process 1: [41]; holds [#1, #0]|entries: 6 given, 6 acted on|state: 6c77bcc77202|
+node start ping.hom ping-part.log => process 0: waiting on [1, #0, #1]; holds [#1, #0]|process 1: waiting on [2, #0]; holds [#0]|entries: 3 given, 3 acted on|state: 94c49eb326c2|
+node from 94c49eb326c2 ping.log => process 0: 42; holds [#1, #0]|process 1: [41]; holds [#1, #0]|entries: 6 given, 3 acted on|state: 6c77bcc77202|
+node start ping.hom ping.log => process 0: 42; holds [#1, #0]|process 1: [41]; holds [#1, #0]|entries: 6 given, 6 acted on|state: 6c77bcc77202|
+node start ping.hom ping-again.log => process 0: 42; holds [#1, #0]|process 1: [41]; holds [#1, #0]|entries: 10 given, 6 acted on|state: 6c77bcc77202|
+node from 6c77bcc77202 ping-again.log => process 0: 42; holds [#1, #0]|process 1: [41]; holds [#1, #0]|entries: 10 given, 0 acted on|state: 6c77bcc77202|
+node start race.hom race.log => process 0: []; holds [#5]|process 1: waiting on [2, #5]; holds [#5]|process 2: [7]; holds [#5]|entries: 4 given, 4 acted on|state: bcce6e94efb5|
+node start guess.hom guess.log => process 0: waiting on [1, #0, 7]; holds [#0]|process 1: waiting on [2, #0]; holds []|entries: 4 given, 2 acted on|refused: entry 2, [2, 0, 1], cannot happen|state: cf8baba46aea|
+node start guess.hom guess-again.log => process 0: waiting on [1, #0, 7]; holds [#0]|process 1: waiting on [2, #0]; holds []|entries: 5 given, 2 acted on|refused: entry 4, [2, 0, 1], cannot happen|state: cf8baba46aea|
+node start guess.hom guess-two.log => process 0: waiting on [1, #0, 7]; holds [#0]|process 1: waiting on [2, #0]; holds []|entries: 2 given, 2 acted on|state: cf8baba46aea|
+node start number.hom guess.log => process 0: waiting on [1, #0, 7]; holds [#0]|process 1: waiting on [2, 0]; holds []|entries: 4 given, 2 acted on|refused: entry 2, [2, 0, 1], cannot happen|state: 8df89f86b59d|
+node: a name handed over twice is held once, and the logged node restarts to the same root
+node refused: usage: node <store-dir> start <program-file> <log-file> [step-budget]
+node refused: usage: node <store-dir> start <program-file> <log-file> [step-budget]
+node refused: usage: node <store-dir> start <program-file> <log-file> [step-budget]
+node refused: node: cannot read the program file: FileNotFound
+node refused: node: cannot read the log file: FileNotFound
+node refused: node: cannot open the store directory: FileNotFound
+node refused: node: the step budget must be a whole number
+node start ping.hom long-node.log => process 0: 42; holds [#1, #0]|process 1: [41]; holds [#1, #0]|entries: 70000 given, 6 acted on|refused: entry 6, [1, 0], cannot happen|state: 6c77bcc77202|
+node command checks passed
