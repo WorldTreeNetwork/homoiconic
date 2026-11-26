@@ -8,3 +8,8 @@ import Surface.KeepProof
 import Surface.KeepLogProof
 import Surface.Chan
 import Surface.Host
+import Surface.CrossModel
+import Surface.CrossStep
+import Surface.CrossLink
+import Surface.CrossActs
+import Surface.CrossProof

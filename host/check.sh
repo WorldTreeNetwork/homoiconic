@@ -16,6 +16,7 @@ lake env lean ChannelContract.lean
 lake env lean LogContract.lean
 lake env lean NodeContract.lean
 lake env lean CrossingContract.lean
+lake env lean GuestContract.lean
 lake env lean RootContract.lean
 lake env lean WalkContract.lean
 lake env lean Surface/Check.lean

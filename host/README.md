@@ -4,7 +4,7 @@ From the repository root, run `sh host/check.sh` with Zig 0.16.0 and the
 Lean toolchain pinned in `kernel/lean-toolchain` installed. The script builds
 the package, checks `ReflectContract.lean`, `MachineContract.lean`,
 `RequestContract.lean`, `StoreContract.lean`, `ChannelContract.lean`,
-`LogContract.lean`, `NodeContract.lean`, `CrossingContract.lean` and `Surface/Check.lean`, runs
+`LogContract.lean`, `NodeContract.lean`, `CrossingContract.lean`, `GuestContract.lean` and `Surface/Check.lean`, runs
 `ReflectRun.lean`, `WireCheck.lean`, `KeepCheck.lean`, `LogCheck.lean`, `NodeCheck.lean`, `CrossCheck.lean` and `StoreCheck.lean`
 and fails on a line that starts with `FAIL`, writes the
 programs to run, compiles Lean to C and C to objects, compiles the Zig check to
