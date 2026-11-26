@@ -20,6 +20,8 @@ import Reflect.Node
 import Reflect.NodeProof
 import Reflect.Store
 import Reflect.StoreProof
+import Reflect.StoreSpace
+import Reflect.StoreSpaceProof
 import Reflect.Crossing
 import Reflect.CrossingProof
 import Reflect.Hold

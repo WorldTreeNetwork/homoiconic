@@ -75,7 +75,7 @@ lake env lean --run Surface/EmitCases.lean > "$OUT/cases.zig"
 # Preserve Lake's package identity so the initializer and imported symbols agree.
 # Only the modules the entry points import are compiled, not proof objects.
 OBJS=""
-for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Space Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store Reflect/Crossing Reflect/Hold \
+for module in Reflect/Text Reflect/Syntax Reflect/Semantics Reflect/Interpreter Reflect/Machine Reflect/RunUntil Reflect/Space Reflect/Arith Reflect/Request Reflect/Channel Reflect/Log Reflect/Node Reflect/Store Reflect/StoreSpace Reflect/Crossing Reflect/Hold \
               Wire/Cbor Wire/Form Wire/Blake3 Wire/Piece Wire/Reply \
               Surface/Read Surface/Render Surface/Run Surface/Bytes Surface/Chan Surface/Keep Surface/Cross Surface/Host; do
     name="$(echo "$module" | tr / -)"

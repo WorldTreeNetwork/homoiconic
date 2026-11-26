@@ -5,6 +5,7 @@ import Reflect.Interpreter
 import Surface.Render
 import Wire.Cbor
 import Surface.Keep
+import Reflect.StoreSpace
 open Reflect
 
 /-! The worst program found for each operation and each step of the machine's
@@ -114,16 +115,19 @@ def main (args : List String) : IO UInt32 := do
       pure 0
   | ["lazy", name, size, budget] =>
     -- The same case on the lazy machine of a kept session, with an empty
-    -- store (`Surface.Keep.steps`).
+    -- store and a ledger too large to spend (`Reflect.lrunSpace`, as
+    -- `Surface.Keep.steps` runs it; on a tree before `bound-kept-sessions`
+    -- this was `Surface.Keep.steps (fun _ => none) b s`).
     match caseTerm name size.toNat!, budget.toNat! with
     | some t, b =>
       let s : PState Wire.Ref := (load (compile t)).toP
       let t0 ← IO.monoNanosNow
-      let (e, left) := Surface.Keep.steps (fun _ => none) b s
+      let (e, left, _) := lrunSpace (fun _ => none) (LSpace.ledger (10 ^ 15)) b (10 ^ 15) s
       let r := match e with
         | .at (.halted _) => "halted"
         | .at _ => "budget"
         | .paused _ _ => "paused"
+        | .full _ => "space"
       let t1 ← IO.monoNanosNow
       let ns := t1 - t0
       IO.println s!"lazy {name} size={size} budget={b} ended={r} left={left} ms={ns / 1000000} ns/unit={(ns * 1000 / (max b 1)).toFloat / 1000.0}"

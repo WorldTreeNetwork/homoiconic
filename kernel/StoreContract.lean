@@ -96,3 +96,38 @@ example : ∀ [Ops] {R : Type} {σ σ' : Store R}, σ'.le σ → ∀ {pc : P R} 
 #print axioms Reflect.lazy_program
 #print axioms Reflect.lazy_turn_complete
 #print axioms Reflect.lazy_turn_sound
+
+-- A kept session's lazy run, priced and space-limited (`bound-kept-sessions`).
+-- Its charge is found within the fuel left, and a floor of it that converts
+-- nothing is asked first.
+example : ∀ [Ops] {R : Type} (s : PState R) (cap : Nat),
+    lstepCostWithin s cap = min (lstepCost s) (cap + 1) := Reflect.lstepCostWithin_eq
+example : ∀ [Ops] {R : Type} (s : PState R), lfloor s ≤ lstepCost s := Reflect.lfloor_le
+example : ∀ [Ops] {R : Type} (s : PState R) (cap : Nat),
+    lfloorWithin s cap = min (lfloor s) (cap + 1) := Reflect.lfloorWithin_eq
+
+-- It takes `lrun`'s steps, a pause is a step that needs the piece it names,
+-- and the cells its steps made are within its credit, or within the limit
+-- after a count at no more than three quarters of it.
+example : ∀ [Ops] {R : Type} (σ : Store R) (sp : LSpace R) (fuel credit : Nat) (s : PState R),
+    ∃ k, k ≤ fuel ∧ lrun σ k s = .at (lrunSpace σ sp fuel credit s).1.state ∧
+      (∀ r t, (lrunSpace σ sp fuel credit s).1 = .paused r t → lstep σ t = .needs r) ∧
+      LHeld σ sp credit s k (lrunSpace σ sp fuel credit s).2.2 :=
+  Reflect.lrunSpace_ledger
+
+-- It is stopped for space only when its steps would make more than its
+-- credit, so a run whose steps stay within it is not, whatever the count.
+example : ∀ [Ops] {R : Type} (σ : Store R) (sp : LSpace R) (fuel credit : Nat) (s t : PState R),
+    (lrunSpace σ sp fuel credit s).1 = .full t →
+      ∃ k, k < fuel ∧ lrun σ k s = .at t ∧ credit < lmade σ (k + 1) s :=
+  Reflect.lrunSpace_full
+example : ∀ [Ops] {R : Type} (σ : Store R) (sp : LSpace R) {fuel credit : Nat} {s : PState R},
+    lmade σ fuel s ≤ credit → ∀ t, (lrunSpace σ sp fuel credit s).1 ≠ .full t :=
+  Reflect.lrunSpace_within
+
+#print axioms Reflect.lstepCostWithin_eq
+#print axioms Reflect.lfloor_le
+#print axioms Reflect.lfloorWithin_eq
+#print axioms Reflect.lrunSpace_ledger
+#print axioms Reflect.lrunSpace_full
+#print axioms Reflect.lrunSpace_within
