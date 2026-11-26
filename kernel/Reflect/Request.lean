@@ -146,6 +146,59 @@ def driveRun (budget : Nat) : List Data → MOutcome → List Data × Stop
     | _ => ([], .unfinished)
   | _, w => ([], .finished w)
 
+/-- `driveRun` with the payloads asked so far in `acc`, newest first: a loop,
+    not a call for each answer (`homoiconic-q59.78`). -/
+def driveGo (budget : Nat) (acc : List Data) : List Data → MOutcome → List Data × Stop
+  | as, .value (.closure k e) =>
+    match runTurn budget (.running (compile payloadTerm) [.closure k e] [] []) with
+    | .halted (.value (.data p)) =>
+      match as with
+      | [] => ((p :: acc).reverse, .waiting (.closure k e))
+      | a :: rest =>
+        match runTurn budget (.running (compile (resumeTerm a)) [.closure k e] [] []) with
+        | .halted w => driveGo budget (p :: acc) rest w
+        | _ => ((p :: acc).reverse, .unfinished)
+    | .halted (.value (.closure _ _)) => (acc.reverse, .finished .wrong)
+    | .halted w => (acc.reverse, .finished w)
+    | _ => (acc.reverse, .unfinished)
+  | _, w => (acc.reverse, .finished w)
+
+theorem driveGo_eq (budget : Nat) : ∀ (as : List Data) (w : MOutcome) (acc : List Data),
+    driveGo budget acc as w = (acc.reverse ++ (driveRun budget as w).1, (driveRun budget as w).2) := by
+  intro as
+  induction as with
+  | nil =>
+    intro w acc
+    by_cases hw : ∃ k e, w = .value (.closure k e)
+    · obtain ⟨k, e, rfl⟩ := hw
+      rw [driveGo, driveRun]
+      split <;> simp_all
+    · have h' : ∀ k e, w = .value (.closure k e) → False := fun k e x => hw ⟨k, e, x⟩
+      rw [driveGo.eq_2 _ _ _ _ h', driveRun.eq_2 _ _ _ h']; simp
+  | cons a rest ih =>
+    intro w acc
+    by_cases hw : ∃ k e, w = .value (.closure k e)
+    · obtain ⟨k, e, rfl⟩ := hw
+      rw [driveGo, driveRun]
+      split
+      · simp only []
+        split
+        · rw [ih]; simp
+        · simp
+      · simp
+      · simp
+      · simp
+    · have h' : ∀ k e, w = .value (.closure k e) → False := fun k e x => hw ⟨k, e, x⟩
+      rw [driveGo.eq_2 _ _ _ _ h', driveRun.eq_2 _ _ _ h']; simp
+
+def driveRunWalk (budget : Nat) (as : List Data) (w : MOutcome) : List Data × Stop :=
+  driveGo budget [] as w
+
+omit [Ops] in
+@[csimp] theorem driveRun_eq_walk : @driveRun = @driveRunWalk := by
+  funext inst budget as w
+  simp [driveRunWalk, driveGo_eq]
+
 /-- Run a program against a list of answers on the machine. -/
 def converse (budget : Nat) (p : Term) (answers : List Data) : List Data × Stop :=
   match runTurn budget (load (compile p)) with

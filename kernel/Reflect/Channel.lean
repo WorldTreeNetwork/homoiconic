@@ -321,6 +321,35 @@ def schedIn (cells budget : Nat) : MConfig → List Event → List Event × MCon
     | .refused => ([], cfg, .refused ev)
     | .unfinished => ([], cfg, .unfinished ev)
 
+/-- `schedIn` with the events that happened so far in `acc`, newest first: a
+    loop, not a call for each event (`homoiconic-q59.78`). -/
+def schedGo (cells budget : Nat) (acc : List Event) : MConfig → List Event → List Event × MConfig × Stopped
+  | cfg, [] => (acc.reverse, cfg, .ran)
+  | cfg, ev :: evs =>
+    match stepIn cells budget cfg ev with
+    | .ok mid => schedGo cells budget (ev :: acc) mid evs
+    | .refused => (acc.reverse, cfg, .refused ev)
+    | .unfinished => (acc.reverse, cfg, .unfinished ev)
+
+theorem schedGo_eq (cells budget : Nat) : ∀ (evs : List Event) (cfg : MConfig) (acc : List Event),
+    schedGo cells budget acc cfg evs =
+      (acc.reverse ++ (schedIn cells budget cfg evs).1, (schedIn cells budget cfg evs).2)
+  | [], cfg, acc => by simp [schedGo, schedIn]
+  | ev :: evs, cfg, acc => by
+    rw [schedGo, schedIn]
+    cases stepIn cells budget cfg ev with
+    | ok mid => simp only []; rw [schedGo_eq cells budget evs mid]; simp
+    | refused => simp
+    | unfinished => simp
+
+def schedInWalk (cells budget : Nat) (cfg : MConfig) (evs : List Event) : List Event × MConfig × Stopped :=
+  schedGo cells budget [] cfg evs
+
+omit [Ops] in
+@[csimp] theorem schedIn_eq_walk : @schedIn = @schedInWalk := by
+  funext inst cells budget cfg evs
+  simp [schedInWalk, schedGo_eq]
+
 /-- The first configuration, on the machine. `none`: a run did not halt. -/
 def beginIn (cells budget : Nat) (p : Term) : Option MConfig :=
   match runTurnIn cells budget (load (compile p)) with
@@ -410,5 +439,41 @@ def autoRun (budget : Nat) : Nat → MConfig → List Event × MConfig × Stoppe
         (ev :: r.1, r.2)
       | .refused => ([], cfg, .refused ev, false)
       | .unfinished => ([], cfg, .unfinished ev, false)
+
+/-- `autoRun` with the events that happened so far in `acc`, newest first: a
+    loop (`homoiconic-q59.78`). -/
+def autoGo (budget : Nat) (acc : List Event) : Nat → MConfig → List Event × MConfig × Stopped × Bool
+  | 0, cfg => (acc.reverse, cfg, .ran, (pick cfg).isSome)
+  | limit + 1, cfg =>
+    match pick cfg with
+    | none => (acc.reverse, cfg, .ran, false)
+    | some ev =>
+      match stepRun budget cfg ev with
+      | .ok mid => autoGo budget (ev :: acc) limit mid
+      | .refused => (acc.reverse, cfg, .refused ev, false)
+      | .unfinished => (acc.reverse, cfg, .unfinished ev, false)
+
+theorem autoGo_eq (budget : Nat) : ∀ (limit : Nat) (cfg : MConfig) (acc : List Event),
+    autoGo budget acc limit cfg =
+      (acc.reverse ++ (autoRun budget limit cfg).1, (autoRun budget limit cfg).2)
+  | 0, cfg, acc => by simp [autoGo, autoRun]
+  | limit + 1, cfg, acc => by
+    rw [autoGo, autoRun]
+    cases pick cfg with
+    | none => simp
+    | some ev =>
+      simp only []
+      cases stepRun budget cfg ev with
+      | ok mid => simp only []; rw [autoGo_eq budget limit mid]; simp
+      | refused => simp
+      | unfinished => simp
+
+def autoRunWalk (budget limit : Nat) (cfg : MConfig) : List Event × MConfig × Stopped × Bool :=
+  autoGo budget [] limit cfg
+
+omit [Ops] in
+@[csimp] theorem autoRun_eq_walk : @autoRun = @autoRunWalk := by
+  funext inst budget limit cfg
+  simp [autoRunWalk, autoGo_eq]
 
 end Reflect

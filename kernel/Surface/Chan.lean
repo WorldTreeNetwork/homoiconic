@@ -38,6 +38,34 @@ def dataEvents : Nat → List Data → Except Nat (List Event)
     | some ev => (dataEvents (k + 1) ds).map (ev :: ·)
     | none => .error k
 
+/-- `dataEvents` with the events read so far in `acc`, newest first: a loop
+    (`homoiconic-q59.78`). -/
+def dataEventsGo (acc : List Event) : Nat → List Data → Except Nat (List Event)
+  | _, [] => .ok acc.reverse
+  | k, d :: ds =>
+    match dataEvent d with
+    | some ev => dataEventsGo (ev :: acc) (k + 1) ds
+    | none => .error k
+
+theorem dataEventsGo_eq : ∀ (ds : List Data) (k : Nat) (acc : List Event),
+    dataEventsGo acc k ds = (dataEvents k ds).map (acc.reverse ++ ·)
+  | [], k, acc => by simp [dataEventsGo, dataEvents, Except.map]
+  | d :: ds, k, acc => by
+    rw [dataEventsGo, dataEvents]
+    cases dataEvent d with
+    | none => rfl
+    | some ev =>
+      simp only []
+      rw [dataEventsGo_eq ds (k + 1)]
+      cases dataEvents (k + 1) ds <;> simp [Except.map]
+
+def dataEventsWalk (k : Nat) (ds : List Data) : Except Nat (List Event) := dataEventsGo [] k ds
+
+@[csimp] theorem dataEvents_eq_walk : @dataEvents = @dataEventsWalk := by
+  funext k ds
+  rw [dataEventsWalk, dataEventsGo_eq]
+  cases dataEvents k ds <;> simp [Except.map]
+
 def renderProcs : Nat → List (Proc MValue MOutcome) → String
   | _, [] => ""
   | i, q :: qs =>
@@ -46,6 +74,30 @@ def renderProcs : Nat → List (Proc MValue MOutcome) → String
        | .waiting _ p => "waiting on " ++ renderData p
        | .finished w => renderMOutcome w) ++
       "; holds " ++ renderData (.arr (q.held.map .name)) ++ "\n" ++ renderProcs (i + 1) qs
+
+/-- One process's line of `renderProcs`. -/
+def renderProc (i : Nat) (q : Proc MValue MOutcome) : String :=
+  s!"process {i}: " ++
+    (match q.status with
+     | .waiting _ p => "waiting on " ++ renderData p
+     | .finished w => renderMOutcome w) ++
+    "; holds " ++ renderData (.arr (q.held.map .name)) ++ "\n"
+
+/-- `renderProcs` after `acc`, as a loop (`homoiconic-q59.78`). -/
+def renderProcsGo : Nat → String → List (Proc MValue MOutcome) → String
+  | _, acc, [] => acc
+  | i, acc, q :: qs => renderProcsGo (i + 1) (acc ++ renderProc i q) qs
+
+theorem renderProcsGo_eq : ∀ (qs : List (Proc MValue MOutcome)) (i : Nat) (acc : String),
+    renderProcsGo i acc qs = acc ++ renderProcs i qs
+  | [], i, acc => by simp [renderProcsGo, renderProcs]
+  | q :: qs, i, acc => by
+    rw [renderProcsGo, renderProcsGo_eq qs, renderProcs, String.append_assoc]; rfl
+
+def renderProcsWalk (i : Nat) (qs : List (Proc MValue MOutcome)) : String := renderProcsGo i "" qs
+
+@[csimp] theorem renderProcs_eq_walk : @renderProcs = @renderProcsWalk := by
+  funext i qs; simp [renderProcsWalk, renderProcsGo_eq]
 
 /-- The schedule that happened, each process, and how the run stopped. `more`:
     `pick` offers a next event. -/

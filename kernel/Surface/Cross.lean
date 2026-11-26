@@ -636,6 +636,107 @@ def readLines (who : String) : Nat → List String → Record → Except String 
       readLines who (k + 1) ls { r with procs := r.procs ++ [(l.drop 5).toString] }
     else .error s!"record {who}: line {k} is not read"
 
+/-- `r` with the entries and the process lines read since it was last set,
+    each list newest first, put after its own. -/
+def Record.with (r : Record) (es : List Data) (ps : List String) : Record :=
+  { r with entries := r.entries ++ es.reverse, procs := r.procs ++ ps.reverse }
+
+/-- `readLines` with the entries and process lines read so far kept newest
+    first and put in order once at the end, so reading a record takes time
+    linear in its lines, not quadratic (`homoiconic-q59.78`). -/
+def readLinesGo (who : String) : Nat → List String → Record → List Data → List String →
+    Except String Record
+  | _, [], r, es, ps => .ok (r.with es ps)
+  | k, l :: ls, r, es, ps =>
+    if l == "" then readLinesGo who (k + 1) ls r es ps
+    else if l == "form 2" then readLinesGo who (k + 1) ls { r with form := true } es ps
+    else if l.startsWith "me " then readLinesGo who (k + 1) ls { r with me := (l.drop 3).toString } es ps
+    else if l.startsWith "peer " then readLinesGo who (k + 1) ls { r with peer := (l.drop 5).toString } es ps
+    else if l.startsWith "budget " then
+      match numbersText (l.drop 7).toString with
+      | some [s, c] => readLinesGo who (k + 1) ls { r with budget := [s, c] } es ps
+      | _ => .error s!"record {who}: line {k} is not read"
+    else if l.startsWith "own " then
+      match numbersText (l.drop 4).toString with
+      | some [s, c, h] => readLinesGo who (k + 1) ls { r with own := [s, c, h] } es ps
+      | _ => .error s!"record {who}: line {k} is not read"
+    else if l.startsWith "entry " then
+      match readData (l.drop 6).toString with
+      | some d => readLinesGo who (k + 1) ls r (d :: es) ps
+      | none => .error s!"record {who}: line {k} is not read"
+    else if l.startsWith "head " then
+      match ((l.drop 5).toString.splitOn " ") with
+      | [n, name] =>
+        match numberWord n, readData name with
+        | some n, some d => readLinesGo who (k + 1) ls { r with head := some (n, d) } es ps
+        | _, _ => .error s!"record {who}: line {k} is not read"
+      | _ => .error s!"record {who}: line {k} is not read"
+    else if l.startsWith "proc " then
+      readLinesGo who (k + 1) ls r es ((l.drop 5).toString :: ps)
+    else .error s!"record {who}: line {k} is not read"
+
+theorem readLinesGo_eq (who : String) : ∀ (ls : List String) (k : Nat) (r : Record)
+    (es : List Data) (ps : List String),
+    readLinesGo who k ls r es ps = readLines who k ls (r.with es ps)
+  | [], k, r, es, ps => by simp [readLinesGo, readLines]
+  | l :: ls, k, r, es, ps => by
+    have ih := readLinesGo_eq who ls (k + 1)
+    rw [readLinesGo, readLines]
+    by_cases h : (l == "") = true
+    · rw [if_pos h, if_pos h]
+      exact ih _ _ _
+    rw [if_neg h, if_neg h]
+    by_cases h : (l == "form 2") = true
+    · rw [if_pos h, if_pos h]
+      exact ih _ _ _
+    rw [if_neg h, if_neg h]
+    by_cases h : (l.startsWith "me ") = true
+    · rw [if_pos h, if_pos h]
+      exact ih _ _ _
+    rw [if_neg h, if_neg h]
+    by_cases h : (l.startsWith "peer ") = true
+    · rw [if_pos h, if_pos h]
+      exact ih _ _ _
+    rw [if_neg h, if_neg h]
+    by_cases h : (l.startsWith "budget ") = true
+    · rw [if_pos h, if_pos h]
+      split
+      · exact ih _ _ _
+      · rfl
+    rw [if_neg h, if_neg h]
+    by_cases h : (l.startsWith "own ") = true
+    · rw [if_pos h, if_pos h]
+      split
+      · exact ih _ _ _
+      · rfl
+    rw [if_neg h, if_neg h]
+    by_cases h : (l.startsWith "entry ") = true
+    · rw [if_pos h, if_pos h]
+      split
+      · rw [ih]; congr 1; simp [Record.with]
+      · rfl
+    rw [if_neg h, if_neg h]
+    by_cases h : (l.startsWith "head ") = true
+    · rw [if_pos h, if_pos h]
+      split
+      · split
+        · exact ih _ _ _
+        · rfl
+      · rfl
+    rw [if_neg h, if_neg h]
+    by_cases h : (l.startsWith "proc ") = true
+    · rw [if_pos h, if_pos h]
+      rw [ih]; congr 1; simp [Record.with]
+    rw [if_neg h, if_neg h]
+
+def readLinesWalk (who : String) (k : Nat) (ls : List String) (r : Record) : Except String Record :=
+  readLinesGo who k ls r [] []
+
+@[csimp] theorem readLines_eq_walk : @readLines = @readLinesWalk := by
+  funext who k ls r
+  rw [readLinesWalk, readLinesGo_eq]
+  simp [Record.with]
+
 def readRecord (who : String) (bytes : ByteArray) : Except String Record := do
   match String.fromUTF8? bytes with
   | none => .error s!"record {who}: not text"
@@ -660,6 +761,52 @@ def readChain (who : String) (prev : Data) : Nat → List Data → Except String
         let r ← readChain who (Keep.entryName (.arr [.arr [.nat 0, parent, .nat n], body])) (k + 1) ds
         pure (note :: r.1, r.2)
   | k, _ :: _ => .error s!"log {who}: entry {k} has no link"
+
+/-- `readChain` with the notes read so far in `acc`, newest first: a loop
+    (`homoiconic-q59.78`). -/
+def readChainGo (who : String) (acc : List Note) (prev : Data) : Nat → List Data →
+    Except String (List Note × Data)
+  | _, [] => .ok (acc.reverse, prev)
+  | k, .arr [.arr [.nat 0, parent, .nat n], body] :: ds =>
+    if parent != prev then .error s!"log {who}: entry {k} does not name the entry before it"
+    else if n != k then .error s!"log {who}: entry {k} is out of order"
+    else
+      match dataNote body with
+      | none => .error s!"log {who}: entry {k} is not an entry"
+      | some note =>
+        readChainGo who (note :: acc) (Keep.entryName (.arr [.arr [.nat 0, parent, .nat n], body]))
+          (k + 1) ds
+  | k, _ :: _ => .error s!"log {who}: entry {k} has no link"
+
+theorem readChainGo_eq (who : String) : ∀ (ds : List Data) (acc : List Note) (prev : Data) (k : Nat),
+    readChainGo who acc prev k ds =
+      (readChain who prev k ds).map fun r => (acc.reverse ++ r.1, r.2)
+  | [], acc, prev, k => by simp [readChainGo, readChain, Except.map]
+  | d :: ds, acc, prev, k => by
+    by_cases h : ∃ parent n body, d = .arr [.arr [.nat 0, parent, .nat n], body]
+    · obtain ⟨parent, n, body, rfl⟩ := h
+      rw [readChainGo, readChain]
+      split
+      · rfl
+      · split
+        · rfl
+        · cases dataNote body with
+          | none => rfl
+          | some note =>
+            simp only [bind, Except.bind, pure, Except.pure]
+            rw [readChainGo_eq who ds]
+            cases readChain who _ (k + 1) ds <;> simp [Except.map]
+    · have h' : ∀ parent n body, d = .arr [.arr [.nat 0, parent, .nat n], body] → False :=
+        fun p n b e => h ⟨p, n, b, e⟩
+      rw [readChainGo.eq_3 _ _ _ _ _ _ h', readChain.eq_3 _ _ _ _ _ h']; rfl
+
+def readChainWalk (who : String) (prev : Data) (k : Nat) (ds : List Data) :
+    Except String (List Note × Data) := readChainGo who [] prev k ds
+
+@[csimp] theorem readChain_eq_walk : @readChain = @readChainWalk := by
+  funext who prev k ds
+  rw [readChainWalk, readChainGo_eq]
+  cases readChain who prev k ds <;> simp [Except.map]
 
 /-- The notes of a record, after its chain and its head are checked. -/
 def recordNotes (who : String) (r : Record) : Except String (List Note) := do

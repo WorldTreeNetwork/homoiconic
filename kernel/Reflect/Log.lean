@@ -56,6 +56,16 @@ mutual
       | _, isFalse h => isFalse (fun e => h (List.cons.inj e).2)
 end
 
+/-- `Data.decEq` as the compiler runs it: `Data.same`, a walk over a list of
+    work that decides equality (`Data.same_iff`), so comparing data nested
+    deeper than the native stack does not end the process
+    (`homoiconic-q59.78`). Two proofs that a proposition is decidable are
+    equal, so this is `Data.decEq`. -/
+def Data.decEqWalk (a b : Data) : Decidable (a = b) := decidable_of_iff _ (Data.same_iff a b)
+
+@[csimp] theorem Data.decEq_eq_walk : @Data.decEq = @Data.decEqWalk := by
+  funext a b; exact Subsingleton.elim _ _
+
 instance : DecidableEq Data := Data.decEq
 
 /-- Membership by equality. The derived `==` on data is not used: nothing is
