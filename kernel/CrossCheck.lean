@@ -72,6 +72,15 @@ def entryWith (body : String) (record : String) : Nat :=
 
 def lie (record : String) : String := reseal record.toUTF8
 
+/-- Two guests run to the end in one process have closed with nothing in
+    flight: neither keeps a packet the other has not counted, and neither has
+    accepted a packet it has not worked. -/
+def closedQuiet (path : String) (far takeNew : Bool) : IO Bool := do
+  let p ← bytesOf path
+  let ba := simulateWith p { frame := 100000, exchanges := 40, far, takeNew }
+  pure (ba.1.closed && ba.2.closed && ba.1.sent.isEmpty && ba.2.sent.isEmpty &&
+    ba.1.inbox.isEmpty && ba.2.inbox.isEmpty)
+
 def replace (record old new : String) : String := String.intercalate new (record.splitOn old)
 
 def main : IO Unit := do
@@ -92,6 +101,16 @@ def main : IO Unit := do
     ["schedule: [[0, 0, 0], [1, 0], [1, 0], [2, 0, 1]]", "places b: []"]
   accepted "a start stays near and its send finds a local receiver" race false false
     ["places a: [0, 1, 2]", "process 0: [1, 2]; holds [#0]"]
+  -- The pairs above closed with nothing in flight. The theorems of
+  -- `GuestContract.lean` speak of such pairs; that closing leaves a pair so is
+  -- not proved (`homoiconic-q59.85`), and this is its test.
+  let mut quiet := true
+  for (path, far, takeNew) in [(race, true, false), (race, true, true),
+      ("../examples/cross-reply.hom", true, false), ("../examples/cross-name.hom", true, false),
+      ("../examples/cross-held.hom", true, false), ("../examples/race.hom", false, false),
+      (race, false, false)] do
+    if !(← closedQuiet path far takeNew) then quiet := false
+  truth "the pairs above closed with nothing in flight" quiet
   let (p, a, b) ← records race true false
   let (_, a', b') ← records race true true
   let chk := fun (x y : String) => check p x.toUTF8 y.toUTF8
