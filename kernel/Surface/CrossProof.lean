@@ -1090,14 +1090,21 @@ theorem honest_combine {s : Pair} (h : Reach s) (hq : s.Quiet) :
     · exact c.dirB.calm c.dirA hsa hib x hx
 
 /-- Where nothing is in flight and `a` has begun the program it was given,
-    the check accepts the two logs with the budgets `a` ran with, and what the
-    replay reaches is, at each guest's places, the processes that guest
-    holds. -/
+    `accept` accepts the two logs with the budgets `a` ran with; the check's
+    own replay (`traceRun`, from where the program begins) runs to the end, to
+    the same configuration; and what the replay reaches is, at each guest's
+    places, the processes that guest holds: as many places as processes, and
+    the same processes in order. -/
 theorem honest_accept {s : Pair} {t : Term} (h : Reach s) (hq : s.Quiet) (hp : s.prog = some t)
     (hb : s.a.waiting = false) :
-    ∃ tr last cfg,
+    ∃ tr last c₀ cfg,
       combineTrace s.a.log.reverse s.b.log.reverse = some (tr, last) ∧
+      beginIn s.a.cells s.a.budget t = some c₀ ∧
       accept s.a.cells s.a.budget t s.a.log.reverse s.b.log.reverse = some (traceEvents tr, cfg) ∧
+      (∀ (places : Side → List Nat) (pa pb : Nat),
+        (traceRun s.a.cells s.a.budget places c₀ pa pb tr).stopped = .ran ∧
+        (traceRun s.a.cells s.a.budget places c₀ pa pb tr).cfg = cfg) ∧
+      last.placeA.length = s.a.cfg.procs.length ∧ last.placeB.length = s.b.cfg.procs.length ∧
       last.placeA.filterMap (cfg.procs[·]?) = s.a.cfg.procs ∧
       last.placeB.filterMap (cfg.procs[·]?) = s.b.cfg.procs := by
   obtain ⟨tr, last, hc⟩ := honest_combine h hq
@@ -1127,9 +1134,12 @@ theorem honest_accept {s : Pair} {t : Term} (h : Reach s) (hq : s.Quiet) (hp : s
     have hla : ra.map (·.1) = s.a.log.reverse := c.dirA.log
     have hlb : rb.map (·.1) = s.b.log.reverse := c.dirB.log
     rw [← hla, ← hlb] at hc ⊢
-    obtain ⟨cfg, hacc, hpa, hpb⟩ := replay_agrees c.begun c.runA runB
+    obtain ⟨cfg, hacc, htr, hna, hnb, hpa, hpb⟩ := replay_agrees c.begun c.runA runB
       (fun r hr k hk => (c.dirA.link r hr k hk).1) (fun r hr k hk => (c.dirB.link r hr k hk).1) hc
-    exact ⟨tr, last, cfg, hc, hacc, by rw [hpa]; exact c.dirA.procs, by rw [hpb]; exact c.dirB.procs⟩
+    exact ⟨tr, last, c₀, cfg, hc, c.begun, hacc, htr,
+      by rw [hna]; exact congrArg List.length c.dirA.procs,
+      by rw [hnb]; exact congrArg List.length c.dirB.procs,
+      by rw [hpa]; exact c.dirA.procs, by rw [hpb]; exact c.dirB.procs⟩
 
 /-- Where nothing is in flight, each guest's acknowledgements are in the order
     the other took its crossings. -/

@@ -9,6 +9,7 @@ import Surface.KeepLogProof
 import Surface.Chan
 import Surface.Host
 import Surface.CrossModel
+import Surface.CrossHarness
 import Surface.CrossStep
 import Surface.CrossLink
 import Surface.CrossActs

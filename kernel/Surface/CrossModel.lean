@@ -17,7 +17,7 @@ What the model assumes, and nothing else:
   `Wire.read` and `Guest.batch` writes them with `Wire.write`
   (`Guest.take_eq`, `Guest.batch_eq`); that `Wire.read (Wire.write d)` gives
   `d` back is tested (P4), not proved, so it is a hypothesis wherever bytes
-  are spoken of (`Reach.exchange`).
+  are spoken of (`ReadsBack`, `Reach.simulate` in `Surface.CrossHarness`).
 * **The transport.** A batch a guest takes is one its peer made, at some
   earlier time, with some room. Nothing else is assumed of delivery: a batch
   may be lost, taken twice, or taken after a later one. So no order is assumed

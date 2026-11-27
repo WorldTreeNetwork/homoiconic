@@ -1444,10 +1444,232 @@ theorem Agree.first {c₀ : MConfig} {st : Status MValue MOutcome} (h : c₀ = �
     · simp [Mix.first, Mix.places] at hi
   · intro s a ha; cases s <;> simp [Local.init] at ha
 
+/-! The check's own replay. `Surface.Cross.checkedAll` replays with
+    `traceRun`, which charges each entry and refuses an answer from outside;
+    `accept` replays with `schedIn`. For logs a guest's log allows they are the
+    same replay. -/
+
+theorem SideStep.inside {cells budget : Nat} {s : Side} {L M : Local} {r : Note × Data}
+    (h : SideStep cells budget s L r M) : ∀ i x, r.1 ≠ .did (.answer i x) := by
+  intro i x he
+  cases h with
+  | did h free inside par =>
+    simp only [Note.did.injEq] at he
+    subst he
+    simp [Event.isAnswer] at inside
+  | _ => cases he
+
+/-- A guest's log has no answer from outside. -/
+theorem SideRun.inside {cells budget : Nat} {s : Side} {L F : Local} {rs : List (Note × Data)}
+    (h : SideRun cells budget s L rs F) : ∀ r ∈ rs, ∀ i x, r.1 ≠ .did (.answer i x) := by
+  induction h with
+  | nil => intro r hr; simp at hr
+  | cons h _ ih =>
+    intro r hr
+    rcases List.mem_cons.mp hr with rfl | hr
+    · exact h.inside
+    · exact ih r hr
+
+omit [Ops] in
+/-- Only an answer from outside is placed as one. -/
+theorem Mix.place_inside {m m' : Mix} {s : Side} {n : Note} {evs : List Event}
+    (h : m.place s n = some (m', evs)) (hn : ∀ i x, n ≠ .did (.answer i x)) :
+    evs.find? isAnswer = none := by
+  cases n with
+  | did ev =>
+    cases ev with
+    | fresh i k =>
+      simp only [Mix.place] at h
+      cases hf : m.free s i <;> simp [hf] at h
+      obtain ⟨_, rfl⟩ := h
+      simp [isAnswer]
+    | spawn i =>
+      simp only [Mix.place] at h
+      cases hf : m.free s i <;> simp [hf] at h
+      obtain ⟨_, rfl⟩ := h
+      simp [isAnswer]
+    | comm i j =>
+      simp only [Mix.place] at h
+      split at h
+      · cases h; simp [isAnswer]
+      · cases h
+    | answer i x => exact absurd rfl (hn i x)
+  | out i k =>
+    simp only [Mix.place] at h
+    split at h
+    · split at h
+      · cases h; rfl
+      · cases h
+    · cases h
+  | spawnIn k =>
+    simp only [Mix.place] at h
+    split at h
+    · cases h; simp [isAnswer]
+    · cases h
+  | sendIn k j =>
+    simp only [Mix.place] at h
+    split at h
+    · cases h; simp [isAnswer]
+    · cases h
+  | ack k i =>
+    simp only [Mix.place] at h
+    split at h
+    · split at h
+      · cases h; rfl
+      · cases h
+    · cases h
+  | held _ => simp only [Mix.place] at h; cases h; rfl
+  | full _ => simp only [Mix.place] at h; cases h; rfl
+
+omit [Ops] in
+/-- Each entry of the walk's trace is an entry of one of the logs, with the
+    events its placing gave. -/
+theorem mix_trace : ∀ (fuel : Nat) (m : Mix) (a b : List Note) (t : List (Side × Note × List Event))
+    (last : Mix), mix fuel m a b = some (t, last) →
+    ∀ e ∈ t, (e.2.1 ∈ a ∨ e.2.1 ∈ b) ∧ ∃ (m₁ m₂ : Mix), m₁.place e.1 e.2.1 = some (m₂, e.2.2) := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro m a b t last h
+    cases a with
+    | nil =>
+      cases b with
+      | nil =>
+        simp only [mix] at h
+        split at h
+        · cases h; intro e he; simp at he
+        · cases h
+      | cons y ys => simp [mix] at h
+    | cons x xs => simp [mix] at h
+  | succ fuel ih =>
+    intro m a b t last h
+    cases a with
+    | nil =>
+      cases b with
+      | nil =>
+        simp only [mix] at h
+        split at h
+        · cases h; intro e he; simp at he
+        · cases h
+      | cons y ys =>
+        simp only [mix] at h
+        split at h
+        · next m' es hp =>
+          cases hr : mix fuel m' [] ys with
+          | none => simp [hr] at h
+          | some r =>
+            obtain ⟨t', last'⟩ := r
+            simp [hr] at h
+            obtain ⟨rfl, rfl⟩ := h
+            intro e he
+            rcases List.mem_cons.mp he with rfl | he
+            · exact ⟨.inr List.mem_cons_self, m, m', hp⟩
+            · obtain ⟨hm, hpl⟩ := ih m' [] ys t' last' hr e he
+              refine ⟨?_, hpl⟩
+              rcases hm with hm | hm
+              · exact .inl hm
+              · exact .inr (List.mem_cons_of_mem _ hm)
+        · cases h
+    | cons x xs =>
+      simp only [mix] at h
+      split at h
+      · next m' es hp =>
+        cases hr : mix fuel m' xs b with
+        | none => simp [hr] at h
+        | some r =>
+          obtain ⟨t', last'⟩ := r
+          simp [hr] at h
+          obtain ⟨rfl, rfl⟩ := h
+          intro e he
+          rcases List.mem_cons.mp he with rfl | he
+          · exact ⟨.inl List.mem_cons_self, m, m', hp⟩
+          · obtain ⟨hm, hpl⟩ := ih m' xs b t' last' hr e he
+            refine ⟨?_, hpl⟩
+            rcases hm with hm | hm
+            · exact .inl (List.mem_cons_of_mem _ hm)
+            · exact .inr hm
+      · split at h
+        · next y ys' =>
+          split at h
+          · next m' es hp =>
+            cases hr : mix fuel m' (x :: xs) ys' with
+            | none => simp [hr] at h
+            | some r =>
+              obtain ⟨t', last'⟩ := r
+              simp [hr] at h
+              obtain ⟨rfl, rfl⟩ := h
+              intro e he
+              rcases List.mem_cons.mp he with rfl | he
+              · exact ⟨.inr List.mem_cons_self, m, m', hp⟩
+              · obtain ⟨hm, hpl⟩ := ih m' (x :: xs) ys' t' last' hr e he
+                refine ⟨?_, hpl⟩
+                rcases hm with hm | hm
+                · exact .inl hm
+                · exact .inr (List.mem_cons_of_mem _ hm)
+          · cases h
+        · cases h
+
+/-- When a schedule runs to the end, so does each part of it. -/
+theorem schedIn_split {cells budget : Nat} : ∀ (xs ys : List Event) (cfg : MConfig),
+    (schedIn cells budget cfg (xs ++ ys)).2.2 = .ran →
+    ∃ mid, schedIn cells budget cfg xs = (xs, mid, .ran) := by
+  intro xs
+  induction xs with
+  | nil => intro ys cfg _; exact ⟨cfg, rfl⟩
+  | cons x xs ih =>
+    intro ys cfg h
+    simp only [List.cons_append] at h
+    cases hs : stepIn cells budget cfg x with
+    | ok m =>
+      simp only [schedIn, hs] at h
+      obtain ⟨mid, hmid⟩ := ih ys m h
+      exact ⟨mid, by simp [schedIn, hs, hmid]⟩
+    | refused => simp [schedIn, hs] at h
+    | unfinished => simp [schedIn, hs] at h
+
+/-- The check's replay runs to the end wherever `schedIn` does on the same
+    trace, when no entry stands for an answer from outside, and reaches the
+    same configuration. With `traceRun_sched` the two replays are one. -/
+theorem traceRun_ran {cells budget : Nat} (places : Side → List Nat) :
+    ∀ (t : List (Side × Note × List Event)) (cfg : MConfig) (pa pb : Nat),
+    (∀ e ∈ t, e.2.2.find? isAnswer = none) →
+    (schedIn cells budget cfg (traceEvents t)).2.2 = .ran →
+    (traceRun cells budget places cfg pa pb t).stopped = .ran ∧
+      (traceRun cells budget places cfg pa pb t).cfg =
+        (schedIn cells budget cfg (traceEvents t)).2.1 := by
+  intro t
+  induction t with
+  | nil => intro cfg pa pb _ _; exact ⟨rfl, rfl⟩
+  | cons e rest ih =>
+    obtain ⟨s, n, evs⟩ := e
+    intro cfg pa pb hno h
+    have hte : traceEvents ((s, n, evs) :: rest) = evs ++ traceEvents rest := by
+      simp [traceEvents]
+    rw [hte] at h ⊢
+    obtain ⟨mid, hmid⟩ := schedIn_split evs (traceEvents rest) cfg h
+    have happ := schedIn_append cells budget cfg mid evs (traceEvents rest) hmid
+    rw [happ] at h ⊢
+    simp only at h ⊢
+    have hf : evs.find? isAnswer = none := hno (s, n, evs) List.mem_cons_self
+    have hq := runEvents_sched cells budget cfg evs
+    rw [hmid] at hq
+    rw [traceRun]
+    simp only [hf]
+    generalize runEvents cells budget cfg evs = q at hq ⊢
+    obtain ⟨evs', mid', stop, x, y⟩ := q
+    simp only [Prod.mk.injEq] at hq
+    obtain ⟨rfl, rfl, rfl⟩ := hq
+    have ih' := fun pa pb => ih mid' pa pb (fun e he => hno e (List.mem_cons_of_mem _ he)) h
+    cases s with
+    | a => exact ih' _ _
+    | b => exact ih' _ _
+
 /-- Two logs, each what a guest's log allows from that guest's first state,
     every crossing taken as the packet made for it. If they combine, the check
     accepts them with the budget they were run with, and what the replay
-    reaches, at each guest's places, is that guest's processes. -/
+    reaches, at each guest's places, is that guest's processes: as many places
+    as processes, and the same processes in order. The check's own replay
+    (`traceRun`) runs to the end as well, to the same configuration. -/
 theorem replay_agrees {cells budget : Nat} {p : Term} {c₀ : MConfig} {ra rb : List (Note × Data)}
     {FA FB : Local} {t : List (Side × Note × List Event)} {last : Mix}
     (hb : beginIn cells budget p = some c₀)
@@ -1457,6 +1679,10 @@ theorem replay_agrees {cells budget : Nat} {p : Term} {c₀ : MConfig} {ra rb : 
     (linkB : ∀ r ∈ rb, ∀ k, r.1.taking = some k → FA.outPkts[k]? = some r.2)
     (ht : combineTrace (ra.map (·.1)) (rb.map (·.1)) = some (t, last)) :
     ∃ cfg, accept cells budget p (ra.map (·.1)) (rb.map (·.1)) = some (traceEvents t, cfg) ∧
+      (∀ (places : Side → List Nat) (pa pb : Nat),
+        (traceRun cells budget places c₀ pa pb t).stopped = .ran ∧
+        (traceRun cells budget places c₀ pa pb t).cfg = cfg) ∧
+      last.placeA.length = FA.procs.length ∧ last.placeB.length = FB.procs.length ∧
       last.placeA.filterMap (cfg.procs[·]?) = FA.procs ∧
       last.placeB.filterMap (cfg.procs[·]?) = FB.procs := by
   obtain ⟨hw, hc⟩ := combineTrace_walk ht
@@ -1465,7 +1691,23 @@ theorem replay_agrees {cells budget : Nat} {p : Term} {c₀ : MConfig} {ra rb : 
     (L := fun u => match u with | .a => Local.init c₀.procs | .b => Local.init [])
     rfl rfl runA runB linkA linkB (Agree.first hst)
     (by intro u; cases u <;> exact Local.Ok.init _ _ _ _)
-  refine ⟨R', ?_, ag.procs hw.settled .a, ag.procs hw.settled .b⟩
-  simp [accept, hc, hb, hs]
+  have hno : ∀ e ∈ t, e.2.2.find? isAnswer = none := by
+    intro e he
+    have ht' : mix ((ra.map (·.1)).length + (rb.map (·.1)).length) Mix.first (ra.map (·.1))
+        (rb.map (·.1)) = some (t, last) := ht
+    obtain ⟨hmem, m₁, m₂, hpl⟩ := mix_trace _ _ _ _ _ _ ht' e he
+    refine Mix.place_inside hpl ?_
+    intro i x hx
+    rcases hmem with hm | hm
+    · obtain ⟨r, hr, hre⟩ := List.mem_map.mp hm
+      exact runA.inside r hr i x (hre.trans hx)
+    · obtain ⟨r, hr, hre⟩ := List.mem_map.mp hm
+      exact runB.inside r hr i x (hre.trans hx)
+  refine ⟨R', ?_, ?_, ag.len .a, ag.len .b, ag.procs hw.settled .a, ag.procs hw.settled .b⟩
+  · simp [accept, hc, hb, hs]
+  · intro places pa pb
+    have := traceRun_ran (cells := cells) (budget := budget) places t c₀ pa pb hno (by rw [hs])
+    rw [hs] at this
+    exact this
 
 end Reflect

@@ -112,10 +112,12 @@ example : ∀ {a b : List Note} {evs : List Event}, Merged a b evs → ∃ evs',
 -- processes, and what it does to them with the machine's runs. Take two logs
 -- that are each such a run from their guest's first state, with every crossing
 -- taken as the packet its guest made for it. If they combine, `accept`
--- accepts them with the budgets they were run with, and what the replay
--- reaches is, at each guest's places and in order, that guest's processes. The
--- proof (`Walk.replay`) is for any order the table allows, not only the one
--- the walk chooses.
+-- accepts them with the budgets they were run with; the check's own replay
+-- (`traceRun`, which charges each entry and refuses an answer from outside)
+-- runs to the end as well, to the same configuration; and what the replay
+-- reaches is, at each guest's places, that guest's processes: as many places
+-- as processes, and the same processes in order. The proof (`Walk.replay`) is
+-- for any order the table allows, not only the one the walk chooses.
 example : ∀ [Ops] {cells budget : Nat} {p : Term} {c₀ : MConfig} {ra rb : List (Note × Data)}
     {FA FB : Local} {t : List (Side × Note × List Event)} {last : Mix},
     beginIn cells budget p = some c₀ →
@@ -125,11 +127,29 @@ example : ∀ [Ops] {cells budget : Nat} {p : Term} {c₀ : MConfig} {ra rb : Li
     (∀ r ∈ rb, ∀ k, r.1.taking = some k → FA.outPkts[k]? = some r.2) →
     combineTrace (ra.map (·.1)) (rb.map (·.1)) = some (t, last) →
     ∃ cfg, accept cells budget p (ra.map (·.1)) (rb.map (·.1)) = some (traceEvents t, cfg) ∧
+      (∀ (places : Side → List Nat) (pa pb : Nat),
+        (traceRun cells budget places c₀ pa pb t).stopped = .ran ∧
+        (traceRun cells budget places c₀ pa pb t).cfg = cfg) ∧
+      last.placeA.length = FA.procs.length ∧ last.placeB.length = FB.procs.length ∧
       last.placeA.filterMap (cfg.procs[·]?) = FA.procs ∧
       last.placeB.filterMap (cfg.procs[·]?) = FB.procs :=
   fun hb runA runB linkA linkB ht => Reflect.replay_agrees hb runA runB linkA linkB ht
 
+-- The check's own replay against `schedIn`, the other way from
+-- `traceRun_sched`: on a trace none of whose entries stands for an answer
+-- from outside, where `schedIn` runs every event so does `traceRun`, to the
+-- same configuration. A guest's log has no such entry (`SideRun.inside`).
+example : ∀ [Ops] {cells budget : Nat} (places : Side → List Nat)
+    (t : List (Side × Note × List Event)) (cfg : MConfig) (pa pb : Nat),
+    (∀ e ∈ t, e.2.2.find? isAnswer = none) →
+    (schedIn cells budget cfg (traceEvents t)).2.2 = .ran →
+    (traceRun cells budget places cfg pa pb t).stopped = .ran ∧
+      (traceRun cells budget places cfg pa pb t).cfg =
+        (schedIn cells budget cfg (traceEvents t)).2.1 :=
+  fun places t cfg pa pb => Reflect.traceRun_ran places t cfg pa pb
+
 #print axioms Reflect.accepted_network
+#print axioms Reflect.traceRun_ran
 #print axioms Reflect.combine_complete
 #print axioms Reflect.replay_agrees
 #print axioms Reflect.combine_merged
