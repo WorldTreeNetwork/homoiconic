@@ -81,7 +81,7 @@ Each stage is one or more changes. A stage is done when its theorems are checked
 
 Two tracks. The spine pushes the metacircular theorem as far as it goes, because every later stage rests on it and it is the largest risk. The machine track is textbook work that can run beside it.
 
-Statuses as of 2026-11-24, brought up to date at the fold from the git history, `docs/PROOFS.md` and the beads. Each names the commit or bead that shows it. The stages are as the user reviewed them.
+Statuses as of 2026-11-24, brought up to date at the fold from the git history, `docs/PROOFS.md` and the beads; stage 6 as of 2026-11-27. Each names the commit or bead that shows it. The stages are as the user reviewed them.
 
 | Stage | Track | Name | What lands | Demonstration | Proofs | Status |
 |---|---|---|---|---|---|---|
@@ -91,7 +91,7 @@ Statuses as of 2026-11-24, brought up to date at the fold from the git history, 
 | 3 | Spine | Primitives | New primitives added through one parametric statement, with native implementations. | Arithmetic and hashing on bytes, interpreted and direct, agree. | P8, P9 | Partly done. P8: `add-operation-tables`, `e01f6c6`; a new operation needs no lemma. A cost per operation, charged by every budgeted run: `homoiconic-q59.9`, `homoiconic-q59.52` (`c25766d`). Open: bytes and hashing as operations, native implementations (`homoiconic-q59.20`), P9. |
 | 4 | Spine | Requests and channels | Programs make requests and continue from answers. Send, receive, spawn, and fresh name are requests. The interpreter preserves what a program asks for. | Two processes exchange a channel name and then talk over it; replaying the recorded answers gives the same outcome. | P10, P11, P12 | Done inside one machine; P12 for requests to the outside is open. P10, P11: `add-requests`, `eeb3706`. Send, receive, start and new as requests, the demonstration, and P12 for channel names: `add-channels`, `ddbc076`; a name is its own kind of data since `add-data-kinds`, `5539df4`. |
 | 5 | Join | One VM | A VM whose state is a replay of its event log. Events are identikey-log ops. | Kill the VM, restart from the log, and the state hash is unchanged. | P13, P14 | Done, except that an event is not an identikey-log op. P13, P14 for one program: `add-event-log`, `65ed13c`; for a node of processes: `add-logged-processes`, `7383928`. Restart from the log: `log_restart`; equal states saved under one root: `homoiconic-q59.29` (`aa2ab1a`). An entry is named by its Blake3 hash (`seal-log-entries`, `4f91779`) and names the entry before it; the host checks its signature (`homoiconic-q59.42`, `0d48980`). |
-| 6 | Join | Two VMs | Closures and paused machines move between VMs. Delivery order is recorded. | A computation starts on one VM and finishes on another with the same receipt as a local run. | P15, P17 | Started. A closure and a reply name cross between two guests over QUIC: `add-unikernel-quic` (`94cb89a`), `add-network-channels` (`246a233`, `homoiconic-q59.16`). P17 holds for one machine (`network_deterministic`, `ddbc076`). Open: the order the two guests delivered in is not recorded and no received schedule is replayed (`homoiconic-q59.51`, in progress); the offer is one program built into Lean; P15 is not proved. |
+| 6 | Join | Two VMs | Closures and paused machines move between VMs. Delivery order is recorded. | A computation starts on one VM and finishes on another with the same receipt as a local run. | P15, P17 | Partly done. A closure and a reply name cross between two guests over QUIC: `add-unikernel-quic` (`94cb89a`), `add-network-channels` (`246a233`, `homoiconic-q59.16`). Delivery order is recorded by the guest that takes, any quoted program crosses, and two guests' signed records are combined into one schedule and replayed on one machine: `add-recorded-crossing` (`970330d`, `homoiconic-q59.51`), `harden-crossing` (`73fefe9`); `unikernel/check-wire.sh` runs it on two guests. P17: an accepted record is a run of the one-machine network (`accepted_network`), and two guests that follow the protocol, where nothing is in flight, produce logs that combine and replay to what the guests hold (`honest_combine`, `honest_accept`, `1ad8d75`, `homoiconic-q59.68`). Open: that guests that have closed have nothing in flight (`homoiconic-q59.85`); the ledger walk and the record's text for an honest pair (`homoiconic-q59.86`, `homoiconic-q59.87`); more than two guests (`homoiconic-q59.83`); P15's byte half is tested, not proved; there is no receipt yet (stage 8), so the demonstration compares records, not receipts. |
 | 7 | Join | Model calls | Requests answered by a model. Outputs labelled by dependence. Checked use of answers. | A program takes a model's proposal, checks it, and the receipt shows which outputs depended on the model. | P18, P19 | Not started. No change or bead. |
 | 8 | Join | Receipts | Receipt checking and dispute by bisection. | A wrong receipt is rejected, and a dispute over a million steps is settled by checking one. | P20, P21 | Not started. No change or bead. |
 
@@ -112,6 +112,10 @@ Stages 1 and 2 start together. Stage 4 needs stages 1 and 2. Stage 8's receipt c
 - A surface syntax, module system, or editor.
 
 ## Changelog
+
+### 2026-11-27
+
+Stage 6's status brought up to date. Its row still said that delivery order was not recorded. Since then `add-recorded-crossing` and `harden-crossing` landed, and `homoiconic-q59.68` proved that two guests that follow the protocol produce logs that combine and replay to what the guests hold, where nothing is in flight. The stage is not done: see its row and the note of 2026-11-25 under Network in [`DECISIONS.md`](DECISIONS.md).
 
 ### 2026-11-24
 
